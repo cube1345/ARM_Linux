@@ -1,0 +1,27 @@
+[
+  {
+    "directory": "/home/cube/WorkSpace/Linux/ARM_Linux_WS",
+    "command": "/home/cube/WorkSpace/Linux/ARM_Linux/host/bin/aarch64-buildroot-linux-gnu-gcc --sysroot=/home/cube/WorkSpace/Linux/ARM_Linux/host/aarch64-buildroot-linux-gnu/sysroot -Wall -Wextra -O2 -std=gnu17 -c -o hello.o /home/cube/WorkSpace/Linux/ARM_Linux_WS/hello.c",
+    "file": "/home/cube/WorkSpace/Linux/ARM_Linux_WS/hello.c"
+  },
+  {
+    "directory": "/home/cube/WorkSpace/Linux/ARM_Linux_WS/apps/update_agent",
+    "command": "/home/cube/WorkSpace/Linux/ARM_Linux/host/bin/aarch64-buildroot-linux-gnu-gcc --sysroot=/home/cube/WorkSpace/Linux/ARM_Linux/host/aarch64-buildroot-linux-gnu/sysroot -Wall -Wextra -O2 -std=gnu17 -c -o main.o /home/cube/WorkSpace/Linux/ARM_Linux_WS/apps/update_agent/main.c",
+    "file": "/home/cube/WorkSpace/Linux/ARM_Linux_WS/apps/update_agent/main.c"
+  },
+  {
+    "directory": "/home/cube/WorkSpace/Linux/ARM_Linux_WS/drivers/hello_char",
+    "command": "/home/cube/WorkSpace/Linux/ARM_Linux/host/bin/aarch64-buildroot-linux-gnu-gcc --sysroot=/home/cube/WorkSpace/Linux/ARM_Linux/host/aarch64-buildroot-linux-gnu/sysroot -Wall -Wextra -O2 -std=gnu17 -c -o hello_test.o /home/cube/WorkSpace/Linux/ARM_Linux_WS/drivers/hello_char/hello_test.c",
+    "file": "/home/cube/WorkSpace/Linux/ARM_Linux_WS/drivers/hello_char/hello_test.c"
+  },
+  {
+    "directory": "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44",
+    "command": "/home/cube/WorkSpace/Linux/ARM_Linux/host/bin/aarch64-buildroot-linux-gnu-gcc -nostdinc -isystem /home/cube/WorkSpace/Linux/ARM_Linux/host/lib/gcc/aarch64-buildroot-linux-gnu/12.3.0/include -I/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/arch/arm64/include -I/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/arch/arm64/include/generated -I/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include -I/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/arch/arm64/include/uapi -I/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/arch/arm64/include/generated/uapi -I/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include/uapi -I/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include/generated/uapi -include /home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include/linux/compiler-version.h -include /home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include/linux/kconfig.h -include /home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include/linux/compiler_types.h -D__KERNEL__ -DMODULE -DKBUILD_BASENAME=\\\"hello_char\\\" -DKBUILD_MODNAME=\\\"hello_char\\\" -D__KBUILD_MODNAME=kmod_hello_char -DCONFIG_ARM64 -mlittle-endian -mgeneral-regs-only -std=gnu11 -c -o /home/cube/WorkSpace/Linux/ARM_Linux_WS/drivers/hello_char/hello_char.o /home/cube/WorkSpace/Linux/ARM_Linux_WS/drivers/hello_char/hello_char.c",
+    "file": "/home/cube/WorkSpace/Linux/ARM_Linux_WS/drivers/hello_char/hello_char.c"
+  },
+  {
+    "directory": "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44",
+    "command": "/home/cube/WorkSpace/Linux/ARM_Linux/host/bin/aarch64-buildroot-linux-gnu-gcc -nostdinc -isystem /home/cube/WorkSpace/Linux/ARM_Linux/host/lib/gcc/aarch64-buildroot-linux-gnu/12.3.0/include -I/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/arch/arm64/include -I/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/arch/arm64/include/generated -I/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include -I/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/arch/arm64/include/uapi -I/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/arch/arm64/include/generated/uapi -I/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include/uapi -I/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include/generated/uapi -include /home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include/linux/compiler-version.h -include /home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include/linux/kconfig.h -include /home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include/linux/compiler_types.h -D__KERNEL__ -DMODULE -DKBUILD_BASENAME=\\\"hello_char.mod\\\" -DKBUILD_MODNAME=\\\"hello_char\\\" -D__KBUILD_MODNAME=kmod_hello_char -DCONFIG_ARM64 -mlittle-endian -mgeneral-regs-only -std=gnu11 -c -o /home/cube/WorkSpace/Linux/ARM_Linux_WS/drivers/hello_char/hello_char.mod.o /home/cube/WorkSpace/Linux/ARM_Linux_WS/drivers/hello_char/hello_char.mod.c",
+    "file": "/home/cube/WorkSpace/Linux/ARM_Linux_WS/drivers/hello_char/hello_char.mod.c"
+  }
+]

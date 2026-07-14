@@ -1,0 +1,70 @@
+{
+    "configurations": [
+        {
+            "name": "Workspace (arm64 compile_commands)",
+            "compilerPath": "/home/cube/WorkSpace/Linux/ARM_Linux/host/bin/aarch64-buildroot-linux-gnu-gcc",
+            "compileCommands": "${workspaceFolder}/compile_commands.json",
+            "compilerArgs": [
+                "--sysroot=/home/cube/WorkSpace/Linux/ARM_Linux/host/aarch64-buildroot-linux-gnu/sysroot"
+            ],
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/home/cube/WorkSpace/Linux/ARM_Linux/host/aarch64-buildroot-linux-gnu/sysroot/usr/include",
+                "/home/cube/WorkSpace/Linux/ARM_Linux/host/lib/gcc/aarch64-buildroot-linux-gnu/12.3.0/include"
+            ],
+            "defines": [],
+            "cStandard": "gnu17",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "linux-gcc-arm64"
+        },
+        {
+            "name": "Linux kernel module (arm64)",
+            "compilerPath": "/home/cube/WorkSpace/Linux/ARM_Linux/host/bin/aarch64-buildroot-linux-gnu-gcc",
+            "compilerArgs": [
+                "-nostdinc",
+                "-isystem",
+                "/home/cube/WorkSpace/Linux/ARM_Linux/host/lib/gcc/aarch64-buildroot-linux-gnu/12.3.0/include"
+            ],
+            "includePath": [
+                "${workspaceFolder}/drivers/hello_char",
+                "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/arch/arm64/include",
+                "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/arch/arm64/include/generated",
+                "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include",
+                "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/arch/arm64/include/uapi",
+                "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/arch/arm64/include/generated/uapi",
+                "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include/uapi",
+                "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include/generated/uapi",
+                "/home/cube/WorkSpace/Linux/ARM_Linux/host/lib/gcc/aarch64-buildroot-linux-gnu/12.3.0/include"
+            ],
+            "defines": [
+                "__KERNEL__",
+                "MODULE",
+                "KBUILD_MODNAME=\"hello_char\"",
+                "KBUILD_BASENAME=\"hello_char\"",
+                "CONFIG_ARM64"
+            ],
+            "forcedInclude": [
+                "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include/linux/compiler-version.h",
+                "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include/linux/kconfig.h",
+                "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include/linux/compiler_types.h"
+            ],
+            "browse": {
+                "path": [
+                    "${workspaceFolder}/drivers/hello_char",
+                    "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/arch/arm64/include",
+                    "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/arch/arm64/include/generated",
+                    "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include",
+                    "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/arch/arm64/include/uapi",
+                    "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/arch/arm64/include/generated/uapi",
+                    "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include/uapi",
+                    "/home/cube/WorkSpace/Linux/ARM_Linux/build/linux-6.1.44/include/generated/uapi"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            },
+            "cStandard": "gnu17",
+            "cppStandard": "c++14",
+            "intelliSenseMode": "linux-gcc-arm64"
+        }
+    ],
+    "version": 4
+}
