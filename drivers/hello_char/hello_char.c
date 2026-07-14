@@ -7,6 +7,9 @@
 #include <linux/string.h>
 #include <linux/device.h>
 #include <linux/cdev.h>
+#include <linux/wait.h>
+#include <linux/sched/signal.h>
+#include <linux/poll.h>
 
 #include "hello_char.h"
 
@@ -30,7 +33,8 @@ static char hello_buffer[BUFFER_SIZE] = "hello from kernel!\n";
 // 防止多个进程读取hello_buffer，mutex锁
 static DEFINE_MUTEX(hello_lock);
 
-
+static wait_queue_head_t read_queue;
+static int data_ready;
 
 /// @brief open() & close() 设备时调用该函数
 /// @param inode 
@@ -60,11 +64,33 @@ static ssize_t hello_read(struct file *file,char __user *user_buf,size_t count,l
         size_t available;
         ssize_t ret;
 
-        mutex_lock(&hello_lock);
+        
+        // 阻塞式等待
+        // if(!*ppos)
+        // {
+        //     ret = wait_event_interruptible(read_queue,data_ready);
+        //     if(ret) return ret;
+        // }
 
+        //非阻塞式等待
+        if(!*ppos)
+        {
+            if(!data_ready)
+            {
+                // 没有数据的话立刻返回 -EAGAIN
+                if(file -> f_flags & O_NONBLOCK) return -EAGAIN;
+                ret = wait_event_interruptible(read_queue,data_ready);
+                if(ret) return ret;
+            }
+            
+        }
+
+        // 当接受到write进程写入的数据后，数据空间只能由read进程掌有
+        mutex_lock(&hello_lock);
         len = strnlen(hello_buffer,BUFFER_SIZE);
         if(*ppos >= len)
         {
+            data_ready = 0;
             ret = 0;
             goto out;
         }
@@ -81,6 +107,12 @@ static ssize_t hello_read(struct file *file,char __user *user_buf,size_t count,l
         }
         *ppos += count;
         ret = count;
+
+        // 读取完全之后清状态
+        if(*ppos >= len) 
+        {
+            data_ready = 0;
+        }
 
 out:    mutex_unlock(&hello_lock);
         return ret;
@@ -103,8 +135,28 @@ static ssize_t hello_write(struct file *file, const char __user *user_buf,size_t
         return -EFAULT;
     }
     hello_buffer[len] = '\0';
+    data_ready = 1;
     mutex_unlock(&hello_lock);
+    wake_up_interruptible(&read_queue);
     return len;
+}
+
+/// @brief 当前这个设备是否有数据可以读？
+/// @param file 当前打开的设备文件
+/// @param wait 传进来的等待表
+/// @return 
+static __poll_t hello_poll(struct file* file,poll_table* wait)
+{
+    __poll_t mask = 0;
+    // 将当前进程登记到等待队列上
+    poll_wait(file,&read_queue,wait);
+    mutex_lock(&hello_lock);
+
+    // 新旧版本的“有新数据可以读”
+    if(data_ready) mask |= POLLIN | POLLRDNORM;
+    mutex_unlock(&hello_lock);
+    return mask;
+
 }
 
 static long hello_ioctl(struct file* file,unsigned int cmd,unsigned long arg)
@@ -112,19 +164,21 @@ static long hello_ioctl(struct file* file,unsigned int cmd,unsigned long arg)
     int len;
     int ret = 0;
     mutex_lock(&hello_lock);
+
     switch (cmd)
     {
     case HELLO_IOC_CLEAR:
         /* code */
         hello_buffer[0] = '\0';
         pr_info("hello_char: buffer cleared\n");
+        data_ready = 0;
         break;
     case HELLO_IOC_GET_LEN:
         len = strnlen(hello_buffer, BUFFER_SIZE);
         if(copy_to_user((int __user *)arg,&len,sizeof(len))) ret = -EFAULT;
         break;
     default:
-        ret = -EFAULT;
+        ret = -ENOTTY;
         break;
     }
     mutex_unlock(&hello_lock);
@@ -140,12 +194,15 @@ static const struct file_operations hello_fops = {
     .write = hello_write,
     .llseek = default_llseek,
     .unlocked_ioctl = hello_ioctl,
+    .poll = hello_poll,
 };
 
 static int __init hello_char_init(void)
 {
         int ret;
         struct device* device;
+        init_waitqueue_head(&read_queue);
+        data_ready = 0;
 
         // 设备号动态申请
         ret = alloc_chrdev_region(&hello_dev,0,1,DEVICE_NAME);

@@ -17,7 +17,7 @@ int main(int argc,char** argv)
     ssize_t n;
     int len = 0;
 
-    fd = open(DEVICE_PATH,O_RDWR);
+    fd = open(DEVICE_PATH,O_RDWR | O_NONBLOCK);
     if (fd < 0)
     {
         perror("open");

@@ -9,9 +9,11 @@ obj-m += hello_char.o
 
 all:
 	$(MAKE) -C $(KDIR) M=$(CURDIR) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) modules
-app: hello_test
+app: hello_test hello_poll_test
 hello_test: hello_test.c
+	$(CC) $(CFLAGS) $< -o $@
+hello_poll_test: hello_poll_test.c
 	$(CC) $(CFLAGS) $< -o $@
 clean:
 	$(MAKE) -C $(KDIR) M=$(CURDIR) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) clean
-	rm -f hello_test
+	rm -f hello_test hello_poll_test
