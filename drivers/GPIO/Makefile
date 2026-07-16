@@ -9,11 +9,13 @@ CFLAGS := -Wall -Wextra -O2
 
 all:
 	$(MAKE) -C $(KDIR) M=$(CURDIR) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) modules
-app: gpio_set gpio_get
+app: gpio_set gpio_get gpio_blink
 gpio_set: gpio_set.c 
 	$(CC) $(CFLAGS) $< -o $@ -lgpiod
 gpio_get: gpio_get.c 
 	$(CC) $(CFLAGS) $< -o $@ -lgpiod
+gpio_blink: gpio_blink.c 
+	$(CC) $(CFLAGS) $< -o $@ -lgpiod
 clean:
 	$(MAKE) -C $(KDIR) M=$(CURDIR) ARCH=$(ARCH) CROSS_COMPILE=$(CROSS_COMPILE) clean
-	rm -f gpio_set gpio_get
+	rm -f gpio_set gpio_get gpio_blink
