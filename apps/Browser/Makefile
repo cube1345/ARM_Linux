@@ -2,7 +2,8 @@ CROSS_COMPILE ?= /home/cube/WorkSpace/Linux/ARM_Linux/host/bin/aarch64-buildroot
 CC := $(CROSS_COMPILE)gcc
 
 TARGET := image_browser
-SOURCES := image_browser.c bmp_display.c input_keyboard.c image_list.c
+SOURCES := image_browser.c bmp_display.c video_buffer.c input_keyboard.c \
+	   image_list.c image_data.c bmp_decoder.c
 OBJECTS := $(SOURCES:.c=.o)
 CFLAGS := -Wall -Wextra -Wpedantic -O2
 

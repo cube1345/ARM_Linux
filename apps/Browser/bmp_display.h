@@ -6,6 +6,8 @@
 
 #include <linux/fb.h>
 
+#include "video_buffer.h"
+
 /**
  * @brief Framebuffer 显示设备上下文。
  */
@@ -15,6 +17,7 @@ struct bmp_display {
     size_t memory_size;
     struct fb_var_screeninfo variable_info;
     struct fb_fix_screeninfo fixed_info;
+    struct video_buffer back_buffer;
 };
 
 /**

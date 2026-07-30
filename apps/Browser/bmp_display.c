@@ -161,31 +161,10 @@ static uint32_t make_pixel(const struct fb_var_screeninfo *info,
 static void put_pixel(struct bmp_display *display, int x, int y,
                       uint8_t red, uint8_t green, uint8_t blue)
 {
-    size_t bytes_per_pixel;
-    size_t offset;
     uint32_t pixel;
 
-    if (x < 0 || y < 0 ||
-        (uint32_t)x >= display->variable_info.xres ||
-        (uint32_t)y >= display->variable_info.yres) {
-        return;
-    }
-
-    bytes_per_pixel = display->variable_info.bits_per_pixel / 8;
-    if (bytes_per_pixel != 2 && bytes_per_pixel != 3 &&
-        bytes_per_pixel != 4) {
-        return;
-    }
-
-    offset = (size_t)y * display->fixed_info.line_length +
-             (size_t)x * bytes_per_pixel;
-    if (offset > display->memory_size ||
-        bytes_per_pixel > display->memory_size - offset) {
-        return;
-    }
-
     pixel = make_pixel(&display->variable_info, red, green, blue);
-    memcpy(display->memory + offset, &pixel, bytes_per_pixel);
+    video_buffer_put_pixel(&display->back_buffer, x, y, pixel);
 }
 
 /**
@@ -199,15 +178,9 @@ static void put_pixel(struct bmp_display *display, int x, int y,
 static void clear_display(struct bmp_display *display,
                           uint8_t red, uint8_t green, uint8_t blue)
 {
-    uint32_t y;
+    uint32_t pixel = make_pixel(&display->variable_info, red, green, blue);
 
-    for (y = 0; y < display->variable_info.yres; y++) {
-        uint32_t x;
-
-        for (x = 0; x < display->variable_info.xres; x++) {
-            put_pixel(display, (int)x, (int)y, red, green, blue);
-        }
-    }
+    video_buffer_clear(&display->back_buffer, pixel);
 }
 
 /**
@@ -380,6 +353,13 @@ static int draw_bmp(struct bmp_display *display, int bmp_fd,
         }
     }
 
+    if (video_buffer_flush(&display->back_buffer, display->memory,
+                           display->memory_size) < 0) {
+        perror("flush video buffer");
+        free(row_buffer);
+        return -1;
+    }
+
     free(row_buffer);
     printf("displayed: %dx%d -> %dx%d\n", bmp->width, bmp->height,
            target_width, target_height);
@@ -447,6 +427,16 @@ int bmp_display_open(struct bmp_display *display,
         return -1;
     }
 
+    if (video_buffer_create(&display->back_buffer,
+                            display->variable_info.xres,
+                            display->variable_info.yres,
+                            display->variable_info.bits_per_pixel,
+                            display->fixed_info.line_length) < 0) {
+        perror("create video buffer");
+        bmp_display_close(display);
+        return -1;
+    }
+
     printf("framebuffer: %ux%u, %u bpp\n",
            display->variable_info.xres,
            display->variable_info.yres,
@@ -504,6 +494,8 @@ void bmp_display_close(struct bmp_display *display)
     if (display == NULL) {
         return;
     }
+
+    video_buffer_destroy(&display->back_buffer);
 
     if (display->memory != NULL && display->memory != MAP_FAILED) {
         munmap(display->memory, display->memory_size);
