@@ -69,18 +69,4 @@ static inline int browser_file_type_is_audio(enum file_type type)
  */
 uint64_t monotonic_ms(void);
 
-/**
- * @brief 绘制音频播放页面、进度条和音量条。
- * @param app 浏览器上下文。
- * @return 成功返回 0，失败返回 -1。
- */
-int render_audio_page(struct browser_app *app);
-
-/**
- * @brief 绘制文本页并叠加返回按钮。
- * @param app 浏览器上下文。
- * @return 成功返回 0，失败返回 -1。
- */
-int render_text_page(struct browser_app *app);
-
 #endif

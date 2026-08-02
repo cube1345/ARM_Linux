@@ -8,7 +8,7 @@ SOURCES := image_browser.c bmp_display.c video_buffer.c input_keyboard.c \
 	   image_data.c bmp_decoder.c jpeg_decoder.c png_decoder.c \
 	   gif_animation.c animation_decoder.c image_decoder.c \
 	   image_render.c file_list.c font_renderer.c ui_draw.c browser_ui.c \
-	   page_file.c page_image.c text_reader.c \
+	   page_file.c page_image.c page_text.c page_audio.c text_reader.c \
 	   audio_player.c
 OBJECTS := $(SOURCES:.c=.o)
 CFLAGS ?= -Wall -Wextra -Wpedantic -O2
