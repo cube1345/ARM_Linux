@@ -64,18 +64,10 @@ static inline int browser_file_type_is_audio(enum file_type type)
 }
 
 /**
- * @brief 解码当前选择的普通图片或 GIF。
- * @param app 浏览器上下文。
- * @return 成功返回 0，失败返回 -1。
+ * @brief 获取单调时钟毫秒值。
+ * @return 单调时钟毫秒值。
  */
-int load_selected_image(struct browser_app *app);
-
-/**
- * @brief 绘制当前普通图片或 GIF 帧及图片工具按钮。
- * @param app 浏览器上下文。
- * @return 成功返回 0，失败返回 -1。
- */
-int render_image_page(struct browser_app *app);
+uint64_t monotonic_ms(void);
 
 /**
  * @brief 绘制音频播放页面、进度条和音量条。

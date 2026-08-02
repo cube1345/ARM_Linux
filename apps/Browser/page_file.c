@@ -3,6 +3,7 @@
 #include "browser_app.h"
 #include "browser_ui.h"
 #include "file_list.h"
+#include "page_image.h"
 #include "ui_draw.h"
 
 #include <errno.h>
