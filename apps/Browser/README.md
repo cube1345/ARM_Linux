@@ -18,11 +18,24 @@ mpg123 的用户态多媒体文件浏览器。
 
 ## 架构
 
-- 静态图片解码走 `image_decoder_manager` 注册表，当前注册 BMP、JPEG、PNG。
-- 动画图片解码走 `animation_decoder_manager` 注册表，当前注册 GIF。
-- 音频播放线程走内部 backend 表，当前支持 WAV 和 MP3。
-- 页面层只按文件类型选择“图片、文本、音频”页面，不直接关心具体解码实现。
-- 新增格式时优先新增一个 decoder/backend，再注册到 manager，避免改页面状态机。
+主程序已经按“应用上下文、页面、解码/播放 backend、设备适配”拆分：
+
+| 模块 | 职责 |
+| --- | --- |
+| `image_browser.c` | CLI 参数解析、初始化/释放、周期刷新、输入分发和主事件循环 |
+| `browser_app.c/.h` | `browser_app` 共享上下文、页面枚举、文件类型 helper 和跨页面资源收尾 |
+| `page_file.c/.h` | 文件列表渲染、目录进入/返回、文件页键盘和触摸处理 |
+| `page_image.c/.h` | 图片/GIF 打开关闭、图片渲染、相邻图片选择、旋转和图片页输入处理 |
+| `page_text.c/.h` | UTF-8 文本分页渲染、文本翻页键盘和触摸处理 |
+| `page_audio.c/.h` | 音频页渲染、播放暂停、seek、音量条和音频页输入处理 |
+| `browser_ui.c/.h` / `ui_draw.c/.h` | 公共 UI 常量、按钮/进度条 helper、矩形与文字绘制 |
+| `image_decoder.c/.h` | 静态图片 decoder manager，当前注册 BMP、JPEG、PNG |
+| `animation_decoder.c/.h` / `gif_animation.c/.h` | 动画 decoder manager 与 GIF 帧合成/延时/disposal 状态 |
+| `audio_player.c/.h` | WAV/MP3 后台播放线程、backend 表、暂停、音量、seek 与状态快照 |
+| `input_keyboard.c/.h` | Linux Input 键盘与绝对坐标触摸设备归一化 |
+
+新增格式时优先新增 decoder/backend 并注册到 manager；新增交互时优先放在对应
+`page_*.c` 页面模块，避免重新膨胀主循环。
 
 ## Buildroot 配置
 
@@ -109,3 +122,15 @@ cat /proc/bus/input/devices
 
 触摸坐标通过 `EVIOCGABS` 从设备量程映射到 framebuffer 分辨率。点击允许
 15 像素移动；滑动阈值为 32 像素与屏幕对应轴 5% 中的较大值。
+
+## 验收清单
+
+- `make clean` 后可重新完整构建。
+- `make CFLAGS='-Wall -Wextra -Wpedantic -Werror -O2'` 无 warning/error。
+- `git diff --check -- apps/Browser` 无空白错误。
+- `make DESTDIR=/home/cube/WorkSpace/Linux/ARM_Linux/target install` 生成
+  `target/usr/bin/media-browser`。
+- 在 `/home/cube/WorkSpace/Linux/ARM_Linux` 执行 `make` 后生成
+  `images/rootfs.ext4`。
+- QEMU 中使用 `default` ALSA device 启动，文件列表、图片/GIF、文本、
+  WAV/MP3、键盘和触摸路径均可进入对应页面。
