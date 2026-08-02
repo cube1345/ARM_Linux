@@ -69,4 +69,11 @@ static inline int browser_file_type_is_audio(enum file_type type)
  */
 uint64_t monotonic_ms(void);
 
+/**
+ * @brief 关闭当前媒体资源并返回文件列表页。
+ * @param app 浏览器上下文。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int browser_app_close_media_page(struct browser_app *app);
+
 #endif

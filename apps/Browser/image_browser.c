@@ -52,72 +52,6 @@ uint64_t monotonic_ms(void)
 }
 
 /**
- * @brief 关闭媒体资源并返回文件列表。
- * @param app 浏览器上下文。
- * @return 成功返回 0，失败返回 -1。
- */
-static int close_media_page(struct browser_app *app)
-{
-    if (app->page == BROWSER_PAGE_IMAGE) {
-        close_image(app);
-    } else if (app->page == BROWSER_PAGE_TEXT) {
-        text_reader_close(&app->text);
-    } else if (app->page == BROWSER_PAGE_AUDIO) {
-        audio_player_stop(&app->audio);
-    }
-    app->page = BROWSER_PAGE_FILES;
-    return render_file_page(app);
-}
-
-/**
- * @brief 处理媒体页面键盘动作。
- * @param app 浏览器上下文。
- * @param action 输入动作。
- * @return 继续返回 0，退出返回 1，失败返回 -1。
- */
-static int handle_media_key(struct browser_app *app,
-                            enum input_action action)
-{
-    if (action == INPUT_ACTION_EXIT) {
-        return 1;
-    }
-    if (action == INPUT_ACTION_BACK) {
-        return close_media_page(app);
-    }
-    if (app->page == BROWSER_PAGE_IMAGE) {
-        return handle_image_key(app, action);
-    } else if (app->page == BROWSER_PAGE_TEXT) {
-        return handle_text_key(app, action);
-    } else if (app->page == BROWSER_PAGE_AUDIO) {
-        return handle_audio_key(app, action);
-    }
-    return 0;
-}
-
-/**
- * @brief 处理媒体页面触摸手势。
- * @param app 浏览器上下文。
- * @param input 触摸输入。
- * @return 继续返回 0，失败返回 -1。
- */
-static int handle_media_touch(struct browser_app *app,
-                              const struct browser_input *input)
-{
-    if (input->touch == TOUCH_ACTION_TAP && input->x < UI_BUTTON_SIZE &&
-        input->y < UI_BUTTON_SIZE) {
-        return close_media_page(app);
-    }
-    if (app->page == BROWSER_PAGE_IMAGE) {
-        return handle_image_touch(app, input);
-    } else if (app->page == BROWSER_PAGE_TEXT) {
-        return handle_text_touch(app, input);
-    } else if (app->page == BROWSER_PAGE_AUDIO) {
-        return handle_audio_touch(app, input);
-    }
-    return 0;
-}
-
-/**
  * @brief 推进 GIF 并定时刷新音频状态。
  * @param app 浏览器上下文。
  * @param now_ms 当前单调时钟毫秒值。
@@ -162,14 +96,42 @@ static int dispatch_input(struct browser_app *app,
                           const struct browser_input *input)
 {
     if (input->action != INPUT_ACTION_NONE) {
-        return app->page == BROWSER_PAGE_FILES ?
-               handle_file_key(app, input->action) :
-               handle_media_key(app, input->action);
+        if (input->action == INPUT_ACTION_EXIT) {
+            return 1;
+        }
+        if (app->page == BROWSER_PAGE_FILES) {
+            return handle_file_key(app, input->action);
+        }
+        if (input->action == INPUT_ACTION_BACK) {
+            return browser_app_close_media_page(app);
+        }
+        if (app->page == BROWSER_PAGE_IMAGE) {
+            return handle_image_key(app, input->action);
+        }
+        if (app->page == BROWSER_PAGE_TEXT) {
+            return handle_text_key(app, input->action);
+        }
+        if (app->page == BROWSER_PAGE_AUDIO) {
+            return handle_audio_key(app, input->action);
+        }
     }
     if (input->touch != TOUCH_ACTION_NONE) {
-        return app->page == BROWSER_PAGE_FILES ?
-               handle_file_touch(app, input) :
-               handle_media_touch(app, input);
+        if (app->page == BROWSER_PAGE_FILES) {
+            return handle_file_touch(app, input);
+        }
+        if (input->touch == TOUCH_ACTION_TAP && input->x < UI_BUTTON_SIZE &&
+            input->y < UI_BUTTON_SIZE) {
+            return browser_app_close_media_page(app);
+        }
+        if (app->page == BROWSER_PAGE_IMAGE) {
+            return handle_image_touch(app, input);
+        }
+        if (app->page == BROWSER_PAGE_TEXT) {
+            return handle_text_touch(app, input);
+        }
+        if (app->page == BROWSER_PAGE_AUDIO) {
+            return handle_audio_touch(app, input);
+        }
     }
     return 0;
 }
