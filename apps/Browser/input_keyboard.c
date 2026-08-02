@@ -29,7 +29,19 @@ static enum input_action event_to_action(const struct input_event *event)
         return INPUT_ACTION_PREVIOUS;
     case KEY_RIGHT:
         return INPUT_ACTION_NEXT;
+    case KEY_UP:
+        return INPUT_ACTION_UP;
+    case KEY_DOWN:
+        return INPUT_ACTION_DOWN;
+    case KEY_ENTER:
+    case KEY_KPENTER:
+        return INPUT_ACTION_OPEN;
+    case KEY_BACKSPACE:
     case KEY_ESC:
+        return INPUT_ACTION_BACK;
+    case KEY_SPACE:
+        return INPUT_ACTION_TOGGLE;
+    case KEY_Q:
         return INPUT_ACTION_EXIT;
     default:
         return INPUT_ACTION_NONE;
@@ -172,6 +184,16 @@ const char *input_action_name(enum input_action action)
         return "previous";
     case INPUT_ACTION_NEXT:
         return "next";
+    case INPUT_ACTION_UP:
+        return "up";
+    case INPUT_ACTION_DOWN:
+        return "down";
+    case INPUT_ACTION_OPEN:
+        return "open";
+    case INPUT_ACTION_BACK:
+        return "back";
+    case INPUT_ACTION_TOGGLE:
+        return "toggle";
     case INPUT_ACTION_EXIT:
         return "exit";
     case INPUT_ACTION_NONE:
