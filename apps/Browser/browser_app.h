@@ -42,4 +42,53 @@ struct browser_app {
     uint64_t last_audio_refresh_ms;
 };
 
+/**
+ * @brief 判断文件类型是否为图片。
+ * @param type 文件类型。
+ * @return 是图片返回 1，否则返回 0。
+ */
+static inline int browser_file_type_is_image(enum file_type type)
+{
+    return type == FILE_TYPE_BMP || type == FILE_TYPE_JPEG ||
+           type == FILE_TYPE_PNG || type == FILE_TYPE_GIF;
+}
+
+/**
+ * @brief 判断文件类型是否为音频。
+ * @param type 文件类型。
+ * @return 是音频返回 1，否则返回 0。
+ */
+static inline int browser_file_type_is_audio(enum file_type type)
+{
+    return type == FILE_TYPE_WAV || type == FILE_TYPE_MP3;
+}
+
+/**
+ * @brief 解码当前选择的普通图片或 GIF。
+ * @param app 浏览器上下文。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int load_selected_image(struct browser_app *app);
+
+/**
+ * @brief 绘制当前普通图片或 GIF 帧及图片工具按钮。
+ * @param app 浏览器上下文。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int render_image_page(struct browser_app *app);
+
+/**
+ * @brief 绘制音频播放页面、进度条和音量条。
+ * @param app 浏览器上下文。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int render_audio_page(struct browser_app *app);
+
+/**
+ * @brief 绘制文本页并叠加返回按钮。
+ * @param app 浏览器上下文。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int render_text_page(struct browser_app *app);
+
 #endif
