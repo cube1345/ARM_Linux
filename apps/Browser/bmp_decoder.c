@@ -6,216 +6,352 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <sys/stat.h>
 #include <unistd.h>
 
-#define BMP_HEADER_SIZE 54
-#define BMP_INFO_HEADER_SIZE 40
-#define BMP_COMPRESSION_RGB 0
+#define BMP_RGB 0U
+#define BMP_RLE8 1U
+#define BMP_RLE4 2U
 
-/**
- * @brief BMP 文件中解析出的图片信息。
- */
+/** @brief 已验证的 BMP 元数据。 */
 struct bmp_info {
     int32_t width;
     int32_t height;
-    uint16_t bits_per_pixel;
+    uint16_t bpp;
+    uint32_t compression;
     uint32_t data_offset;
+    uint32_t palette_offset;
+    uint32_t palette_count;
     uint32_t row_stride;
     int top_down;
 };
 
 /**
- * @brief 从小端字节流读取 16 位无符号整数。
- *
- * @param buffer 至少包含 2 字节的缓冲区。
- * @return 解析后的整数。
+ * @brief 读取小端 16 位整数。
+ * @param data 输入字节。
+ * @return 解析值。
  */
-static uint16_t read_le16(const uint8_t *buffer)
+static uint16_t le16(const uint8_t *data)
 {
-    return (uint16_t)buffer[0] | ((uint16_t)buffer[1] << 8);
+    return (uint16_t)data[0] | ((uint16_t)data[1] << 8);
 }
 
 /**
- * @brief 从小端字节流读取 32 位无符号整数。
- *
- * @param buffer 至少包含 4 字节的缓冲区。
- * @return 解析后的整数。
+ * @brief 读取小端 32 位整数。
+ * @param data 输入字节。
+ * @return 解析值。
  */
-static uint32_t read_le32(const uint8_t *buffer)
+static uint32_t le32(const uint8_t *data)
 {
-    return (uint32_t)buffer[0] |
-           ((uint32_t)buffer[1] << 8) |
-           ((uint32_t)buffer[2] << 16) |
-           ((uint32_t)buffer[3] << 24);
+    return (uint32_t)data[0] | ((uint32_t)data[1] << 8) |
+           ((uint32_t)data[2] << 16) | ((uint32_t)data[3] << 24);
 }
 
 /**
- * @brief 从小端字节流读取 32 位有符号整数。
- *
- * @param buffer 至少包含 4 字节的缓冲区。
- * @return 解析后的整数。
- */
-static int32_t read_le32_signed(const uint8_t *buffer)
-{
-    return (int32_t)read_le32(buffer);
-}
-
-/**
- * @brief 完整读取指定数量的字节。
- *
- * @param fd 文件描述符。
- * @param buffer 接收数据的缓冲区。
- * @param length 需要读取的字节数。
+ * @brief 将整个 BMP 文件读入内存。
+ * @param path 文件路径。
+ * @param data 输出数据指针。
+ * @param size 输出文件大小。
  * @return 成功返回 0，失败返回 -1。
  */
-static int read_full(int fd, void *buffer, size_t length)
+static int load_file(const char *path, uint8_t **data, size_t *size)
 {
-    uint8_t *position = buffer;
+    struct stat status;
+    uint8_t *buffer;
+    size_t done = 0;
+    int fd;
 
-    while (length > 0) {
-        ssize_t bytes = read(fd, position, length);
-
-        if (bytes < 0) {
-            if (errno == EINTR) {
-                continue;
-            }
-            perror("read BMP");
-            return -1;
+    fd = open(path, O_RDONLY);
+    if (fd < 0 || fstat(fd, &status) < 0 || status.st_size < 54) {
+        if (fd >= 0) {
+            close(fd);
         }
-
-        if (bytes == 0) {
-            fprintf(stderr, "unexpected end of BMP file\n");
-            errno = EIO;
-            return -1;
-        }
-
-        position += bytes;
-        length -= (size_t)bytes;
-    }
-
-    return 0;
-}
-
-/**
- * @brief 读取并验证 BMP 文件头。
- *
- * @param fd BMP 文件描述符。
- * @param bmp 输出的 BMP 信息。
- * @return 成功返回 0，失败返回 -1。
- */
-static int read_bmp_header(int fd, struct bmp_info *bmp)
-{
-    uint8_t header[BMP_HEADER_SIZE];
-    uint32_t dib_size;
-    uint16_t planes;
-    uint32_t compression;
-    uint64_t minimum_data_offset;
-    uint64_t row_stride;
-
-    if (read_full(fd, header, sizeof(header)) < 0) {
-        return -1;
-    }
-
-    if (header[0] != 'B' || header[1] != 'M') {
-        fprintf(stderr, "not a BMP file\n");
         errno = EINVAL;
         return -1;
     }
-
-    bmp->data_offset = read_le32(&header[10]);
-    dib_size = read_le32(&header[14]);
-    bmp->width = read_le32_signed(&header[18]);
-    bmp->height = read_le32_signed(&header[22]);
-    planes = read_le16(&header[26]);
-    bmp->bits_per_pixel = read_le16(&header[28]);
-    compression = read_le32(&header[30]);
-    minimum_data_offset = 14ULL + dib_size;
-
-    if (dib_size < BMP_INFO_HEADER_SIZE ||
-        bmp->data_offset < minimum_data_offset || planes != 1 ||
-        compression != BMP_COMPRESSION_RGB) {
-        fprintf(stderr, "unsupported BMP format\n");
-        errno = ENOTSUP;
-        return -1;
-    }
-
-    if (bmp->width <= 0 || bmp->height == 0 ||
-        bmp->height == INT32_MIN) {
-        fprintf(stderr, "invalid BMP dimensions\n");
-        errno = EINVAL;
-        return -1;
-    }
-
-    if (bmp->bits_per_pixel != 24 && bmp->bits_per_pixel != 32) {
-        fprintf(stderr, "unsupported BMP bit depth: %u\n",
-                bmp->bits_per_pixel);
-        errno = ENOTSUP;
-        return -1;
-    }
-
-    bmp->top_down = bmp->height < 0;
-    if (bmp->top_down) {
-        bmp->height = -bmp->height;
-    }
-
-    row_stride = (((uint64_t)bmp->width * bmp->bits_per_pixel + 31) / 32) * 4;
-    if (row_stride == 0 || row_stride > UINT32_MAX) {
-        fprintf(stderr, "BMP row is too large\n");
+    if ((uintmax_t)status.st_size > SIZE_MAX) {
+        close(fd);
         errno = EOVERFLOW;
         return -1;
     }
+    *size = (size_t)status.st_size;
+    buffer = malloc(*size);
+    if (buffer == NULL) {
+        close(fd);
+        return -1;
+    }
+    while (done < *size) {
+        ssize_t count = read(fd, buffer + done, *size - done);
 
-    bmp->row_stride = (uint32_t)row_stride;
+        if (count < 0 && errno == EINTR) {
+            continue;
+        }
+        if (count <= 0) {
+            free(buffer);
+            close(fd);
+            errno = EIO;
+            return -1;
+        }
+        done += (size_t)count;
+    }
+    close(fd);
+    *data = buffer;
     return 0;
 }
 
 /**
- * @brief 读取 BMP 的一行像素数据。
- *
- * @param fd BMP 文件描述符。
- * @param bmp BMP 图片信息。
- * @param logical_y 从上向下计数的逻辑行号。
- * @param row_buffer 行数据缓冲区。
+ * @brief 解析并验证 BMP 头。
+ * @param data 文件数据。
+ * @param size 文件大小。
+ * @param info 输出元数据。
  * @return 成功返回 0，失败返回 -1。
  */
-static int read_bmp_row(int fd, const struct bmp_info *bmp,
-                        int logical_y, uint8_t *row_buffer)
+static int parse_header(const uint8_t *data, size_t size,
+                        struct bmp_info *info)
 {
-    int file_y = bmp->top_down ? logical_y :
-                 bmp->height - 1 - logical_y;
-    off_t offset = (off_t)bmp->data_offset +
-                   (off_t)file_y * bmp->row_stride;
+    uint32_t dib_size;
+    uint32_t colors_used;
+    uint64_t stride;
+    uint64_t palette_end;
 
-    if (lseek(fd, offset, SEEK_SET) < 0) {
-        perror("seek BMP row");
+    memset(info, 0, sizeof(*info));
+    if (data[0] != 'B' || data[1] != 'M') {
+        errno = EINVAL;
         return -1;
     }
-
-    return read_full(fd, row_buffer, bmp->row_stride);
+    info->data_offset = le32(data + 10);
+    dib_size = le32(data + 14);
+    if (dib_size < 40 || (uint64_t)14 + dib_size > size) {
+        errno = ENOTSUP;
+        return -1;
+    }
+    info->width = (int32_t)le32(data + 18);
+    info->height = (int32_t)le32(data + 22);
+    info->bpp = le16(data + 28);
+    info->compression = le32(data + 30);
+    colors_used = le32(data + 46);
+    if (le16(data + 26) != 1 || info->width <= 0 || info->height == 0 ||
+        info->height == INT32_MIN || info->data_offset > size) {
+        errno = EINVAL;
+        return -1;
+    }
+    info->top_down = info->height < 0;
+    if (info->top_down) {
+        info->height = -info->height;
+    }
+    if (!((info->compression == BMP_RGB &&
+           (info->bpp == 4 || info->bpp == 8 || info->bpp == 24 ||
+            info->bpp == 32)) ||
+          (info->compression == BMP_RLE8 && info->bpp == 8) ||
+          (info->compression == BMP_RLE4 && info->bpp == 4)) ||
+        (info->top_down && info->compression != BMP_RGB)) {
+        errno = ENOTSUP;
+        return -1;
+    }
+    info->palette_offset = 14U + dib_size;
+    if (info->bpp <= 8) {
+        info->palette_count = colors_used != 0 ? colors_used :
+                              (1U << info->bpp);
+        if (info->palette_count > (1U << info->bpp)) {
+            errno = EINVAL;
+            return -1;
+        }
+        palette_end = (uint64_t)info->palette_offset +
+                      (uint64_t)info->palette_count * 4U;
+        if (palette_end > info->data_offset || palette_end > size) {
+            errno = EINVAL;
+            return -1;
+        }
+    }
+    stride = (((uint64_t)info->width * info->bpp + 31U) / 32U) * 4U;
+    if (stride == 0 || stride > UINT32_MAX ||
+        (info->compression == BMP_RGB &&
+         (uint64_t)info->data_offset + stride * (uint32_t)info->height > size)) {
+        errno = EINVAL;
+        return -1;
+    }
+    info->row_stride = (uint32_t)stride;
+    return 0;
 }
 
 /**
- * @brief 将 BMP 行的 BGR/BGRA 像素转换成 RGB888。
- *
- * @param bmp BMP 图片信息。
- * @param source BMP 原始行数据。
- * @param destination RGB888 目标行。
+ * @brief 将调色板索引写入 RGB888 图片。
+ * @param image 目标图片。
+ * @param info BMP 元数据。
+ * @param palette BGRA 调色板。
+ * @param x 文件坐标 X。
+ * @param file_y 从底向上计数的文件坐标 Y。
+ * @param index 调色板索引。
+ * @return 成功返回 0，越界返回 -1。
  */
-static void convert_bmp_row(const struct bmp_info *bmp,
-                            const uint8_t *source, uint8_t *destination)
+static int put_index(struct image_data *image, const struct bmp_info *info,
+                     const uint8_t *palette, int x, int file_y,
+                     unsigned int index)
 {
-    int source_bytes_per_pixel = bmp->bits_per_pixel / 8;
-    int x;
+    int logical_y;
+    uint8_t *pixel;
 
-    for (x = 0; x < bmp->width; x++) {
-        const uint8_t *source_pixel = source +
-                                      (size_t)x * source_bytes_per_pixel;
-        uint8_t *destination_pixel = destination + (size_t)x * 3;
-
-        destination_pixel[0] = source_pixel[2];
-        destination_pixel[1] = source_pixel[1];
-        destination_pixel[2] = source_pixel[0];
+    if (x < 0 || x >= info->width || file_y < 0 || file_y >= info->height ||
+        index >= info->palette_count) {
+        errno = EINVAL;
+        return -1;
     }
+    logical_y = info->height - 1 - file_y;
+    pixel = image->pixels + (size_t)logical_y * image->line_length +
+            (size_t)x * 3U;
+    pixel[0] = palette[index * 4U + 2U];
+    pixel[1] = palette[index * 4U + 1U];
+    pixel[2] = palette[index * 4U];
+    return 0;
+}
+
+/**
+ * @brief 解码未压缩 BMP 像素。
+ * @param data 文件数据。
+ * @param info BMP 元数据。
+ * @param image 输出图片。
+ * @return 成功返回 0，失败返回 -1。
+ */
+static int decode_rgb(const uint8_t *data, const struct bmp_info *info,
+                      struct image_data *image)
+{
+    const uint8_t *palette = data + info->palette_offset;
+    int y;
+
+    for (y = 0; y < info->height; y++) {
+        int file_y = info->top_down ? y : info->height - 1 - y;
+        const uint8_t *row = data + info->data_offset +
+                             (size_t)file_y * info->row_stride;
+        uint8_t *destination = image->pixels +
+                               (size_t)y * image->line_length;
+        int x;
+
+        for (x = 0; x < info->width; x++) {
+            if (info->bpp == 24 || info->bpp == 32) {
+                size_t bytes = info->bpp / 8U;
+                const uint8_t *source = row + (size_t)x * bytes;
+
+                destination[(size_t)x * 3U] = source[2];
+                destination[(size_t)x * 3U + 1U] = source[1];
+                destination[(size_t)x * 3U + 2U] = source[0];
+            } else {
+                unsigned int index = info->bpp == 8 ? row[x] :
+                    ((x & 1) == 0 ? row[x / 2] >> 4 : row[x / 2] & 0x0fU);
+                const uint8_t *color;
+
+                if (index >= info->palette_count) {
+                    errno = EINVAL;
+                    return -1;
+                }
+                color = palette + index * 4U;
+                destination[(size_t)x * 3U] = color[2];
+                destination[(size_t)x * 3U + 1U] = color[1];
+                destination[(size_t)x * 3U + 2U] = color[0];
+            }
+        }
+    }
+    return 0;
+}
+
+/**
+ * @brief 解码一个 RLE 绝对模式数据段。
+ * @param cursor 当前输入位置，成功后前移。
+ * @param end 输入末尾。
+ * @param count 像素数量。
+ * @param info BMP 元数据。
+ * @param image 输出图片。
+ * @param x 当前 X，成功后前移。
+ * @param y 当前文件 Y。
+ * @param palette BGRA 调色板。
+ * @return 成功返回 0，失败返回 -1。
+ */
+static int decode_absolute(const uint8_t **cursor, const uint8_t *end,
+                           unsigned int count, const struct bmp_info *info,
+                           struct image_data *image, int *x, int y,
+                           const uint8_t *palette)
+{
+    size_t packed = info->bpp == 8 ? count : (count + 1U) / 2U;
+    size_t stored = (packed + 1U) & ~(size_t)1U;
+    unsigned int i;
+
+    if ((size_t)(end - *cursor) < stored) {
+        errno = EINVAL;
+        return -1;
+    }
+    for (i = 0; i < count; i++) {
+        unsigned int index = info->bpp == 8 ? (*cursor)[i] :
+            ((i & 1U) == 0 ? (*cursor)[i / 2U] >> 4 :
+             (*cursor)[i / 2U] & 0x0fU);
+
+        if (put_index(image, info, palette, *x, y, index) < 0) {
+            return -1;
+        }
+        (*x)++;
+    }
+    *cursor += stored;
+    return 0;
+}
+
+/**
+ * @brief 解码 BI_RLE4 或 BI_RLE8 像素流。
+ * @param data 文件数据。
+ * @param size 文件大小。
+ * @param info BMP 元数据。
+ * @param image 输出图片。
+ * @return 成功返回 0，失败返回 -1。
+ */
+static int decode_rle(const uint8_t *data, size_t size,
+                      const struct bmp_info *info, struct image_data *image)
+{
+    const uint8_t *cursor = data + info->data_offset;
+    const uint8_t *end = data + size;
+    const uint8_t *palette = data + info->palette_offset;
+    int x = 0;
+    int y = 0;
+
+    while ((size_t)(end - cursor) >= 2U) {
+        unsigned int count = *cursor++;
+        unsigned int value = *cursor++;
+
+        if (count != 0) {
+            unsigned int i;
+
+            for (i = 0; i < count; i++) {
+                unsigned int index = info->bpp == 8 ? value :
+                    ((i & 1U) == 0 ? value >> 4 : value & 0x0fU);
+
+                if (put_index(image, info, palette, x, y, index) < 0) {
+                    return -1;
+                }
+                x++;
+            }
+        } else if (value == 0) {
+            x = 0;
+            y++;
+            if (y > info->height) {
+                errno = EINVAL;
+                return -1;
+            }
+        } else if (value == 1) {
+            return 0;
+        } else if (value == 2) {
+            if ((size_t)(end - cursor) < 2U) {
+                break;
+            }
+            x += *cursor++;
+            y += *cursor++;
+            if (x > info->width || y >= info->height) {
+                errno = EINVAL;
+                return -1;
+            }
+        } else if (decode_absolute(&cursor, end, value, info, image,
+                                   &x, y, palette) < 0) {
+            return -1;
+        }
+    }
+    errno = EINVAL;
+    return -1;
 }
 
 /**
@@ -227,63 +363,29 @@ static void convert_bmp_row(const struct bmp_info *bmp,
  */
 int bmp_decode(const char *path, struct image_data *image)
 {
-    struct bmp_info bmp;
-    uint8_t *row_buffer = NULL;
-    int fd = -1;
-    int result = -1;
-    int y;
+    struct bmp_info info;
+    uint8_t *data = NULL;
+    size_t size = 0;
+    int result;
 
     if (path == NULL || image == NULL || image->pixels != NULL) {
         errno = EINVAL;
         return -1;
     }
-
-    fd = open(path, O_RDONLY);
-    if (fd < 0) {
-        perror(path);
+    if (load_file(path, &data, &size) < 0 ||
+        parse_header(data, size, &info) < 0 ||
+        image_data_create(image, (uint32_t)info.width,
+                          (uint32_t)info.height) < 0) {
+        free(data);
         return -1;
     }
-
-    if (read_bmp_header(fd, &bmp) < 0) {
-        goto cleanup;
-    }
-
-    if (image_data_create(image, (uint32_t)bmp.width,
-                          (uint32_t)bmp.height) < 0) {
-        perror("create decoded image");
-        goto cleanup;
-    }
-
-    row_buffer = malloc(bmp.row_stride);
-    if (row_buffer == NULL) {
-        perror("allocate BMP row");
-        goto cleanup;
-    }
-
-    for (y = 0; y < bmp.height; y++) {
-        uint8_t *destination = image->pixels +
-                               (size_t)y * image->line_length;
-
-        if (read_bmp_row(fd, &bmp, y, row_buffer) < 0) {
-            goto cleanup;
-        }
-
-        convert_bmp_row(&bmp, row_buffer, destination);
-    }
-
-    result = 0;
-
-cleanup:
-    free(row_buffer);
-
-    if (close(fd) < 0) {
-        perror("close BMP");
-        result = -1;
-    }
-
+    memset(image->pixels, 0, image->size);
+    result = info.compression == BMP_RGB ?
+             decode_rgb(data, &info, image) :
+             decode_rle(data, size, &info, image);
+    free(data);
     if (result < 0) {
         image_data_destroy(image);
     }
-
     return result;
 }

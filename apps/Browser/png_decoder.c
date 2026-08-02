@@ -3,8 +3,8 @@
 #include <errno.h>
 #include <png.h>
 #include <stdint.h>
-#include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 /**
  * @brief 将 libpng 输出的一行 RGBA 像素合成到黑色背景。
@@ -39,95 +39,37 @@ static void composite_row(const uint8_t *source, uint8_t *destination,
  */
 int png_decode(const char *path, struct image_data *image)
 {
-    png_structp png = NULL;
-    png_infop info = NULL;
-    png_bytep row = NULL;
-    FILE *file = NULL;
-    png_uint_32 width;
-    png_uint_32 height;
-    int color_type;
-    int bit_depth;
-    int result = -1;
+    png_image png;
+    png_bytep pixels = NULL;
     png_uint_32 y;
 
     if (path == NULL || image == NULL || image->pixels != NULL) {
         errno = EINVAL;
         return -1;
     }
-    file = fopen(path, "rb");
-    if (file == NULL) {
-        perror(path);
+    memset(&png, 0, sizeof(png));
+    png.version = PNG_IMAGE_VERSION;
+    if (png_image_begin_read_from_file(&png, path) == 0 ||
+        png.width == 0 || png.height == 0) {
+        errno = EINVAL;
+        png_image_free(&png);
         return -1;
     }
-    png = png_create_read_struct(PNG_LIBPNG_VER_STRING, NULL, NULL, NULL);
-    info = png != NULL ? png_create_info_struct(png) : NULL;
-    if (png == NULL || info == NULL) {
-        errno = ENOMEM;
-        goto cleanup;
+    png.format = PNG_FORMAT_RGBA;
+    pixels = malloc(PNG_IMAGE_SIZE(png));
+    if (pixels == NULL ||
+        png_image_finish_read(&png, NULL, pixels, 0, NULL) == 0 ||
+        image_data_create(image, png.width, png.height) < 0) {
+        free(pixels);
+        png_image_free(&png);
+        return -1;
     }
-    if (setjmp(png_jmpbuf(png)) != 0) {
-        errno = EINVAL;
-        goto cleanup;
+    for (y = 0; y < png.height; y++) {
+        composite_row(pixels + (size_t)y * png.width * 4U,
+                      image->pixels + (size_t)y * image->line_length,
+                      png.width);
     }
-    png_init_io(png, file);
-    png_read_info(png, info);
-    width = png_get_image_width(png, info);
-    height = png_get_image_height(png, info);
-    color_type = png_get_color_type(png, info);
-    bit_depth = png_get_bit_depth(png, info);
-    if (width == 0 || height == 0) {
-        errno = EINVAL;
-        goto cleanup;
-    }
-    if (bit_depth == 16) {
-        png_set_strip_16(png);
-    }
-    if (color_type == PNG_COLOR_TYPE_PALETTE) {
-        png_set_palette_to_rgb(png);
-    }
-    if (color_type == PNG_COLOR_TYPE_GRAY && bit_depth < 8) {
-        png_set_expand_gray_1_2_4_to_8(png);
-    }
-    if (png_get_valid(png, info, PNG_INFO_tRNS) != 0) {
-        png_set_tRNS_to_alpha(png);
-    }
-    if (color_type == PNG_COLOR_TYPE_GRAY ||
-        color_type == PNG_COLOR_TYPE_GRAY_ALPHA) {
-        png_set_gray_to_rgb(png);
-    }
-    if ((color_type & PNG_COLOR_MASK_ALPHA) == 0 &&
-        png_get_valid(png, info, PNG_INFO_tRNS) == 0) {
-        png_set_add_alpha(png, 0xff, PNG_FILLER_AFTER);
-    }
-    png_set_interlace_handling(png);
-    png_read_update_info(png, info);
-    if (png_get_channels(png, info) != 4 ||
-        png_get_rowbytes(png, info) < (png_size_t)width * 4U ||
-        image_data_create(image, width, height) < 0) {
-        goto cleanup;
-    }
-    row = malloc(png_get_rowbytes(png, info));
-    if (row == NULL) {
-        goto cleanup;
-    }
-    for (y = 0; y < height; y++) {
-        png_read_row(png, row, NULL);
-        composite_row(row, image->pixels + (size_t)y * image->line_length,
-                      width);
-    }
-    png_read_end(png, NULL);
-    result = 0;
-
-cleanup:
-    free(row);
-    if (png != NULL) {
-        png_destroy_read_struct(&png, info != NULL ? &info : NULL, NULL);
-    }
-    if (file != NULL) {
-        fclose(file);
-    }
-    if (result < 0) {
-        image_data_destroy(image);
-    }
-    return result;
+    free(pixels);
+    png_image_free(&png);
+    return 0;
 }
