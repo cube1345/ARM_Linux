@@ -17,6 +17,8 @@ int render_text_page(struct browser_app *app)
         return -1;
     }
     browser_ui_draw_back_button(&app->display, &app->font);
+    browser_ui_draw_footer_hint(&app->display, &app->font,
+                                "←/→ page  Swipe page  Esc back");
     return bmp_display_flush(&app->display);
 }
 

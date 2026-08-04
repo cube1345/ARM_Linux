@@ -1,5 +1,6 @@
 #include "bmp_display.h"
 
+#include "browser_log.h"
 #include "bmp_decoder.h"
 #include "image_render.h"
 
@@ -149,7 +150,7 @@ int bmp_display_open(struct bmp_display *display,
 
     display->fd = open(framebuffer_path, O_RDWR);
     if (display->fd < 0) {
-        perror("open framebuffer");
+        browser_log_errno(BROWSER_LOG_ERROR, "open framebuffer");
         return -1;
     }
 
@@ -157,7 +158,8 @@ int bmp_display_open(struct bmp_display *display,
               &display->fixed_info) < 0 ||
         ioctl(display->fd, FBIOGET_VSCREENINFO,
               &display->variable_info) < 0) {
-        perror("get framebuffer information");
+        browser_log_errno(BROWSER_LOG_ERROR,
+                          "get framebuffer information");
         bmp_display_close(display);
         return -1;
     }
@@ -165,15 +167,16 @@ int bmp_display_open(struct bmp_display *display,
     bytes_per_pixel = display->variable_info.bits_per_pixel / 8;
     if (bytes_per_pixel != 2 && bytes_per_pixel != 3 &&
         bytes_per_pixel != 4) {
-        fprintf(stderr, "unsupported framebuffer depth: %u bpp\n",
-                display->variable_info.bits_per_pixel);
+        browser_log(BROWSER_LOG_ERROR,
+                    "unsupported framebuffer depth: %u bpp",
+                    display->variable_info.bits_per_pixel);
         bmp_display_close(display);
         return -1;
     }
 
     display->memory_size = display->fixed_info.smem_len;
     if (display->memory_size == 0) {
-        fprintf(stderr, "framebuffer memory size is zero\n");
+        browser_log(BROWSER_LOG_ERROR, "framebuffer memory size is zero");
         bmp_display_close(display);
         return -1;
     }
@@ -182,7 +185,7 @@ int bmp_display_open(struct bmp_display *display,
                            PROT_READ | PROT_WRITE, MAP_SHARED,
                            display->fd, 0);
     if (display->memory == MAP_FAILED) {
-        perror("map framebuffer");
+        browser_log_errno(BROWSER_LOG_ERROR, "map framebuffer");
         bmp_display_close(display);
         return -1;
     }
@@ -192,15 +195,15 @@ int bmp_display_open(struct bmp_display *display,
                             display->variable_info.yres,
                             display->variable_info.bits_per_pixel,
                             display->fixed_info.line_length) < 0) {
-        perror("create video buffer");
+        browser_log_errno(BROWSER_LOG_ERROR, "create video buffer");
         bmp_display_close(display);
         return -1;
     }
 
-    printf("framebuffer: %ux%u, %u bpp\n",
-           display->variable_info.xres,
-           display->variable_info.yres,
-           display->variable_info.bits_per_pixel);
+    browser_log(BROWSER_LOG_INFO, "framebuffer: %ux%u, %u bpp",
+                display->variable_info.xres,
+                display->variable_info.yres,
+                display->variable_info.bits_per_pixel);
     return 0;
 }
 
@@ -228,7 +231,7 @@ int bmp_display_show(struct bmp_display *display, const char *bmp_path)
 
     result = image_render_draw(display, &image, 0);
     if (result < 0) {
-        perror("render image");
+        browser_log_errno(BROWSER_LOG_ERROR, "render image");
     }
 
     image_data_destroy(&image);

@@ -1,5 +1,6 @@
 #include "text_reader.h"
 
+#include "browser_log.h"
 #include "ui_draw.h"
 
 #include <errno.h>
@@ -45,18 +46,18 @@ int text_reader_open(struct text_reader *reader, const char *path)
     memset(reader, 0, sizeof(*reader));
     file = fopen(path, "rb");
     if (file == NULL) {
-        perror(path);
+        browser_log_errno(BROWSER_LOG_ERROR, path);
         return -1;
     }
     if (fseek(file, 0, SEEK_END) != 0 || (length = ftell(file)) < 0 ||
         fseek(file, 0, SEEK_SET) != 0) {
-        perror("inspect text file");
+        browser_log_errno(BROWSER_LOG_ERROR, "inspect text file");
         fclose(file);
         return -1;
     }
     if ((unsigned long)length > TEXT_READER_MAX_FILE_SIZE) {
-        fprintf(stderr, "text file exceeds %u bytes\n",
-                TEXT_READER_MAX_FILE_SIZE);
+        browser_log(BROWSER_LOG_ERROR, "text file exceeds %u bytes",
+                    TEXT_READER_MAX_FILE_SIZE);
         fclose(file);
         errno = EFBIG;
         return -1;
@@ -67,7 +68,7 @@ int text_reader_open(struct text_reader *reader, const char *path)
         return -1;
     }
     if (fread(reader->data, 1, (size_t)length, file) != (size_t)length) {
-        perror("read text file");
+        browser_log_errno(BROWSER_LOG_ERROR, "read text file");
         fclose(file);
         text_reader_close(reader);
         return -1;

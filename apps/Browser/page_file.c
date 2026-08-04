@@ -13,6 +13,31 @@
 #include <stdlib.h>
 #include <string.h>
 
+#define FILE_PAGE_LIST_TOP (UI_HEADER_HEIGHT + 12)
+#define FILE_PAGE_TAG_WIDTH 64
+
+/**
+ * @brief 获取文件类型标签颜色。
+ * @param type 文件类型。
+ * @return RGB888 颜色。
+ */
+static uint32_t file_type_color(enum file_type type)
+{
+    if (type == FILE_TYPE_DIRECTORY) {
+        return UI_ACCENT;
+    }
+    if (type == FILE_TYPE_TEXT) {
+        return UI_WARNING;
+    }
+    if (browser_file_type_is_audio(type)) {
+        return UI_ACCENT_2;
+    }
+    if (browser_file_type_is_image(type)) {
+        return UI_SELECTED_BORDER;
+    }
+    return UI_MUTED;
+}
+
 /**
  * @brief 绘制文件列表页面。
  * @param app 浏览器上下文。
@@ -20,49 +45,60 @@
  */
 int render_file_page(struct browser_app *app)
 {
-    int row_height = (int)app->font.pixel_size + 14;
+    int width = (int)app->display.variable_info.xres;
+    int row_height = (int)app->font.pixel_size + 18;
+    int card_x = UI_MARGIN;
+    int card_width = width - UI_MARGIN * 2;
+    char subtitle[FILE_LIST_NAME_SIZE + 32];
     size_t visible = browser_ui_visible_rows(&app->display, &app->font);
     size_t first = app->selected / visible * visible;
     size_t index;
 
+    snprintf(subtitle, sizeof(subtitle), "%zu items  ·  %.180s",
+             app->files.count, app->files.directory);
     bmp_display_clear(&app->display, (uint8_t)(UI_BACKGROUND >> 16),
                       (uint8_t)(UI_BACKGROUND >> 8),
                       (uint8_t)UI_BACKGROUND);
-    ui_draw_rect(&app->display, 0, 0,
-                 (int)app->display.variable_info.xres,
-                 UI_HEADER_HEIGHT, UI_HEADER);
-    ui_draw_text(&app->display, &app->font, app->files.directory,
-                 UI_MARGIN, (int)app->font.pixel_size + 14,
-                 (int)app->display.variable_info.xres - UI_MARGIN * 2,
-                 UI_TEXT, UI_HEADER);
+    browser_ui_draw_header(&app->display, &app->font,
+                           "Media Browser", subtitle);
     for (index = first; index < app->files.count && index < first + visible;
          index++) {
-        int y = UI_HEADER_HEIGHT + (int)(index - first) * row_height;
-        uint32_t background = index == app->selected ?
-                              UI_SELECTED : UI_BACKGROUND;
-        char line[FILE_LIST_NAME_SIZE + 16];
+        int y = FILE_PAGE_LIST_TOP + (int)(index - first) * row_height;
+        int card_height = row_height - 6;
+        uint32_t background = index == app->selected ? UI_SELECTED :
+                              (index % 2U == 0U ? UI_SURFACE :
+                               UI_SURFACE_ALT);
+        uint32_t border = index == app->selected ? UI_SELECTED_BORDER :
+                          UI_BORDER;
+        uint32_t tag = file_type_color(app->files.entries[index].type);
 
-        if (index == app->selected) {
-            ui_draw_rect(&app->display, 0, y,
-                         (int)app->display.variable_info.xres,
-                         row_height, background);
-        }
-        snprintf(line, sizeof(line), "%-3s  %s",
-                 file_type_name(app->files.entries[index].type),
-                 app->files.entries[index].name);
-        ui_draw_text(&app->display, &app->font, line, UI_MARGIN,
-                     y + (int)app->font.pixel_size + 5,
-                     (int)app->display.variable_info.xres - UI_MARGIN * 2,
+        browser_ui_draw_panel(&app->display, card_x, y, card_width,
+                              card_height, background, border);
+        ui_draw_rect(&app->display, card_x + 10, y + 9,
+                     FILE_PAGE_TAG_WIDTH, card_height - 18, tag);
+        ui_draw_text(&app->display, &app->font,
+                     file_type_name(app->files.entries[index].type),
+                     card_x + 20, y + (int)app->font.pixel_size + 6,
+                     FILE_PAGE_TAG_WIDTH - 18, UI_BACKGROUND, tag);
+        ui_draw_text(&app->display, &app->font,
+                     app->files.entries[index].name,
+                     card_x + FILE_PAGE_TAG_WIDTH + 28,
+                     y + (int)app->font.pixel_size + 7,
+                     card_width - FILE_PAGE_TAG_WIDTH - 44,
                      index == app->selected ? UI_TEXT : UI_MUTED,
                      background);
     }
     if (app->files.count == 0) {
+        int y = FILE_PAGE_LIST_TOP + 20;
+
+        browser_ui_draw_panel(&app->display, UI_MARGIN, y, card_width,
+                              row_height + 24, UI_SURFACE, UI_BORDER);
         ui_draw_text(&app->display, &app->font, "Empty directory",
-                     UI_MARGIN, UI_HEADER_HEIGHT +
-                     (int)app->font.pixel_size + 10,
-                     (int)app->display.variable_info.xres - UI_MARGIN * 2,
-                     UI_MUTED, UI_BACKGROUND);
+                     UI_MARGIN + 18, y + (int)app->font.pixel_size + 18,
+                     card_width - 36, UI_MUTED, UI_SURFACE);
     }
+    browser_ui_draw_footer_hint(&app->display, &app->font,
+                                "↑↓ select  Enter open  Esc back  Q quit");
     return bmp_display_flush(&app->display);
 }
 
@@ -182,10 +218,12 @@ int handle_file_touch(struct browser_app *app,
 {
     size_t visible = browser_ui_visible_rows(&app->display, &app->font);
 
-    if (input->touch == TOUCH_ACTION_TAP && input->y >= UI_HEADER_HEIGHT) {
-        int row_height = (int)app->font.pixel_size + 14;
+    if (input->touch == TOUCH_ACTION_TAP &&
+        input->y >= FILE_PAGE_LIST_TOP &&
+        input->y < (int)app->display.variable_info.yres - UI_FOOTER_HEIGHT) {
+        int row_height = (int)app->font.pixel_size + 18;
         size_t first = app->selected / visible * visible;
-        size_t row = (size_t)(input->y - UI_HEADER_HEIGHT) /
+        size_t row = (size_t)(input->y - FILE_PAGE_LIST_TOP) /
                      (size_t)row_height;
 
         if (first + row < app->files.count && row < visible) {

@@ -39,10 +39,24 @@ struct browser_input {
     int dy;
 };
 
-/** @brief 键盘与绝对坐标触摸设备管理器。 */
+struct input_manager;
+
+/** @brief 输入设备 operation 回调集合。 */
+struct input_operation {
+    const char *name;
+    int fd;
+    int (*read)(struct input_manager *manager,
+                struct input_operation *operation,
+                struct browser_input *output);
+    void (*close)(struct input_operation *operation);
+    struct input_operation *next;
+};
+
+/** @brief 键盘与绝对坐标触摸设备 operation 管理器。 */
 struct input_manager {
-    int keyboard_fd;
-    int touch_fd;
+    struct input_operation *operations;
+    struct input_operation keyboard;
+    struct input_operation touch;
     int screen_width;
     int screen_height;
     int abs_x_code;

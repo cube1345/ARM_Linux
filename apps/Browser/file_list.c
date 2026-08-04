@@ -1,5 +1,7 @@
 #include "file_list.h"
 
+#include "browser_log.h"
+
 #include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
@@ -111,12 +113,12 @@ int file_list_scan(const char *directory, struct file_list *list)
     }
     memset(list, 0, sizeof(*list));
     if (realpath(directory, list->directory) == NULL) {
-        perror(directory);
+        browser_log_errno(BROWSER_LOG_ERROR, directory);
         return -1;
     }
     stream = opendir(list->directory);
     if (stream == NULL) {
-        perror(list->directory);
+        browser_log_errno(BROWSER_LOG_ERROR, list->directory);
         return -1;
     }
 
@@ -130,7 +132,7 @@ int file_list_scan(const char *directory, struct file_list *list)
         entry = readdir(stream);
         if (entry == NULL) {
             if (errno != 0) {
-                perror("readdir");
+                browser_log_errno(BROWSER_LOG_ERROR, "readdir");
                 closedir(stream);
                 return -1;
             }
@@ -161,7 +163,7 @@ int file_list_scan(const char *directory, struct file_list *list)
         list->count++;
     }
     if (closedir(stream) < 0) {
-        perror("closedir");
+        browser_log_errno(BROWSER_LOG_ERROR, "closedir");
         return -1;
     }
     qsort(list->entries, list->count, sizeof(list->entries[0]), compare_entry);

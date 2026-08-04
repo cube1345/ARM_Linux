@@ -12,6 +12,7 @@
 #include "text_reader.h"
 
 #include <limits.h>
+#include <pthread.h>
 #include <stdint.h>
 
 /** @brief 浏览器当前页面。 */
@@ -32,13 +33,23 @@ struct browser_app {
     struct audio_player audio;
     struct animation_decoder_manager animations;
     struct image_data image;
+    struct image_data preloaded_image;
     struct gif_animation gif;
     char root[PATH_MAX];
     char current_path[PATH_MAX];
+    char preloaded_path[PATH_MAX];
     const char *alsa_device;
     size_t selected;
+    size_t preloaded_index;
+    enum file_type preloaded_type;
     enum browser_page page;
     unsigned int rotation;
+    int slideshow_enabled;
+    int preload_thread_created;
+    int preload_ready;
+    int preload_result;
+    pthread_t preload_thread;
+    uint64_t next_slideshow_ms;
     uint64_t last_audio_refresh_ms;
 };
 

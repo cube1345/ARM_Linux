@@ -33,6 +33,24 @@ int render_image_page(struct browser_app *app);
 int select_adjacent_image(struct browser_app *app, int direction);
 
 /**
+ * @brief 执行图片页面周期任务。
+ * @param app 浏览器上下文。
+ * @param now_ms 当前单调时钟毫秒值。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int update_image_page(struct browser_app *app, uint64_t now_ms);
+
+/**
+ * @brief 由图片页面状态调整事件等待时间。
+ * @param app 浏览器上下文。
+ * @param now_ms 当前单调时钟毫秒值。
+ * @param current_timeout 当前等待时间。
+ * @return 调整后的等待时间。
+ */
+int image_page_event_timeout(const struct browser_app *app, uint64_t now_ms,
+                             int current_timeout);
+
+/**
  * @brief 处理图片页面键盘动作。
  * @param app 浏览器上下文。
  * @param action 输入动作。

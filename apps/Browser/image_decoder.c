@@ -158,6 +158,16 @@ static int ensure_default_manager(void)
 }
 
 /**
+ * @brief 提前初始化默认图片解码器管理器。
+ *
+ * @return 成功返回 0，失败返回 -1。
+ */
+int image_decoder_prepare(void)
+{
+    return ensure_default_manager();
+}
+
+/**
  * @brief 按文件类型调用对应图片解码器。
  *
  * @param path 图片路径。

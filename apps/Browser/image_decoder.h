@@ -43,6 +43,13 @@ int image_decoder_register(struct image_decoder_manager *manager,
 int image_decoder_register_builtin(struct image_decoder_manager *manager);
 
 /**
+ * @brief 提前初始化默认图片解码器管理器。
+ *
+ * @return 成功返回 0，失败返回 -1。
+ */
+int image_decoder_prepare(void);
+
+/**
  * @brief 通过指定管理器解码静态图片。
  *
  * @param manager 解码器管理器。

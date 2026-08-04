@@ -1,5 +1,7 @@
 #include "input_keyboard.h"
 
+#include "browser_log.h"
+
 #include <errno.h>
 #include <fcntl.h>
 #include <linux/input.h>
@@ -10,7 +12,15 @@
 #include <unistd.h>
 
 #define INPUT_BATCH 32
+#define INPUT_MAX_OPERATIONS 4
 #define INPUT_NAME_SIZE 128
+
+static int read_keyboard(struct input_manager *manager,
+                         struct input_operation *operation,
+                         struct browser_input *output);
+static int read_touch(struct input_manager *manager,
+                      struct input_operation *operation,
+                      struct browser_input *output);
 
 /**
  * @brief 将键盘按下事件映射为浏览器动作。
@@ -55,33 +65,35 @@ static int open_input(const char *path)
     int fd = open(path, O_RDONLY | O_NONBLOCK);
 
     if (fd < 0) {
-        perror(path);
+        browser_log_errno(BROWSER_LOG_ERROR, path);
         return -1;
     }
     (void)ioctl(fd, EVIOCGNAME(sizeof(name)), name);
-    printf("input device: %s (%s)\n", path, name);
+    browser_log(BROWSER_LOG_INFO, "input device: %s (%s)", path, name);
     return fd;
 }
 
 /**
  * @brief 查找触摸设备支持的绝对坐标轴。
  * @param manager 输入管理器。
+ * @param fd 触摸设备文件描述符。
  * @return 成功返回 0，失败返回 -1。
  */
-static int configure_axes(struct input_manager *manager)
+static int configure_axes(struct input_manager *manager, int fd)
 {
-    if (ioctl(manager->touch_fd, EVIOCGABS(ABS_X), &manager->abs_x) == 0 &&
-        ioctl(manager->touch_fd, EVIOCGABS(ABS_Y), &manager->abs_y) == 0) {
+    if (ioctl(fd, EVIOCGABS(ABS_X), &manager->abs_x) == 0 &&
+        ioctl(fd, EVIOCGABS(ABS_Y), &manager->abs_y) == 0) {
         manager->abs_x_code = ABS_X;
         manager->abs_y_code = ABS_Y;
-    } else if (ioctl(manager->touch_fd, EVIOCGABS(ABS_MT_POSITION_X),
+    } else if (ioctl(fd, EVIOCGABS(ABS_MT_POSITION_X),
                      &manager->abs_x) == 0 &&
-               ioctl(manager->touch_fd, EVIOCGABS(ABS_MT_POSITION_Y),
+               ioctl(fd, EVIOCGABS(ABS_MT_POSITION_Y),
                      &manager->abs_y) == 0) {
         manager->abs_x_code = ABS_MT_POSITION_X;
         manager->abs_y_code = ABS_MT_POSITION_Y;
     } else {
-        fprintf(stderr, "touch device has no absolute X/Y axes\n");
+        browser_log(BROWSER_LOG_ERROR,
+                    "touch device has no absolute X/Y axes");
         errno = ENOTSUP;
         return -1;
     }
@@ -91,6 +103,37 @@ static int configure_axes(struct input_manager *manager)
         return -1;
     }
     return 0;
+}
+
+/**
+ * @brief 注册一个输入 operation。
+ * @param manager 输入管理器。
+ * @param operation 输入 operation。
+ * @return 成功返回 0，失败返回 -1。
+ */
+static int input_manager_register_operation(
+    struct input_manager *manager, struct input_operation *operation)
+{
+    if (manager == NULL || operation == NULL || operation->name == NULL ||
+        operation->fd < 0 || operation->read == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    operation->next = manager->operations;
+    manager->operations = operation;
+    return 0;
+}
+
+/**
+ * @brief 关闭输入 operation 的文件描述符。
+ * @param operation 输入 operation。
+ */
+static void close_input_operation(struct input_operation *operation)
+{
+    if (operation != NULL && operation->fd >= 0) {
+        close(operation->fd);
+        operation->fd = -1;
+    }
 }
 
 /**
@@ -133,24 +176,41 @@ int input_manager_open(struct input_manager *manager,
         return -1;
     }
     memset(manager, 0, sizeof(*manager));
-    manager->keyboard_fd = -1;
-    manager->touch_fd = -1;
+    manager->keyboard.fd = -1;
+    manager->touch.fd = -1;
     manager->screen_width = screen_width;
     manager->screen_height = screen_height;
     if (strcmp(keyboard_path, "-") != 0) {
-        manager->keyboard_fd = open_input(keyboard_path);
-        if (manager->keyboard_fd < 0) {
+        manager->keyboard.fd = open_input(keyboard_path);
+        if (manager->keyboard.fd < 0) {
             return -1;
         }
-    }
-    if (touch_path != NULL && strcmp(touch_path, "-") != 0) {
-        manager->touch_fd = open_input(touch_path);
-        if (manager->touch_fd < 0 || configure_axes(manager) < 0) {
+        manager->keyboard.name = "keyboard";
+        manager->keyboard.read = read_keyboard;
+        manager->keyboard.close = close_input_operation;
+        if (input_manager_register_operation(manager,
+                                             &manager->keyboard) < 0) {
             input_manager_close(manager);
             return -1;
         }
     }
-    if (manager->keyboard_fd < 0 && manager->touch_fd < 0) {
+    if (touch_path != NULL && strcmp(touch_path, "-") != 0) {
+        manager->touch.fd = open_input(touch_path);
+        if (manager->touch.fd < 0 || configure_axes(manager,
+                                                    manager->touch.fd) < 0) {
+            input_manager_close(manager);
+            return -1;
+        }
+        manager->touch.name = "touch";
+        manager->touch.read = read_touch;
+        manager->touch.close = close_input_operation;
+        if (input_manager_register_operation(manager,
+                                             &manager->touch) < 0) {
+            input_manager_close(manager);
+            return -1;
+        }
+    }
+    if (manager->operations == NULL) {
         errno = ENODEV;
         return -1;
     }
@@ -226,14 +286,16 @@ static int finish_touch_report(struct input_manager *manager,
 /**
  * @brief 读取并聚合触摸 Input 事件。
  * @param manager 输入管理器。
+ * @param operation 触摸输入 operation。
  * @param output 输出归一化事件。
  * @return 生成事件返回 1，无完整事件返回 0，失败返回 -1。
  */
 static int read_touch(struct input_manager *manager,
+                      struct input_operation *operation,
                       struct browser_input *output)
 {
     struct input_event events[INPUT_BATCH];
-    ssize_t bytes = read(manager->touch_fd, events, sizeof(events));
+    ssize_t bytes = read(operation->fd, events, sizeof(events));
     size_t count;
     size_t index;
     int generated = 0;
@@ -280,15 +342,19 @@ static int read_touch(struct input_manager *manager,
 
 /**
  * @brief 读取一批键盘事件。
- * @param fd 键盘文件描述符。
+ * @param manager 输入管理器。
+ * @param operation 键盘输入 operation。
  * @param output 输出浏览器事件。
  * @return 生成动作返回 1，无动作返回 0，失败返回 -1。
  */
-static int read_keyboard(int fd, struct browser_input *output)
+static int read_keyboard(struct input_manager *manager,
+                         struct input_operation *operation,
+                         struct browser_input *output)
 {
     struct input_event event;
-    ssize_t bytes = read(fd, &event, sizeof(event));
+    ssize_t bytes = read(operation->fd, &event, sizeof(event));
 
+    (void)manager;
     if (bytes < 0 && (errno == EAGAIN || errno == EWOULDBLOCK ||
                       errno == EINTR)) {
         return 0;
@@ -311,8 +377,9 @@ static int read_keyboard(int fd, struct browser_input *output)
 int input_manager_wait(struct input_manager *manager,
                        struct browser_input *event, int timeout_ms)
 {
-    struct pollfd descriptors[2];
-    int kinds[2];
+    struct pollfd descriptors[INPUT_MAX_OPERATIONS];
+    struct input_operation *operations[INPUT_MAX_OPERATIONS];
+    struct input_operation *operation;
     int count = 0;
     int poll_result;
     int index;
@@ -322,15 +389,23 @@ int input_manager_wait(struct input_manager *manager,
         return -1;
     }
     memset(event, 0, sizeof(*event));
-    if (manager->keyboard_fd >= 0) {
-        descriptors[count].fd = manager->keyboard_fd;
+    for (operation = manager->operations; operation != NULL;
+         operation = operation->next) {
+        if (count >= INPUT_MAX_OPERATIONS) {
+            errno = E2BIG;
+            return -1;
+        }
+        if (operation->fd < 0) {
+            continue;
+        }
+        descriptors[count].fd = operation->fd;
         descriptors[count].events = POLLIN;
-        kinds[count++] = 0;
+        descriptors[count].revents = 0;
+        operations[count++] = operation;
     }
-    if (manager->touch_fd >= 0) {
-        descriptors[count].fd = manager->touch_fd;
-        descriptors[count].events = POLLIN;
-        kinds[count++] = 1;
+    if (count == 0) {
+        errno = ENODEV;
+        return -1;
     }
     do {
         poll_result = poll(descriptors, (nfds_t)count, timeout_ms);
@@ -349,9 +424,7 @@ int input_manager_wait(struct input_manager *manager,
         if ((descriptors[index].revents & POLLIN) == 0) {
             continue;
         }
-        result = kinds[index] == 0 ? read_keyboard(descriptors[index].fd,
-                                                   event) :
-                 read_touch(manager, event);
+        result = operations[index]->read(manager, operations[index], event);
         if (result != 0) {
             return result;
         }
@@ -365,17 +438,20 @@ int input_manager_wait(struct input_manager *manager,
  */
 void input_manager_close(struct input_manager *manager)
 {
+    struct input_operation *operation;
+
     if (manager == NULL) {
         return;
     }
-    if (manager->keyboard_fd >= 0) {
-        close(manager->keyboard_fd);
+    for (operation = manager->operations; operation != NULL;
+         operation = operation->next) {
+        if (operation->close != NULL) {
+            operation->close(operation);
+        }
     }
-    if (manager->touch_fd >= 0) {
-        close(manager->touch_fd);
-    }
-    manager->keyboard_fd = -1;
-    manager->touch_fd = -1;
+    close_input_operation(&manager->keyboard);
+    close_input_operation(&manager->touch);
+    manager->operations = NULL;
 }
 
 /**

@@ -1,5 +1,7 @@
 #include "audio_player.h"
 
+#include "browser_log.h"
+
 #include <alsa/asoundlib.h>
 #include <errno.h>
 #include <limits.h>
@@ -151,7 +153,8 @@ static int open_pcm(struct audio_player *player, unsigned int channels,
                                    channels, rate, 1, 200000);
     }
     if (error < 0) {
-        fprintf(stderr, "ALSA setup: %s\n", snd_strerror(error));
+        browser_log(BROWSER_LOG_ERROR, "ALSA setup: %s",
+                    snd_strerror(error));
         if (*pcm != NULL) {
             snd_pcm_close(*pcm);
             *pcm = NULL;
@@ -212,8 +215,8 @@ static snd_pcm_sframes_t write_frames(struct audio_player *player,
         if (written < 0) {
             written = snd_pcm_recover(pcm, (int)written, 1);
             if (written < 0) {
-                fprintf(stderr, "ALSA write: %s\n",
-                        snd_strerror((int)written));
+                browser_log(BROWSER_LOG_ERROR, "ALSA write: %s",
+                            snd_strerror((int)written));
                 return -1;
             }
             continue;
@@ -482,15 +485,16 @@ static int play_mp3(struct audio_player *player)
                                  &new_encoding) != MPG123_OK ||
                 new_rate != rate || new_channels != channels ||
                 (new_encoding & MPG123_ENC_SIGNED_16) == 0) {
-                fprintf(stderr, "unsupported MP3 format change\n");
+                browser_log(BROWSER_LOG_ERROR,
+                            "unsupported MP3 format change");
                 goto cleanup;
             }
             if (bytes == 0) {
                 continue;
             }
         } else if (status != MPG123_OK) {
-            fprintf(stderr, "mpg123 decode: %s\n",
-                    mpg123_strerror(decoder));
+            browser_log(BROWSER_LOG_ERROR, "mpg123 decode: %s",
+                        mpg123_strerror(decoder));
             goto cleanup;
         }
         if (bytes % ((size_t)channels * 2U) != 0) {

@@ -1,5 +1,7 @@
 #include "jpeg_decoder.h"
 
+#include "browser_log.h"
+
 #include <errno.h>
 #include <stdio.h>
 #include <jpeglib.h>
@@ -46,7 +48,7 @@ int jpeg_decode(const char *path, struct image_data *image)
     }
     file = fopen(path, "rb");
     if (file == NULL) {
-        perror(path);
+        browser_log_errno(BROWSER_LOG_ERROR, path);
         return -1;
     }
     decoder.err = jpeg_std_error(&error.manager);

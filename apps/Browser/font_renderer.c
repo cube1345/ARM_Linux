@@ -1,5 +1,7 @@
 #include "font_renderer.h"
 
+#include "browser_log.h"
+
 #include <errno.h>
 #include <stdio.h>
 #include <string.h>
@@ -36,11 +38,11 @@ int font_renderer_open(struct font_renderer *renderer,
     }
     memset(renderer, 0, sizeof(*renderer));
     if (FT_Init_FreeType(&renderer->library) != 0) {
-        fprintf(stderr, "FT_Init_FreeType failed\n");
+        browser_log(BROWSER_LOG_ERROR, "FT_Init_FreeType failed");
         return -1;
     }
     if (FT_New_Face(renderer->library, font_path, 0, &renderer->face) != 0) {
-        fprintf(stderr, "cannot load font: %s\n", font_path);
+        browser_log(BROWSER_LOG_ERROR, "cannot load font: %s", font_path);
         font_renderer_close(renderer);
         return -1;
     }
@@ -66,7 +68,7 @@ int font_renderer_set_size(struct font_renderer *renderer,
         return -1;
     }
     if (FT_Set_Pixel_Sizes(renderer->face, 0, pixel_size) != 0) {
-        fprintf(stderr, "FT_Set_Pixel_Sizes failed\n");
+        browser_log(BROWSER_LOG_ERROR, "FT_Set_Pixel_Sizes failed");
         return -1;
     }
     renderer->pixel_size = pixel_size;
