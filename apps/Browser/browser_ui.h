@@ -140,6 +140,15 @@ void browser_ui_format_time(uint64_t milliseconds, char *output,
 int browser_ui_bar_percent(const struct bmp_display *display, int x);
 
 /**
+ * @brief 将屏幕 X 坐标转换为指定水平条范围的百分比。
+ * @param x 屏幕 X 坐标。
+ * @param bar_x 水平条左边界。
+ * @param bar_width 水平条宽度。
+ * @return 0 到 100 的百分比。
+ */
+int browser_ui_bar_percent_at(int x, int bar_x, int bar_width);
+
+/**
  * @brief 判断触摸手势是否命中指定水平条。
  * @param input 触摸输入。
  * @param y 条形控件 Y 坐标。

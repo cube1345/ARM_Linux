@@ -255,17 +255,29 @@ void browser_ui_format_time(uint64_t milliseconds, char *output,
 int browser_ui_bar_percent(const struct bmp_display *display, int x)
 {
     int width;
-    int percent;
 
     if (display == NULL) {
         return 0;
     }
     width = (int)display->variable_info.xres - UI_MARGIN * 2;
-    if (width <= 0) {
+    return browser_ui_bar_percent_at(x, UI_MARGIN, width);
+}
+
+/**
+ * @brief 将屏幕 X 坐标转换为指定水平条范围的百分比。
+ * @param x 屏幕 X 坐标。
+ * @param bar_x 水平条左边界。
+ * @param bar_width 水平条宽度。
+ * @return 0 到 100 的百分比。
+ */
+int browser_ui_bar_percent_at(int x, int bar_x, int bar_width)
+{
+    int percent;
+
+    if (bar_width <= 0) {
         return 0;
     }
-    percent = (x - UI_MARGIN) * 100 / width;
-
+    percent = (x - bar_x) * 100 / bar_width;
     if (percent < 0) {
         return 0;
     }

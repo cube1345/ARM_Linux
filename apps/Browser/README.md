@@ -16,6 +16,8 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - 后台播放 PCM WAV 和 MP3，支持暂停、软件音量、进度显示和 seek。
 - Player 支持 MP4、MOV、MKV、AVI、WebM、M4V 视频，以及 AAC、M4A、FLAC、OGG、
   Opus 音频；FFmpeg 负责解复用、视频转 RGB 和音频重采样。
+- Player 触摸页提供 `PLAY/PAUSE`、进度条和音量条；文件页提供 `UP` 父目录和
+  `HOME` 桌面入口，适合不接键盘的设备。
 - 视频帧按容器 PTS 和单调时钟控制显示节奏，带音轨和纯视频文件均按正常速度播放。
 - 启动后进入简约软件桌面，Gallery、Player、Files、Reader、Diagnostics、Settings
   按功能提供独立入口。
@@ -132,6 +134,22 @@ ldd /usr/bin/media-browser
 RK3506 首次上板先以 320x240、480p 视频验收 CPU 占用和帧率，再决定是否接入
 Rockchip 硬件解码接口；硬件加速不影响桌面和页面层接口。
 
+已在独立 Buildroot ARMv7 output 中完成 Cortex-A7 hard-float 门禁：
+
+```sh
+make O=/tmp/browser-rk3506-qemu-armv7 \
+     BR2_DL_DIR=/home/cube/Edisk/buildroot/dl -j16
+cd /home/cube/WorkSpace/Linux/ARM_Linux_WS/apps/Browser
+make BUILDROOT_OUTPUT=/tmp/browser-rk3506-qemu-armv7 \
+     TARGET_TRIPLE=arm-buildroot-linux-gnueabihf \
+     CFLAGS='-Wall -Wextra -Wpedantic -Werror -O2'
+```
+
+产物为 `ARM EABI5`、`VFPv3-D16`、hard-float ELF。使用 `virt + cortex-a7`
+QEMU 已验证 rootfs、动态库、FreeType 字体、测试 MP4 和 Browser usage 可运行。
+`vexpress-a9` 只能用于 Cortex-A9 用户态门禁，不能直接运行开启 ARMv7 分频指令
+的 Cortex-A7 构建；RK3506 上板应使用实际 BSP toolchain 和硬件设备节点验收。
+
 ## QEMU 启动
 
 ```sh
@@ -222,6 +240,8 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 | Player 媒体 | 点击或拖动进度条 | seek 视频或 FFmpeg 音频 |
 | Player 媒体 | 点击或拖动音量条 | 设置软件音量 |
 | 媒体页面 | 左上角 `<` | 返回文件列表 |
+| Player 媒体 | 顶部 `PLAY/PAUSE` | 暂停 / 继续 |
+| 文件列表 | 顶部 `UP` | 返回父目录 |
 
 触摸坐标通过 `EVIOCGABS` 从设备量程映射到 framebuffer 分辨率。点击允许
 15 像素移动；滑动阈值为 32 像素与屏幕对应轴 5% 中的较大值。

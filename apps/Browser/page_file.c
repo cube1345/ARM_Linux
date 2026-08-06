@@ -17,6 +17,7 @@
 
 #define FILE_PAGE_LIST_TOP (UI_HEADER_HEIGHT + 12)
 #define FILE_PAGE_TAG_WIDTH 64
+#define FILE_PAGE_UP_WIDTH 72
 #define FILE_PAGE_HOME_WIDTH 104
 
 /**
@@ -70,6 +71,10 @@ int render_file_page(struct browser_app *app)
     browser_ui_draw_header(&app->display, &app->font,
                            application == NULL ? "Files" : application->name,
                            subtitle);
+    browser_ui_draw_button(&app->display, &app->font,
+                           width - UI_MARGIN - FILE_PAGE_HOME_WIDTH -
+                           FILE_PAGE_UP_WIDTH - 12, 10,
+                           FILE_PAGE_UP_WIDTH, 42, "UP", UI_HEADER);
     browser_ui_draw_button(&app->display, &app->font,
                            width - UI_MARGIN - FILE_PAGE_HOME_WIDTH, 10,
                            FILE_PAGE_HOME_WIDTH, 42, "HOME", UI_HEADER);
@@ -252,6 +257,19 @@ int handle_file_touch(struct browser_app *app,
     int width = (int)app->display.variable_info.xres;
     size_t visible = browser_ui_visible_rows(&app->display, &app->font);
 
+    if (input->touch == TOUCH_ACTION_TAP &&
+        input->y < UI_HEADER_HEIGHT &&
+        input->x >= width - UI_MARGIN - FILE_PAGE_HOME_WIDTH -
+                    FILE_PAGE_UP_WIDTH - 12 &&
+        input->x < width - UI_MARGIN - FILE_PAGE_HOME_WIDTH - 12) {
+        int result = enter_parent(app);
+
+        if (result < 0) {
+            return -1;
+        }
+        return result == 0 ? browser_app_return_to_desktop(app) :
+               render_file_page(app);
+    }
     if (input->touch == TOUCH_ACTION_TAP &&
         input->y < UI_HEADER_HEIGHT &&
         input->x >= width - UI_MARGIN - FILE_PAGE_HOME_WIDTH &&

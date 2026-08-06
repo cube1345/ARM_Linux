@@ -8,7 +8,7 @@
 #include <stdio.h>
 
 #define SETTINGS_PANEL_TOP (UI_HEADER_HEIGHT + 30)
-#define SETTINGS_PANEL_HEIGHT 250
+#define SETTINGS_PANEL_HEIGHT 210
 #define SETTINGS_BUTTON_WIDTH 118
 #define SETTINGS_BUTTON_HEIGHT 48
 #define SETTINGS_VOLUME_Y (SETTINGS_PANEL_TOP + 118)
@@ -68,11 +68,11 @@ int render_settings_page(struct browser_app *app)
                            SETTINGS_BUTTON_WIDTH, SETTINGS_BUTTON_HEIGHT,
                            "+ 5", UI_HEADER);
     browser_ui_draw_panel(&app->display, UI_MARGIN,
-                          SETTINGS_PANEL_TOP + SETTINGS_PANEL_HEIGHT + 20,
-                          panel_width, 92, UI_SURFACE_ALT, UI_BORDER);
+                          SETTINGS_PANEL_TOP + SETTINGS_PANEL_HEIGHT + 12,
+                          panel_width, 72, UI_SURFACE_ALT, UI_BORDER);
     ui_draw_text(&app->display, &app->font, device, UI_MARGIN + 24,
                  SETTINGS_PANEL_TOP + SETTINGS_PANEL_HEIGHT +
-                 (int)app->font.pixel_size + 40,
+                 (int)app->font.pixel_size + 30,
                  panel_width - 48, UI_MUTED, UI_SURFACE_ALT);
     browser_ui_draw_footer_hint(
         &app->display, &app->font,
@@ -113,15 +113,20 @@ int handle_settings_touch(struct browser_app *app,
                           const struct browser_input *input)
 {
     struct audio_player_status status;
+    int width = (int)app->display.variable_info.xres;
+    int panel_width = width - UI_MARGIN * 2;
     int button_x = settings_button_x(app);
     int button_y = SETTINGS_PANEL_TOP + 158;
 
     if ((input->touch == TOUCH_ACTION_MOVE ||
          input->touch == TOUCH_ACTION_TAP) &&
+        input->x >= UI_MARGIN + 24 &&
+        input->x <= UI_MARGIN + 24 + panel_width - 48 &&
         browser_ui_touches_bar(input, SETTINGS_VOLUME_Y)) {
         browser_app_set_volume(app,
-                               browser_ui_bar_percent(&app->display,
-                                                      input->x));
+                               browser_ui_bar_percent_at(input->x,
+                                                        UI_MARGIN + 24,
+                                                        panel_width - 48));
         return render_settings_page(app);
     }
     if (input->touch != TOUCH_ACTION_TAP ||

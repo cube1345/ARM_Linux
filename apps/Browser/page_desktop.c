@@ -122,7 +122,7 @@ int render_desktop_page(struct browser_app *app)
                       (uint8_t)(UI_BACKGROUND >> 8),
                       (uint8_t)UI_BACKGROUND);
     browser_ui_draw_header(&app->display, &app->font,
-                           "Embedded Desktop", "ARM64 framebuffer workspace");
+                           "Embedded Desktop", "Linux framebuffer workspace");
     for (index = 0; index < app->desktop_apps.count; index++) {
         const struct desktop_app_operation *operation =
             desktop_app_at(&app->desktop_apps, index);

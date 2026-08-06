@@ -11,8 +11,8 @@
 #include <unistd.h>
 
 #define DIAGNOSTICS_ROW_TOP (UI_HEADER_HEIGHT + 22)
-#define DIAGNOSTICS_ROW_HEIGHT 82
-#define DIAGNOSTICS_ROW_GAP 12
+#define DIAGNOSTICS_ROW_HEIGHT 58
+#define DIAGNOSTICS_ROW_GAP 4
 
 /**
  * @brief 绘制一条诊断状态。

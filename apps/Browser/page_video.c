@@ -13,6 +13,7 @@
 #define VIDEO_BAR_HEIGHT 12
 #define VIDEO_BAR_INSET 28
 #define VIDEO_PANEL_HEIGHT 220
+#define VIDEO_PLAY_BUTTON_WIDTH 112
 
 static int video_bar_x(void)
 {
@@ -80,6 +81,7 @@ int render_video_page(struct browser_app *app)
     uint64_t serial = 0;
     int has_frame;
     char title[FILE_LIST_NAME_SIZE + 16];
+    int screen_width = (int)app->display.variable_info.xres;
 
     media_player_get_status(&app->media, &status);
     if (status.frame_serial != app->media_frame_serial) {
@@ -109,8 +111,14 @@ int render_video_page(struct browser_app *app)
              app->files.entries[app->selected].name);
     browser_ui_draw_back_button(&app->display, &app->font);
     ui_draw_text(&app->display, &app->font, title, UI_BUTTON_SIZE + 16,
-                 40, (int)app->display.variable_info.xres - UI_BUTTON_SIZE - 32,
+                 40, screen_width - UI_BUTTON_SIZE -
+                 VIDEO_PLAY_BUTTON_WIDTH - 48,
                  UI_TEXT, UI_BACKGROUND);
+    browser_ui_draw_button(&app->display, &app->font,
+                           screen_width - UI_MARGIN - VIDEO_PLAY_BUTTON_WIDTH,
+                           10, VIDEO_PLAY_BUTTON_WIDTH, 42,
+                           status.state == MEDIA_PLAYER_PAUSED ? "PLAY" :
+                           "PAUSE", UI_HEADER);
     draw_video_controls(app, &status);
     browser_ui_draw_footer_hint(&app->display, &app->font,
                                 "Space play/pause  ←/→ seek  +/- volume");
@@ -155,16 +163,25 @@ int handle_video_touch(struct browser_app *app,
     int height = (int)app->display.variable_info.yres;
     int progress_y = height - UI_FOOTER_HEIGHT - 58;
     int volume_y = height - UI_FOOTER_HEIGHT - 28;
+    int bar_x = video_bar_x();
+    int bar_width = video_bar_width(app);
+    int play_x = (int)app->display.variable_info.xres - UI_MARGIN -
+                 VIDEO_PLAY_BUTTON_WIDTH;
     int percent;
 
     if (input->touch != TOUCH_ACTION_TAP && input->touch != TOUCH_ACTION_MOVE) {
         return 0;
     }
-    percent = browser_ui_bar_percent(&app->display, input->x);
-    if (browser_ui_touches_bar(input, progress_y)) {
+    percent = browser_ui_bar_percent_at(input->x, bar_x, bar_width);
+    if (input->x >= bar_x && input->x <= bar_x + bar_width &&
+        browser_ui_touches_bar(input, progress_y)) {
         media_player_seek_percent(&app->media, percent);
-    } else if (browser_ui_touches_bar(input, volume_y)) {
+    } else if (input->x >= bar_x && input->x <= bar_x + bar_width &&
+               browser_ui_touches_bar(input, volume_y)) {
         browser_app_set_volume(app, percent);
+    } else if (input->touch == TOUCH_ACTION_TAP && input->y < UI_HEADER_HEIGHT &&
+               input->x >= play_x && input->x < play_x + VIDEO_PLAY_BUTTON_WIDTH) {
+        media_player_toggle_pause(&app->media);
     } else {
         return 0;
     }
