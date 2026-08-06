@@ -35,7 +35,7 @@ static void draw_diagnostics_row(struct browser_app *app, int row,
     ui_draw_rect(&app->display, UI_MARGIN + 16, y + 18,
                  116, DIAGNOSTICS_ROW_HEIGHT - 36, color);
     ui_draw_text(&app->display, &app->font, label, UI_MARGIN + 28,
-                 y + 18 + (int)app->font.pixel_size + 6,
+                 y + 18 + (int)app->font.pixel_size + 2,
                  92, UI_BACKGROUND, color);
     ui_draw_text(&app->display, &app->font, value, UI_MARGIN + 154,
                  y + (DIAGNOSTICS_ROW_HEIGHT +

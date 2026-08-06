@@ -153,7 +153,7 @@ QEMU 已验证 rootfs、动态库、FreeType 字体、测试 MP4 和 Browser usa
 `vexpress-a9` 只能用于 Cortex-A9 用户态门禁，不能直接运行开启 ARMv7 分频指令
 的 Cortex-A7 构建；RK3506 上板应使用实际 BSP toolchain 和硬件设备节点验收。
 
-## QEMU 启动
+## 嵌入式设备 QEMU 虚拟机启动
 
 ```sh
 cd /home/cube/WorkSpace/Linux/ARM_Linux/images
