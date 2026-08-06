@@ -23,13 +23,23 @@ static int read_touch(struct input_manager *manager,
                       struct browser_input *output);
 
 /**
- * @brief 将键盘按下事件映射为浏览器动作。
+ * @brief 判断键盘事件是否可触发浏览器动作。
+ * @param event Linux Input 原始事件。
+ * @return 可触发返回 1，否则返回 0。
+ */
+static int key_event_is_active(const struct input_event *event)
+{
+    return event->type == EV_KEY && (event->value == 1 || event->value == 2);
+}
+
+/**
+ * @brief 将键盘按下或重复事件映射为浏览器动作。
  * @param event Linux Input 原始事件。
  * @return 浏览器动作。
  */
 static enum input_action key_action(const struct input_event *event)
 {
-    if (event->type != EV_KEY || event->value != 1) {
+    if (!key_event_is_active(event)) {
         return INPUT_ACTION_NONE;
     }
     switch (event->code) {
