@@ -1,17 +1,25 @@
 #include "page_manager.h"
 
 #include "browser_ui.h"
+#include "page_desktop.h"
+#include "page_diagnostics.h"
 #include "page_audio.h"
 #include "page_file.h"
 #include "page_image.h"
+#include "page_settings.h"
 #include "page_text.h"
+#include "page_video.h"
 
 #include <errno.h>
 
 static struct page_operation file_page_operation;
+static struct page_operation desktop_page_operation;
 static struct page_operation image_page_operation;
 static struct page_operation text_page_operation;
 static struct page_operation audio_page_operation;
+static struct page_operation video_page_operation;
+static struct page_operation diagnostics_page_operation;
+static struct page_operation settings_page_operation;
 
 /**
  * @brief 执行音频页面周期任务。
@@ -64,6 +72,15 @@ int page_manager_register(struct page_manager *manager,
  */
 int page_manager_register_builtin(struct page_manager *manager)
 {
+    desktop_page_operation.page = BROWSER_PAGE_DESKTOP;
+    desktop_page_operation.name = "desktop";
+    desktop_page_operation.render = render_desktop_page;
+    desktop_page_operation.handle_key = handle_desktop_key;
+    desktop_page_operation.handle_touch = handle_desktop_touch;
+    desktop_page_operation.periodic = NULL;
+    desktop_page_operation.event_timeout = NULL;
+    desktop_page_operation.next = NULL;
+
     file_page_operation.page = BROWSER_PAGE_FILES;
     file_page_operation.name = "files";
     file_page_operation.render = render_file_page;
@@ -100,10 +117,41 @@ int page_manager_register_builtin(struct page_manager *manager)
     audio_page_operation.event_timeout = NULL;
     audio_page_operation.next = NULL;
 
-    return page_manager_register(manager, &file_page_operation) < 0 ||
+    video_page_operation.page = BROWSER_PAGE_VIDEO;
+    video_page_operation.name = "video";
+    video_page_operation.render = render_video_page;
+    video_page_operation.handle_key = handle_video_key;
+    video_page_operation.handle_touch = handle_video_touch;
+    video_page_operation.periodic = update_video_page;
+    video_page_operation.event_timeout = NULL;
+    video_page_operation.next = NULL;
+
+    diagnostics_page_operation.page = BROWSER_PAGE_DIAGNOSTICS;
+    diagnostics_page_operation.name = "diagnostics";
+    diagnostics_page_operation.render = render_diagnostics_page;
+    diagnostics_page_operation.handle_key = handle_diagnostics_key;
+    diagnostics_page_operation.handle_touch = handle_diagnostics_touch;
+    diagnostics_page_operation.periodic = NULL;
+    diagnostics_page_operation.event_timeout = NULL;
+    diagnostics_page_operation.next = NULL;
+
+    settings_page_operation.page = BROWSER_PAGE_SETTINGS;
+    settings_page_operation.name = "settings";
+    settings_page_operation.render = render_settings_page;
+    settings_page_operation.handle_key = handle_settings_key;
+    settings_page_operation.handle_touch = handle_settings_touch;
+    settings_page_operation.periodic = NULL;
+    settings_page_operation.event_timeout = NULL;
+    settings_page_operation.next = NULL;
+
+    return page_manager_register(manager, &desktop_page_operation) < 0 ||
+           page_manager_register(manager, &file_page_operation) < 0 ||
            page_manager_register(manager, &image_page_operation) < 0 ||
            page_manager_register(manager, &text_page_operation) < 0 ||
-           page_manager_register(manager, &audio_page_operation) < 0 ? -1 : 0;
+           page_manager_register(manager, &audio_page_operation) < 0 ||
+           page_manager_register(manager, &video_page_operation) < 0 ||
+           page_manager_register(manager, &diagnostics_page_operation) < 0 ||
+           page_manager_register(manager, &settings_page_operation) < 0 ? -1 : 0;
 }
 
 /**

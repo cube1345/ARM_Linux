@@ -100,6 +100,38 @@ void browser_ui_draw_header(struct bmp_display *display,
 }
 
 /**
+ * @brief 绘制带返回按钮的应用顶栏。
+ * @param display 显示设备。
+ * @param font 字体上下文。
+ * @param title 主标题。
+ * @param subtitle 次级提示，可为 NULL。
+ */
+void browser_ui_draw_navigation_header(struct bmp_display *display,
+                                       struct font_renderer *font,
+                                       const char *title,
+                                       const char *subtitle)
+{
+    int width;
+    int text_x = UI_BUTTON_SIZE + 18;
+
+    if (display == NULL || font == NULL || title == NULL) {
+        return;
+    }
+    width = (int)display->variable_info.xres;
+    ui_draw_rect(display, 0, 0, width, UI_HEADER_HEIGHT, UI_HEADER);
+    ui_draw_rect(display, 0, UI_HEADER_HEIGHT - 2, width, 2, UI_BORDER);
+    browser_ui_draw_back_button(display, font);
+    ui_draw_text(display, font, title, text_x,
+                 (int)font->pixel_size + 12, width - text_x - UI_MARGIN,
+                 UI_TEXT, UI_HEADER);
+    if (subtitle != NULL) {
+        ui_draw_text(display, font, subtitle, text_x,
+                     UI_HEADER_HEIGHT - 10, width - text_x - UI_MARGIN,
+                     UI_MUTED, UI_HEADER);
+    }
+}
+
+/**
  * @brief 绘制媒体页面左上角返回按钮。
  * @param display 显示设备。
  * @param font 字体上下文。

@@ -17,7 +17,33 @@ enum file_type {
     FILE_TYPE_TEXT,
     FILE_TYPE_WAV,
     FILE_TYPE_MP3,
+    FILE_TYPE_MP4,
+    FILE_TYPE_MOV,
+    FILE_TYPE_MKV,
+    FILE_TYPE_AVI,
+    FILE_TYPE_WEBM,
+    FILE_TYPE_M4V,
+    FILE_TYPE_AAC,
+    FILE_TYPE_M4A,
+    FILE_TYPE_FLAC,
+    FILE_TYPE_OGG,
+    FILE_TYPE_OPUS,
     FILE_TYPE_UNKNOWN
+};
+
+/** @brief 文件列表媒体类型过滤位。 */
+enum file_list_filter {
+    FILE_LIST_FILTER_NONE = 0U,
+    FILE_LIST_FILTER_IMAGES = 1U << 0,
+    FILE_LIST_FILTER_AUDIO = 1U << 1,
+    FILE_LIST_FILTER_TEXT = 1U << 2,
+    FILE_LIST_FILTER_VIDEO = 1U << 3,
+    FILE_LIST_FILTER_AUDIO_VIDEO = FILE_LIST_FILTER_AUDIO |
+                                   FILE_LIST_FILTER_VIDEO,
+    FILE_LIST_FILTER_ALL = FILE_LIST_FILTER_IMAGES |
+                           FILE_LIST_FILTER_AUDIO |
+                           FILE_LIST_FILTER_TEXT |
+                           FILE_LIST_FILTER_VIDEO
 };
 
 /** @brief 文件列表中的一项。 */
@@ -41,6 +67,17 @@ struct file_list {
  * @return 成功返回 0，失败返回 -1。
  */
 int file_list_scan(const char *directory, struct file_list *list);
+
+/**
+ * @brief 扫描目录并只保留指定媒体类型与子目录。
+ *
+ * @param directory 要扫描的目录。
+ * @param list 输出文件列表。
+ * @param filter 文件类型过滤位。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int file_list_scan_filtered(const char *directory, struct file_list *list,
+                            unsigned int filter);
 
 /**
  * @brief 拼接当前目录与指定条目名称。

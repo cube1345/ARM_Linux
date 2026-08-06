@@ -45,7 +45,75 @@ static enum file_type detect_file_type(const char *name)
     if (strcasecmp(extension, ".mp3") == 0) {
         return FILE_TYPE_MP3;
     }
+    if (strcasecmp(extension, ".mp4") == 0) {
+        return FILE_TYPE_MP4;
+    }
+    if (strcasecmp(extension, ".mov") == 0) {
+        return FILE_TYPE_MOV;
+    }
+    if (strcasecmp(extension, ".mkv") == 0) {
+        return FILE_TYPE_MKV;
+    }
+    if (strcasecmp(extension, ".avi") == 0) {
+        return FILE_TYPE_AVI;
+    }
+    if (strcasecmp(extension, ".webm") == 0) {
+        return FILE_TYPE_WEBM;
+    }
+    if (strcasecmp(extension, ".m4v") == 0) {
+        return FILE_TYPE_M4V;
+    }
+    if (strcasecmp(extension, ".aac") == 0) {
+        return FILE_TYPE_AAC;
+    }
+    if (strcasecmp(extension, ".m4a") == 0) {
+        return FILE_TYPE_M4A;
+    }
+    if (strcasecmp(extension, ".flac") == 0) {
+        return FILE_TYPE_FLAC;
+    }
+    if (strcasecmp(extension, ".ogg") == 0) {
+        return FILE_TYPE_OGG;
+    }
+    if (strcasecmp(extension, ".opus") == 0) {
+        return FILE_TYPE_OPUS;
+    }
     return FILE_TYPE_UNKNOWN;
+}
+
+/**
+ * @brief 判断文件类型是否匹配过滤位。
+ * @param type 文件类型。
+ * @param filter 文件类型过滤位。
+ * @return 匹配返回 1，否则返回 0。
+ */
+static int file_type_matches_filter(enum file_type type,
+                                    unsigned int filter)
+{
+    if (type == FILE_TYPE_DIRECTORY) {
+        return 1;
+    }
+    if (type == FILE_TYPE_BMP || type == FILE_TYPE_JPEG ||
+        type == FILE_TYPE_PNG || type == FILE_TYPE_GIF) {
+        return (filter & FILE_LIST_FILTER_IMAGES) != 0U;
+    }
+    if (type == FILE_TYPE_WAV || type == FILE_TYPE_MP3) {
+        return (filter & FILE_LIST_FILTER_AUDIO) != 0U;
+    }
+    if (type == FILE_TYPE_MP4 || type == FILE_TYPE_MOV ||
+        type == FILE_TYPE_MKV || type == FILE_TYPE_AVI ||
+        type == FILE_TYPE_WEBM || type == FILE_TYPE_M4V) {
+        return (filter & FILE_LIST_FILTER_VIDEO) != 0U;
+    }
+    if (type == FILE_TYPE_AAC || type == FILE_TYPE_M4A ||
+        type == FILE_TYPE_FLAC || type == FILE_TYPE_OGG ||
+        type == FILE_TYPE_OPUS) {
+        return (filter & FILE_LIST_FILTER_AUDIO) != 0U;
+    }
+    if (type == FILE_TYPE_TEXT) {
+        return (filter & FILE_LIST_FILTER_TEXT) != 0U;
+    }
+    return 0;
 }
 
 /**
@@ -103,7 +171,8 @@ static int compare_entry(const void *left, const void *right)
  * @param list 输出文件列表。
  * @return 成功返回 0，失败返回 -1。
  */
-int file_list_scan(const char *directory, struct file_list *list)
+int file_list_scan_filtered(const char *directory, struct file_list *list,
+                            unsigned int filter)
 {
     DIR *stream;
 
@@ -153,7 +222,8 @@ int file_list_scan(const char *directory, struct file_list *list)
         } else {
             continue;
         }
-        if (type == FILE_TYPE_UNKNOWN) {
+        if (type == FILE_TYPE_UNKNOWN ||
+            !file_type_matches_filter(type, filter)) {
             continue;
         }
         snprintf(list->entries[list->count].name,
@@ -168,6 +238,18 @@ int file_list_scan(const char *directory, struct file_list *list)
     }
     qsort(list->entries, list->count, sizeof(list->entries[0]), compare_entry);
     return 0;
+}
+
+/**
+ * @brief 扫描目录并按“目录优先、名称排序”生成文件列表。
+ *
+ * @param directory 要扫描的目录。
+ * @param list 输出文件列表。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int file_list_scan(const char *directory, struct file_list *list)
+{
+    return file_list_scan_filtered(directory, list, FILE_LIST_FILTER_ALL);
 }
 
 /**
@@ -207,6 +289,17 @@ const char *file_type_name(enum file_type type)
     case FILE_TYPE_TEXT: return "TXT";
     case FILE_TYPE_WAV: return "WAV";
     case FILE_TYPE_MP3: return "MP3";
+    case FILE_TYPE_MP4: return "MP4";
+    case FILE_TYPE_MOV: return "MOV";
+    case FILE_TYPE_MKV: return "MKV";
+    case FILE_TYPE_AVI: return "AVI";
+    case FILE_TYPE_WEBM: return "WEBM";
+    case FILE_TYPE_M4V: return "M4V";
+    case FILE_TYPE_AAC: return "AAC";
+    case FILE_TYPE_M4A: return "M4A";
+    case FILE_TYPE_FLAC: return "FLAC";
+    case FILE_TYPE_OGG: return "OGG";
+    case FILE_TYPE_OPUS: return "OPUS";
     case FILE_TYPE_UNKNOWN:
     default: return "?";
     }

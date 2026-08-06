@@ -4,6 +4,7 @@
 #include "browser_log.h"
 #include "browser_ui.h"
 #include "bmp_display.h"
+#include "desktop_app.h"
 #include "file_list.h"
 #include "font_renderer.h"
 #include "gif_animation.h"
@@ -51,6 +52,19 @@ uint64_t monotonic_ms(void)
 }
 
 /**
+ * @brief 判断页面是否为媒体详情页面。
+ * @param page 页面枚举。
+ * @return 媒体详情页面返回 1，否则返回 0。
+ */
+static int browser_page_is_media(enum browser_page page)
+{
+    return page == BROWSER_PAGE_IMAGE ||
+           page == BROWSER_PAGE_TEXT ||
+           page == BROWSER_PAGE_AUDIO ||
+           page == BROWSER_PAGE_VIDEO;
+}
+
+/**
  * @brief 执行当前页面的周期任务。
  * @param pages 页面管理器。
  * @param app 浏览器上下文。
@@ -93,17 +107,30 @@ static int dispatch_input(const struct page_manager *pages,
         if (input->action == INPUT_ACTION_EXIT) {
             return 1;
         }
-        if (app->page != BROWSER_PAGE_FILES &&
-            input->action == INPUT_ACTION_BACK) {
-            return browser_app_close_media_page(app);
+        if (input->action == INPUT_ACTION_BACK) {
+            if (browser_page_is_media(app->page)) {
+                return browser_app_close_media_page(app);
+            }
+            if (app->page == BROWSER_PAGE_DIAGNOSTICS ||
+                app->page == BROWSER_PAGE_SETTINGS) {
+                return browser_app_return_to_desktop(app);
+            }
+            if (app->page == BROWSER_PAGE_DESKTOP) {
+                return 0;
+            }
         }
         return page_manager_handle_key(pages, app, input->action);
     }
     if (input->touch != TOUCH_ACTION_NONE) {
-        if (app->page != BROWSER_PAGE_FILES &&
-            input->touch == TOUCH_ACTION_TAP && input->x < UI_BUTTON_SIZE &&
-            input->y < UI_BUTTON_SIZE) {
-            return browser_app_close_media_page(app);
+        if (input->touch == TOUCH_ACTION_TAP &&
+            input->x < UI_BUTTON_SIZE && input->y < UI_BUTTON_SIZE) {
+            if (browser_page_is_media(app->page)) {
+                return browser_app_close_media_page(app);
+            }
+            if (app->page == BROWSER_PAGE_DIAGNOSTICS ||
+                app->page == BROWSER_PAGE_SETTINGS) {
+                return browser_app_return_to_desktop(app);
+            }
         }
         return page_manager_handle_touch(pages, app, input);
     }
@@ -166,6 +193,7 @@ int main(int argc, char *argv[])
     }
     memset(&app, 0, sizeof(app));
     app.display.fd = -1;
+    app.file_filter = FILE_LIST_FILTER_ALL;
     app.alsa_device = argc >= 6 ? argv[5] : "default";
     touch_path = argc >= 7 ? argv[6] : NULL;
     if (realpath(argv[3], app.root) == NULL ||
@@ -194,14 +222,24 @@ int main(int argc, char *argv[])
     if (audio_player_init(&app.audio) < 0) {
         goto cleanup_input;
     }
+    if (media_player_init(&app.media) < 0) {
+        goto cleanup_audio_player;
+    }
+    desktop_app_manager_init(&app.desktop_apps);
+    if (desktop_app_register_builtin(&app.desktop_apps) < 0) {
+        goto cleanup_media_player;
+    }
     page_manager_init(&pages);
     if (page_manager_register_builtin(&pages) < 0) {
-        goto cleanup_audio;
+        goto cleanup_media_player;
     }
     result = run_browser(&pages, &app);
-cleanup_audio:
+cleanup_media_player:
     close_image(&app);
     text_reader_close(&app.text);
+    image_data_destroy(&app.media_frame);
+    media_player_destroy(&app.media);
+cleanup_audio_player:
     audio_player_destroy(&app.audio);
 cleanup_input:
     input_manager_close(&app.input);

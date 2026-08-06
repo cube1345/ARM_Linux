@@ -63,6 +63,18 @@ void browser_ui_draw_header(struct bmp_display *display,
                             const char *title, const char *subtitle);
 
 /**
+ * @brief 绘制带返回按钮的应用顶栏。
+ * @param display 显示设备。
+ * @param font 字体上下文。
+ * @param title 主标题。
+ * @param subtitle 次级提示，可为 NULL。
+ */
+void browser_ui_draw_navigation_header(struct bmp_display *display,
+                                       struct font_renderer *font,
+                                       const char *title,
+                                       const char *subtitle);
+
+/**
  * @brief 绘制媒体页面左上角返回按钮。
  * @param display 显示设备。
  * @param font 字体上下文。

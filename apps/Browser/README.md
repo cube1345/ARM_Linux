@@ -1,7 +1,7 @@
 # Embedded Linux Multimedia Browser
 
 基于 Linux Framebuffer、Input、FreeType、libjpeg、libpng、giflib、ALSA 和
-mpg123 的用户态多媒体文件浏览器。
+mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 
 ## 功能
 
@@ -14,6 +14,10 @@ mpg123 的用户态多媒体文件浏览器。
   BMP/JPEG/PNG 下一张图片后台预解码。
 - 使用 FreeType 分页显示 UTF-8 文本，支持中文。
 - 后台播放 PCM WAV 和 MP3，支持暂停、软件音量、进度显示和 seek。
+- Player 支持 MP4、MOV、MKV、AVI、WebM、M4V 视频，以及 AAC、M4A、FLAC、OGG、
+  Opus 音频；FFmpeg 负责解复用、视频转 RGB 和音频重采样。
+- 启动后进入简约软件桌面，Gallery、Player、Files、Reader、Diagnostics、Settings
+  按功能提供独立入口。
 - 同时支持 Linux Input 键盘与绝对坐标触摸设备，并以 input operation
   链表统一分发。
 - 使用 framebuffer 离屏缓冲区完成整帧刷新。
@@ -29,11 +33,15 @@ mpg123 的用户态多媒体文件浏览器。
 | --- | --- |
 | `image_browser.c` | CLI 参数解析、初始化/释放、周期刷新、页面 manager 调度和主事件循环 |
 | `browser_app.c/.h` | `browser_app` 共享上下文、页面枚举、文件类型 helper 和跨页面资源收尾 |
+| `desktop_app.c/.h` | Gallery、Player、Files、Reader、Diagnostics、Settings 应用注册和启动 |
+| `page_desktop.c/.h` | 软件桌面卡片、应用选择、键盘和触摸入口 |
 | `page_manager.c/.h` | 页面 operation 注册、查找、渲染、输入分发、周期任务和事件等待时间调整 |
 | `page_file.c/.h` | 文件列表渲染、目录进入/返回、文件页键盘和触摸处理 |
 | `page_image.c/.h` | 图片/GIF 打开关闭、图片渲染、相邻图片选择、自动播放、静态图预解码、旋转和图片页输入处理 |
 | `page_text.c/.h` | UTF-8 文本分页渲染、文本翻页键盘和触摸处理 |
 | `page_audio.c/.h` | 音频页渲染、播放暂停、seek、音量条和音频页输入处理 |
+| `media_player.c/.h` | FFmpeg 容器、视频和音频解码线程、RGB 帧快照、ALSA 输出 |
+| `page_video.c/.h` | 通用媒体页面、视频帧显示、进度/音量控制 |
 | `browser_ui.c/.h` / `ui_draw.c/.h` | 公共 UI 常量、按钮/进度条 helper、矩形与文字绘制 |
 | `browser_log.c/.h` | 统一日志等级、环境变量初始化和 errno 日志输出 |
 | `image_decoder.c/.h` | 静态图片 decoder manager，当前注册 BMP、JPEG、PNG |
@@ -54,6 +62,8 @@ mpg123 的用户态多媒体文件浏览器。
 /home/cube/Edisk/buildroot/utils/config --file .config \
     --enable BR2_PACKAGE_MPG123
 /home/cube/Edisk/buildroot/utils/config --file .config \
+    --enable BR2_PACKAGE_FFMPEG
+/home/cube/Edisk/buildroot/utils/config --file .config \
     --enable BR2_PACKAGE_EVTEST
 /home/cube/Edisk/buildroot/utils/config --file .config \
     --enable BR2_PACKAGE_TSLIB
@@ -70,6 +80,10 @@ mpg123 的用户态多媒体文件浏览器。
 make olddefconfig
 make
 ```
+
+FFmpeg 最小配置需要包含 `libavformat`、`libavcodec`、`libavutil`、`libswscale`
+和 `libswresample`，以及 MP4/MOV/MKV/AVI/WebM 容器、H.264、MPEG-4、VP8/VP9、
+AAC、MP3、Opus、PCM 等解码器。当前 ARM64 配置已将这些库安装到 target。
 
 ## 构建与安装
 
@@ -151,6 +165,9 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 | 音频 | `Space` | 暂停 / 继续 |
 | 音频 | `Left` / `Right` | 后退 / 前进 5% |
 | 音频 | `-` / `+` | 音量降低 / 增加 5% |
+| Player 媒体 | `Space` | 暂停 / 继续 |
+| Player 媒体 | `Left` / `Right` | 后退 / 前进 5% |
+| Player 媒体 | `-` / `+` | 音量降低 / 增加 5% |
 | 媒体页面 | `Esc` / `Backspace` | 返回文件列表 |
 | 任意页面 | `Q` | 退出程序 |
 
@@ -167,6 +184,8 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 | 音频 | `PLAY / PAUSE` | 暂停 / 继续 |
 | 音频 | 点击或拖动进度条 | seek |
 | 音频 | 点击或拖动音量条 | 设置软件音量 |
+| Player 媒体 | 点击或拖动进度条 | seek 视频或 FFmpeg 音频 |
+| Player 媒体 | 点击或拖动音量条 | 设置软件音量 |
 | 媒体页面 | 左上角 `<` | 返回文件列表 |
 
 触摸坐标通过 `EVIOCGABS` 从设备量程映射到 framebuffer 分辨率。点击允许
@@ -182,7 +201,7 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 - 在 `/home/cube/WorkSpace/Linux/ARM_Linux` 执行 `make` 后生成
   `images/rootfs.ext4`。
 - QEMU 中使用 `default` ALSA device 启动，文件列表、图片/GIF、文本、
-  WAV/MP3、键盘和触摸路径均可进入对应页面。
+  WAV/MP3、FFmpeg 媒体页面、键盘和触摸路径均可进入对应页面。
 - 图片页 `Space` 或 `AUTO ON/OFF` 可切换自动播放，约 3 秒自动切换下一张。
 - BMP/JPEG/PNG 相邻切换可复用后台预解码结果；GIF 继续由动画 decoder 实时播放。
 - `BROWSER_LOG_LEVEL=debug` 启动时可看到 input、decoder、audio 和文件列表等模块日志。

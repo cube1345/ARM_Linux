@@ -2,8 +2,10 @@
 
 #include "browser_app.h"
 #include "browser_ui.h"
+#include "desktop_app.h"
 #include "file_list.h"
 #include "page_audio.h"
+#include "page_video.h"
 #include "page_image.h"
 #include "page_text.h"
 #include "ui_draw.h"
@@ -15,6 +17,7 @@
 
 #define FILE_PAGE_LIST_TOP (UI_HEADER_HEIGHT + 12)
 #define FILE_PAGE_TAG_WIDTH 64
+#define FILE_PAGE_HOME_WIDTH 104
 
 /**
  * @brief 获取文件类型标签颜色。
@@ -35,6 +38,9 @@ static uint32_t file_type_color(enum file_type type)
     if (browser_file_type_is_image(type)) {
         return UI_SELECTED_BORDER;
     }
+    if (browser_file_type_is_video(type)) {
+        return UI_ACCENT_2;
+    }
     return UI_MUTED;
 }
 
@@ -45,6 +51,8 @@ static uint32_t file_type_color(enum file_type type)
  */
 int render_file_page(struct browser_app *app)
 {
+    const struct desktop_app_operation *application =
+        desktop_app_find(&app->desktop_apps, app->active_app);
     int width = (int)app->display.variable_info.xres;
     int row_height = (int)app->font.pixel_size + 18;
     int card_x = UI_MARGIN;
@@ -54,13 +62,17 @@ int render_file_page(struct browser_app *app)
     size_t first = app->selected / visible * visible;
     size_t index;
 
-    snprintf(subtitle, sizeof(subtitle), "%zu items  ·  %.180s",
+    snprintf(subtitle, sizeof(subtitle), "%zu items  %.180s",
              app->files.count, app->files.directory);
     bmp_display_clear(&app->display, (uint8_t)(UI_BACKGROUND >> 16),
                       (uint8_t)(UI_BACKGROUND >> 8),
                       (uint8_t)UI_BACKGROUND);
     browser_ui_draw_header(&app->display, &app->font,
-                           "Media Browser", subtitle);
+                           application == NULL ? "Files" : application->name,
+                           subtitle);
+    browser_ui_draw_button(&app->display, &app->font,
+                           width - UI_MARGIN - FILE_PAGE_HOME_WIDTH, 10,
+                           FILE_PAGE_HOME_WIDTH, 42, "HOME", UI_HEADER);
     for (index = first; index < app->files.count && index < first + visible;
          index++) {
         int y = FILE_PAGE_LIST_TOP + (int)(index - first) * row_height;
@@ -119,7 +131,8 @@ int open_selected(struct browser_app *app)
     }
     type = app->files.entries[app->selected].type;
     if (type == FILE_TYPE_DIRECTORY) {
-        if (file_list_scan(app->current_path, &app->files) < 0) {
+        if (file_list_scan_filtered(app->current_path, &app->files,
+                                    app->file_filter) < 0) {
             return -1;
         }
         app->selected = 0;
@@ -140,12 +153,28 @@ int open_selected(struct browser_app *app)
         return render_text_page(app);
     }
     if (browser_file_type_is_audio(type)) {
+        if (type != FILE_TYPE_WAV && type != FILE_TYPE_MP3) {
+            if (media_player_start(&app->media, app->current_path,
+                                   app->alsa_device) < 0) {
+                return -1;
+            }
+            app->page = BROWSER_PAGE_VIDEO;
+            return render_video_page(app);
+        }
         if (audio_player_start(&app->audio, app->current_path,
                                app->alsa_device) < 0) {
             return -1;
         }
         app->page = BROWSER_PAGE_AUDIO;
         return render_audio_page(app);
+    }
+    if (browser_file_type_is_video(type)) {
+        if (media_player_start(&app->media, app->current_path,
+                               app->alsa_device) < 0) {
+            return -1;
+        }
+        app->page = BROWSER_PAGE_VIDEO;
+        return render_video_page(app);
     }
     errno = ENOTSUP;
     return -1;
@@ -171,7 +200,8 @@ int enter_parent(struct browser_app *app)
     } else {
         *slash = '\0';
     }
-    if (file_list_scan(parent, &app->files) < 0) {
+    if (file_list_scan_filtered(parent, &app->files,
+                                app->file_filter) < 0) {
         return -1;
     }
     app->selected = 0;
@@ -196,8 +226,11 @@ int handle_file_key(struct browser_app *app, enum input_action action)
     } else if (action == INPUT_ACTION_BACK) {
         int result = enter_parent(app);
 
-        if (result <= 0) {
-            return result == 0 ? 1 : -1;
+        if (result < 0) {
+            return -1;
+        }
+        if (result == 0) {
+            return browser_app_return_to_desktop(app);
         }
     } else if (action == INPUT_ACTION_EXIT) {
         return 1;
@@ -216,8 +249,15 @@ int handle_file_key(struct browser_app *app, enum input_action action)
 int handle_file_touch(struct browser_app *app,
                       const struct browser_input *input)
 {
+    int width = (int)app->display.variable_info.xres;
     size_t visible = browser_ui_visible_rows(&app->display, &app->font);
 
+    if (input->touch == TOUCH_ACTION_TAP &&
+        input->y < UI_HEADER_HEIGHT &&
+        input->x >= width - UI_MARGIN - FILE_PAGE_HOME_WIDTH &&
+        input->x < width - UI_MARGIN) {
+        return browser_app_return_to_desktop(app);
+    }
     if (input->touch == TOUCH_ACTION_TAP &&
         input->y >= FILE_PAGE_LIST_TOP &&
         input->y < (int)app->display.variable_info.yres - UI_FOOTER_HEIGHT) {
