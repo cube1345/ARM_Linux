@@ -53,8 +53,22 @@ mpg123 的用户态多媒体文件浏览器。
     --enable BR2_PACKAGE_GIFLIB
 /home/cube/Edisk/buildroot/utils/config --file .config \
     --enable BR2_PACKAGE_MPG123
+/home/cube/Edisk/buildroot/utils/config --file .config \
+    --enable BR2_PACKAGE_EVTEST
+/home/cube/Edisk/buildroot/utils/config --file .config \
+    --enable BR2_PACKAGE_TSLIB
+/home/cube/Edisk/buildroot/utils/config --file .config \
+    --enable BR2_PACKAGE_FBGRAB
+/home/cube/Edisk/buildroot/utils/config --file .config \
+    --enable BR2_PACKAGE_FB_TEST_APP
+/home/cube/Edisk/buildroot/utils/config --file .config \
+    --enable BR2_PACKAGE_ALSA_UTILS_AMIXER
+/home/cube/Edisk/buildroot/utils/config --file .config \
+    --enable BR2_PACKAGE_ALSA_UTILS_SPEAKER_TEST
+/home/cube/Edisk/buildroot/utils/config --file .config \
+    --enable BR2_PACKAGE_STRACE
 make olddefconfig
-make libpng giflib mpg123
+make
 ```
 
 ## 构建与安装
@@ -96,6 +110,32 @@ cat /proc/bus/input/devices
 ```
 
 兼容原来的五参数或六参数命令行；不传最后一个参数时只使用键盘。
+
+## 设备调试工具
+
+```sh
+# 查看键盘、鼠标或触摸事件。
+evtest /dev/input/event1
+
+# 校准真实触摸屏。
+TSLIB_TSDEVICE=/dev/input/event1 \
+TSLIB_FBDEVICE=/dev/fb0 \
+ts_calibrate
+
+# 保存 framebuffer 截图并运行像素测试。
+fbgrab /tmp/screen.png
+fb-test
+
+# 查看 ALSA 控件并测试立体声音频输出。
+amixer scontrols
+speaker-test -D default -c 2
+
+# 记录 media-browser 的 syscall。
+strace -f -o /tmp/browser.strace /usr/bin/media-browser \
+    /dev/fb0 /dev/input/event0 /root/media \
+    /usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc default \
+    /dev/input/event1
+```
 
 ## 键盘操作
 
