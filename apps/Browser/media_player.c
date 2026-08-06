@@ -13,6 +13,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 #include <unistd.h>
 
 struct ffmpeg_context {
@@ -29,7 +30,25 @@ struct ffmpeg_context {
     int rgb_linesize;
     snd_pcm_t *pcm;
     int output_rate;
+    int64_t first_video_pts_ms;
+    uint64_t video_wall_start_ms;
+    int video_clock_started;
 };
+
+/**
+ * @brief 获取播放器内部单调时钟毫秒值。
+ * @return 单调时钟毫秒值。
+ */
+static uint64_t player_monotonic_ms(void)
+{
+    struct timespec value;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &value) < 0) {
+        return 0;
+    }
+    return (uint64_t)value.tv_sec * 1000U +
+           (uint64_t)value.tv_nsec / 1000000U;
+}
 
 static int wait_ready(struct media_player *player)
 {
@@ -92,6 +111,48 @@ static void set_position(struct media_player *player, uint64_t position_ms)
                                   player->duration_ms > 0 ?
                               player->duration_ms : position_ms;
     pthread_mutex_unlock(&player->mutex);
+}
+
+/**
+ * @brief 根据视频 PTS 控制纯视频和音视频文件的显示节奏。
+ * @param player 播放器上下文。
+ * @param context FFmpeg 解码上下文。
+ * @param pts_ms 当前视频帧时间戳。
+ */
+static void pace_video_frame(struct media_player *player,
+                             struct ffmpeg_context *context,
+                             int64_t pts_ms)
+{
+    uint64_t target_ms;
+
+    if (!context->video_clock_started) {
+        context->first_video_pts_ms = pts_ms;
+        context->video_wall_start_ms = player_monotonic_ms();
+        context->video_clock_started = 1;
+        return;
+    }
+    if (pts_ms <= context->first_video_pts_ms) {
+        return;
+    }
+    target_ms = context->video_wall_start_ms +
+                (uint64_t)(pts_ms - context->first_video_pts_ms);
+    while (!player_stopped(player)) {
+        uint64_t now_ms;
+        uint64_t wait_ms;
+
+        if (wait_ready(player)) {
+            return;
+        }
+        now_ms = player_monotonic_ms();
+        if (now_ms >= target_ms) {
+            return;
+        }
+        wait_ms = target_ms - now_ms;
+        if (wait_ms > 10U) {
+            wait_ms = 10U;
+        }
+        usleep((useconds_t)(wait_ms * 1000U));
+    }
 }
 
 static int open_codec(AVFormatContext *format, enum AVMediaType media_type,
@@ -257,14 +318,18 @@ static void decode_video(struct media_player *player,
         struct AVRational time_base = context->format->streams[
             context->video_stream]->time_base;
         int64_t timestamp = context->frame->best_effort_timestamp;
+        int64_t timestamp_ms = timestamp == AV_NOPTS_VALUE ? -1 :
+            av_rescale_q(timestamp, time_base, (AVRational){1, 1000});
 
+        if (timestamp_ms >= 0) {
+            pace_video_frame(player, context, timestamp_ms);
+        }
         sws_scale(context->sws, (const uint8_t * const *)context->frame->data,
                   context->frame->linesize, 0, context->video->height,
                   context->rgb->data, context->rgb->linesize);
         publish_video_frame(player, context);
-        if (timestamp != AV_NOPTS_VALUE) {
-            set_position(player, (uint64_t)av_rescale_q(timestamp, time_base,
-                                                       (AVRational){1, 1000}));
+        if (timestamp_ms >= 0) {
+            set_position(player, (uint64_t)timestamp_ms);
         }
     }
 }
@@ -343,6 +408,7 @@ static void *media_player_thread(void *argument)
                 if (context.pcm != NULL) {
                     snd_pcm_drop(context.pcm);
                 }
+                context.video_clock_started = 0;
                 set_position(player, (uint64_t)seek);
             }
         }

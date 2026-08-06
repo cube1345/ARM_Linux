@@ -1,8 +1,10 @@
-CROSS_COMPILE ?= /home/cube/WorkSpace/Linux/ARM_Linux/host/bin/aarch64-buildroot-linux-gnu-
+BUILDROOT_OUTPUT ?= /home/cube/WorkSpace/Linux/ARM_Linux
+TARGET_TRIPLE ?= aarch64-buildroot-linux-gnu
+CROSS_COMPILE ?= $(BUILDROOT_OUTPUT)/host/bin/$(TARGET_TRIPLE)-
 CC := $(CROSS_COMPILE)gcc
 
 TARGET := image_browser
-PKG_CONFIG ?= /home/cube/WorkSpace/Linux/ARM_Linux/host/bin/pkg-config
+PKG_CONFIG ?= $(BUILDROOT_OUTPUT)/host/bin/pkg-config
 PACKAGES := freetype2 alsa libjpeg libpng libmpg123 libavformat libavcodec \
 	    libavutil libswscale libswresample
 SOURCES := image_browser.c browser_app.c bmp_display.c video_buffer.c input_keyboard.c \

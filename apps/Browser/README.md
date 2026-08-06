@@ -16,6 +16,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - 后台播放 PCM WAV 和 MP3，支持暂停、软件音量、进度显示和 seek。
 - Player 支持 MP4、MOV、MKV、AVI、WebM、M4V 视频，以及 AAC、M4A、FLAC、OGG、
   Opus 音频；FFmpeg 负责解复用、视频转 RGB 和音频重采样。
+- 视频帧按容器 PTS 和单调时钟控制显示节奏，带音轨和纯视频文件均按正常速度播放。
 - 启动后进入简约软件桌面，Gallery、Player、Files、Reader、Diagnostics、Settings
   按功能提供独立入口。
 - 同时支持 Linux Input 键盘与绝对坐标触摸设备，并以 input operation
@@ -96,6 +97,40 @@ make DESTDIR=/home/cube/WorkSpace/Linux/ARM_Linux/target install
 cd /home/cube/WorkSpace/Linux/ARM_Linux
 make
 ```
+
+## RK3506 移植准备
+
+代码只依赖标准 Linux 用户态接口，没有 AArch64 汇编或 QEMU 专用调用。切换到
+RK3506 BSP 时，先在 BSP 的 Buildroot output 中确认实际 toolchain triple：
+
+```sh
+ls <rk3506-output>/host/bin/*-gcc
+```
+
+然后使用对应 output 和 triple 构建，例如：
+
+```sh
+make clean
+make BUILDROOT_OUTPUT=<rk3506-output> \
+     TARGET_TRIPLE=<实际-toolchain-triple> \
+     CFLAGS='-Wall -Wextra -Wpedantic -Werror -O2'
+make BUILDROOT_OUTPUT=<rk3506-output> \
+     TARGET_TRIPLE=<实际-toolchain-triple> \
+     DESTDIR=<rk3506-output>/target install
+```
+
+RK3506 rootfs 必须提供 framebuffer、Linux Input、ALSA、FreeType、JPEG、PNG、giflib、
+mpg123 和 FFmpeg 动态库。上板前逐项确认：
+
+```sh
+ls -l /dev/fb0 /dev/input/event* /dev/snd/*
+file /usr/bin/media-browser
+ldd /usr/bin/media-browser
+```
+
+当前视频使用 FFmpeg 软件解码和 `libswscale` 转 RGB，不依赖 QEMU virtio-gpu。
+RK3506 首次上板先以 320x240、480p 视频验收 CPU 占用和帧率，再决定是否接入
+Rockchip 硬件解码接口；硬件加速不影响桌面和页面层接口。
 
 ## QEMU 启动
 
