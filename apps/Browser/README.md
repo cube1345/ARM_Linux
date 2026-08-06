@@ -19,8 +19,10 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - Player 触摸页提供 `PLAY/PAUSE`、进度条和音量条；文件页提供 `UP` 父目录和
   `HOME` 桌面入口，适合不接键盘的设备。
 - 视频帧按容器 PTS 和单调时钟控制显示节奏，带音轨和纯视频文件均按正常速度播放。
-- 启动后进入简约软件桌面，Gallery、Player、Files、Reader、Diagnostics、Settings
-  按功能提供独立入口。
+- 启动后进入简约软件桌面，Gallery、Player、Files、Reader、Diagnostics、Tools、
+  Settings 按功能提供独立入口。
+- Tools 应用以白名单方式运行现有 Linux ARM 命令，可查看 ALSA、mpg123、strace、
+  framebuffer 截图和 input 查询等工具输出。
 - 同时支持 Linux Input 键盘与绝对坐标触摸设备，并以 input operation
   链表统一分发。
 - 使用 framebuffer 离屏缓冲区完成整帧刷新。
@@ -36,7 +38,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 | --- | --- |
 | `image_browser.c` | CLI 参数解析、初始化/释放、周期刷新、页面 manager 调度和主事件循环 |
 | `browser_app.c/.h` | `browser_app` 共享上下文、页面枚举、文件类型 helper 和跨页面资源收尾 |
-| `desktop_app.c/.h` | Gallery、Player、Files、Reader、Diagnostics、Settings 应用注册和启动 |
+| `desktop_app.c/.h` | Gallery、Player、Files、Reader、Diagnostics、Tools、Settings 应用注册和启动 |
 | `page_desktop.c/.h` | 软件桌面卡片、应用选择、键盘和触摸入口 |
 | `page_manager.c/.h` | 页面 operation 注册、查找、渲染、输入分发、周期任务和事件等待时间调整 |
 | `page_file.c/.h` | 文件列表渲染、目录进入/返回、文件页键盘和触摸处理 |
@@ -45,6 +47,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 | `page_audio.c/.h` | 音频页渲染、播放暂停、seek、音量条和音频页输入处理 |
 | `media_player.c/.h` | FFmpeg 容器、视频和音频解码线程、RGB 帧快照、ALSA 输出 |
 | `page_video.c/.h` | 通用媒体页面、视频帧显示、进度/音量控制 |
+| `page_tools.c/.h` | 外部 Linux 命令白名单、命令执行、输出采集和工具页输入处理 |
 | `browser_ui.c/.h` / `ui_draw.c/.h` | 公共 UI 常量、按钮/进度条 helper、矩形与文字绘制 |
 | `browser_log.c/.h` | 统一日志等级、环境变量初始化和 errno 日志输出 |
 | `image_decoder.c/.h` | 静态图片 decoder manager，当前注册 BMP、JPEG、PNG |
@@ -221,6 +224,9 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 | Player 媒体 | `Space` | 暂停 / 继续 |
 | Player 媒体 | `Left` / `Right` | 后退 / 前进 5% |
 | Player 媒体 | `-` / `+` | 音量降低 / 增加 5% |
+| Tools | `Up` / `Down` | 选择外部命令 |
+| Tools | `Enter` | 运行选中命令并显示输出 |
+| Tools | `Esc` / `Backspace` | 返回桌面 |
 | 媒体页面 | `Esc` / `Backspace` | 返回文件列表 |
 | 任意页面 | `Q` | 退出程序 |
 
@@ -239,6 +245,7 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 | 音频 | 点击或拖动音量条 | 设置软件音量 |
 | Player 媒体 | 点击或拖动进度条 | seek 视频或 FFmpeg 音频 |
 | Player 媒体 | 点击或拖动音量条 | 设置软件音量 |
+| Tools | 点击命令条目 | 运行选中命令并显示输出 |
 | 媒体页面 | 左上角 `<` | 返回文件列表 |
 | Player 媒体 | 顶部 `PLAY/PAUSE` | 暂停 / 继续 |
 | 文件列表 | 顶部 `UP` | 返回父目录 |

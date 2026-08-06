@@ -12,7 +12,8 @@ SOURCES := image_browser.c browser_app.c bmp_display.c video_buffer.c input_keyb
 	   gif_animation.c animation_decoder.c image_decoder.c \
 	   image_render.c file_list.c font_renderer.c ui_draw.c browser_ui.c browser_log.c \
 	   desktop_app.c page_manager.c page_desktop.c page_file.c page_image.c \
-	   page_text.c page_audio.c page_diagnostics.c page_settings.c text_reader.c \
+	   page_text.c page_audio.c page_diagnostics.c page_tools.c \
+	   page_settings.c text_reader.c \
 	   audio_player.c media_player.c page_video.c
 OBJECTS := $(SOURCES:.c=.o)
 CFLAGS ?= -Wall -Wextra -Wpedantic -O2

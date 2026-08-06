@@ -8,6 +8,7 @@
 #include "page_image.h"
 #include "page_settings.h"
 #include "page_text.h"
+#include "page_tools.h"
 #include "page_video.h"
 
 #include <errno.h>
@@ -19,6 +20,7 @@ static struct page_operation text_page_operation;
 static struct page_operation audio_page_operation;
 static struct page_operation video_page_operation;
 static struct page_operation diagnostics_page_operation;
+static struct page_operation tools_page_operation;
 static struct page_operation settings_page_operation;
 
 /**
@@ -135,6 +137,15 @@ int page_manager_register_builtin(struct page_manager *manager)
     diagnostics_page_operation.event_timeout = NULL;
     diagnostics_page_operation.next = NULL;
 
+    tools_page_operation.page = BROWSER_PAGE_TOOLS;
+    tools_page_operation.name = "tools";
+    tools_page_operation.render = render_tools_page;
+    tools_page_operation.handle_key = handle_tools_key;
+    tools_page_operation.handle_touch = handle_tools_touch;
+    tools_page_operation.periodic = NULL;
+    tools_page_operation.event_timeout = NULL;
+    tools_page_operation.next = NULL;
+
     settings_page_operation.page = BROWSER_PAGE_SETTINGS;
     settings_page_operation.name = "settings";
     settings_page_operation.render = render_settings_page;
@@ -151,6 +162,7 @@ int page_manager_register_builtin(struct page_manager *manager)
            page_manager_register(manager, &audio_page_operation) < 0 ||
            page_manager_register(manager, &video_page_operation) < 0 ||
            page_manager_register(manager, &diagnostics_page_operation) < 0 ||
+           page_manager_register(manager, &tools_page_operation) < 0 ||
            page_manager_register(manager, &settings_page_operation) < 0 ? -1 : 0;
 }
 

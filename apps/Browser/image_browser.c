@@ -112,6 +112,7 @@ static int dispatch_input(const struct page_manager *pages,
                 return browser_app_close_media_page(app);
             }
             if (app->page == BROWSER_PAGE_DIAGNOSTICS ||
+                app->page == BROWSER_PAGE_TOOLS ||
                 app->page == BROWSER_PAGE_SETTINGS) {
                 return browser_app_return_to_desktop(app);
             }
@@ -128,6 +129,7 @@ static int dispatch_input(const struct page_manager *pages,
                 return browser_app_close_media_page(app);
             }
             if (app->page == BROWSER_PAGE_DIAGNOSTICS ||
+                app->page == BROWSER_PAGE_TOOLS ||
                 app->page == BROWSER_PAGE_SETTINGS) {
                 return browser_app_return_to_desktop(app);
             }

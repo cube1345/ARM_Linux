@@ -235,6 +235,24 @@ static void desktop_draw_diagnostics_glyph(struct bmp_display *display,
                         size / 8, 0x18313aU);
 }
 
+/** @brief 绘制外部工具图标内部图形。 */
+static void desktop_draw_tools_glyph(struct bmp_display *display,
+                                     int x, int y, int size)
+{
+    int left = x + size / 6;
+    int top = y + size / 5;
+    int width = size * 2 / 3;
+    int height = size * 3 / 5;
+
+    desktop_draw_round_rect(display, left, top, width, height,
+                            size / 12, 0x10201aU);
+    ui_draw_rect(display, left, top, width, size / 7, 0xd8ffe5U);
+    desktop_draw_play_triangle(display, left + 12, top + height / 2 - 10,
+                               size / 6, size / 4, 0xd8ffe5U);
+    ui_draw_rect(display, left + width / 2, top + height / 2 + 10,
+                 width / 3, 4, 0xd8ffe5U);
+}
+
 /** @brief 绘制设置图标内部图形。 */
 static void desktop_draw_settings_glyph(struct bmp_display *display,
                                         int x, int y, int size)
@@ -271,6 +289,8 @@ static void desktop_draw_app_icon(struct browser_app *app,
         desktop_draw_reader_glyph(&app->display, x, y, size);
     } else if (op->id == DESKTOP_APP_DIAGNOSTICS) {
         desktop_draw_diagnostics_glyph(&app->display, x, y, size);
+    } else if (op->id == DESKTOP_APP_TOOLS) {
+        desktop_draw_tools_glyph(&app->display, x, y, size);
     } else {
         desktop_draw_settings_glyph(&app->display, x, y, size);
     }

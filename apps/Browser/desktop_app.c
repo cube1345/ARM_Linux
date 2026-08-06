@@ -5,6 +5,7 @@
 #include "page_diagnostics.h"
 #include "page_file.h"
 #include "page_settings.h"
+#include "page_tools.h"
 
 #include <errno.h>
 
@@ -59,6 +60,24 @@ static int launch_settings(
     return render_settings_page(app);
 }
 
+/**
+ * @brief 启动外部工具应用。
+ * @param app 浏览器上下文。
+ * @param operation 应用 operation。
+ * @return 成功返回 0，失败返回 -1。
+ */
+static int launch_tools(
+    struct browser_app *app,
+    const struct desktop_app_operation *operation)
+{
+    app->active_app = operation->id;
+    app->tool_selected = 0;
+    app->tool_output[0] = '\0';
+    app->tool_status[0] = '\0';
+    app->page = BROWSER_PAGE_TOOLS;
+    return render_tools_page(app);
+}
+
 static struct desktop_app_operation builtin_apps[] = {
     {
         DESKTOP_APP_GALLERY, "Gallery", "Photos + GIF",
@@ -83,6 +102,10 @@ static struct desktop_app_operation builtin_apps[] = {
     {
         DESKTOP_APP_DIAGNOSTICS, "Diagnostics", "Device tools",
         "SYS", 0x65c7d0U, 0U, launch_diagnostics, NULL
+    },
+    {
+        DESKTOP_APP_TOOLS, "Tools", "Linux commands",
+        "CLI", 0x72d572U, 0U, launch_tools, NULL
     },
     {
         DESKTOP_APP_SETTINGS, "Settings", "Volume + options",

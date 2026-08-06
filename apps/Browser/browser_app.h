@@ -26,6 +26,7 @@ enum browser_page {
     BROWSER_PAGE_AUDIO,
     BROWSER_PAGE_VIDEO,
     BROWSER_PAGE_DIAGNOSTICS,
+    BROWSER_PAGE_TOOLS,
     BROWSER_PAGE_SETTINGS
 };
 
@@ -55,6 +56,9 @@ struct browser_app {
     enum desktop_app_id active_app;
     unsigned int file_filter;
     size_t desktop_selected;
+    size_t tool_selected;
+    char tool_output[2048];
+    char tool_status[128];
     unsigned int rotation;
     int slideshow_enabled;
     int preload_thread_created;
