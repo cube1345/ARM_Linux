@@ -5,6 +5,7 @@
 #include "input_keyboard.h"
 #include "ui_draw.h"
 
+#include <libavutil/avutil.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -80,6 +81,8 @@ int render_diagnostics_page(struct browser_app *app)
 {
     char display[96];
     char input[96];
+    char audio[128];
+    char ffmpeg[96];
     char tools[160];
     int tools_ready;
 
@@ -88,6 +91,11 @@ int render_diagnostics_page(struct browser_app *app)
              app->display.variable_info.yres,
              app->display.variable_info.bits_per_pixel);
     input_summary(app, input, sizeof(input));
+    snprintf(audio, sizeof(audio), "%s  /dev/snd: %s",
+             app->alsa_device,
+             access("/dev/snd", F_OK) == 0 ? "READY" : "NOT FOUND");
+    snprintf(ffmpeg, sizeof(ffmpeg), "libavutil %s  software decode",
+             av_version_info());
     tools_ready = access("/usr/bin/evtest", X_OK) == 0 &&
                   access("/usr/bin/fbgrab", X_OK) == 0 &&
                   access("/usr/bin/strace", X_OK) == 0;
@@ -101,8 +109,9 @@ int render_diagnostics_page(struct browser_app *app)
                                       "Runtime devices and support tools");
     draw_diagnostics_row(app, 0, "DISPLAY", display, UI_ACCENT);
     draw_diagnostics_row(app, 1, "INPUT", input, UI_ACCENT_2);
-    draw_diagnostics_row(app, 2, "AUDIO", app->alsa_device, UI_WARNING);
-    draw_diagnostics_row(app, 3, "TOOLS", tools, UI_SELECTED_BORDER);
+    draw_diagnostics_row(app, 2, "AUDIO", audio, UI_WARNING);
+    draw_diagnostics_row(app, 3, "FFMPEG", ffmpeg, UI_ACCENT_2);
+    draw_diagnostics_row(app, 4, "TOOLS", tools, UI_SELECTED_BORDER);
     browser_ui_draw_footer_hint(&app->display, &app->font,
                                 "Esc or top-left button returns to desktop");
     return bmp_display_flush(&app->display);

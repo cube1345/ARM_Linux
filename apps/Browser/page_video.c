@@ -139,9 +139,9 @@ int handle_video_key(struct browser_app *app, enum input_action action)
         percent += action == INPUT_ACTION_NEXT ? 5 : -5;
         media_player_seek_percent(&app->media, percent);
     } else if (action == INPUT_ACTION_VOLUME_UP) {
-        media_player_set_volume(&app->media, status.volume + 5);
+        browser_app_set_volume(app, status.volume + 5);
     } else if (action == INPUT_ACTION_VOLUME_DOWN) {
-        media_player_set_volume(&app->media, status.volume - 5);
+        browser_app_set_volume(app, status.volume - 5);
     } else {
         return 0;
     }
@@ -164,7 +164,7 @@ int handle_video_touch(struct browser_app *app,
     if (browser_ui_touches_bar(input, progress_y)) {
         media_player_seek_percent(&app->media, percent);
     } else if (browser_ui_touches_bar(input, volume_y)) {
-        media_player_set_volume(&app->media, percent);
+        browser_app_set_volume(app, percent);
     } else {
         return 0;
     }

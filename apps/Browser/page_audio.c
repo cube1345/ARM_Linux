@@ -264,9 +264,9 @@ int handle_audio_key(struct browser_app *app, enum input_action action)
     } else if (action == INPUT_ACTION_NEXT) {
         seek_relative(app, 5);
     } else if (action == INPUT_ACTION_VOLUME_UP) {
-        audio_player_set_volume(&app->audio, status.volume + 5);
+        browser_app_set_volume(app, status.volume + 5);
     } else if (action == INPUT_ACTION_VOLUME_DOWN) {
-        audio_player_set_volume(&app->audio, status.volume - 5);
+        browser_app_set_volume(app, status.volume - 5);
     } else {
         return 0;
     }
@@ -297,8 +297,7 @@ int handle_audio_touch(struct browser_app *app,
     if ((input->touch == TOUCH_ACTION_MOVE ||
          input->touch == TOUCH_ACTION_TAP) &&
         audio_touches_bar(app, input, volume_y)) {
-        audio_player_set_volume(&app->audio, audio_bar_percent(app,
-                                                               input->x));
+        browser_app_set_volume(app, audio_bar_percent(app, input->x));
         return render_audio_page(app);
     }
     if (input->touch == TOUCH_ACTION_TAP &&

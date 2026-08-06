@@ -93,10 +93,10 @@ int handle_settings_key(struct browser_app *app, enum input_action action)
     audio_player_get_status(&app->audio, &status);
     if (action == INPUT_ACTION_PREVIOUS ||
         action == INPUT_ACTION_VOLUME_DOWN) {
-        audio_player_set_volume(&app->audio, status.volume - 5);
+        browser_app_set_volume(app, status.volume - 5);
     } else if (action == INPUT_ACTION_NEXT ||
                action == INPUT_ACTION_VOLUME_UP) {
-        audio_player_set_volume(&app->audio, status.volume + 5);
+        browser_app_set_volume(app, status.volume + 5);
     } else {
         return 0;
     }
@@ -119,9 +119,9 @@ int handle_settings_touch(struct browser_app *app,
     if ((input->touch == TOUCH_ACTION_MOVE ||
          input->touch == TOUCH_ACTION_TAP) &&
         browser_ui_touches_bar(input, SETTINGS_VOLUME_Y)) {
-        audio_player_set_volume(&app->audio,
-                                browser_ui_bar_percent(&app->display,
-                                                       input->x));
+        browser_app_set_volume(app,
+                               browser_ui_bar_percent(&app->display,
+                                                      input->x));
         return render_settings_page(app);
     }
     if (input->touch != TOUCH_ACTION_TAP ||
@@ -132,10 +132,10 @@ int handle_settings_touch(struct browser_app *app,
     audio_player_get_status(&app->audio, &status);
     if (input->x >= button_x &&
         input->x <= button_x + SETTINGS_BUTTON_WIDTH) {
-        audio_player_set_volume(&app->audio, status.volume - 5);
+        browser_app_set_volume(app, status.volume - 5);
     } else if (input->x >= button_x + SETTINGS_BUTTON_WIDTH + 20 &&
                input->x <= button_x + SETTINGS_BUTTON_WIDTH * 2 + 20) {
-        audio_player_set_volume(&app->audio, status.volume + 5);
+        browser_app_set_volume(app, status.volume + 5);
     } else {
         return 0;
     }

@@ -123,4 +123,11 @@ int browser_app_close_media_page(struct browser_app *app);
  */
 int browser_app_return_to_desktop(struct browser_app *app);
 
+/**
+ * @brief 同时设置传统音频和 FFmpeg 播放器的软件音量。
+ * @param app 浏览器上下文。
+ * @param volume 音量百分比，自动限制到 0 到 100。
+ */
+void browser_app_set_volume(struct browser_app *app, int volume);
+
 #endif
