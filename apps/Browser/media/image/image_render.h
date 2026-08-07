@@ -4,6 +4,13 @@
 #include "bmp_display.h"
 #include "image_data.h"
 
+/** @brief 等比例画面缩放策略。 */
+enum image_render_mode {
+    IMAGE_RENDER_FIT = 0,
+    IMAGE_RENDER_FILL,
+    IMAGE_RENDER_ORIGINAL
+};
+
 /**
  * @brief 等比例缩放并居中绘制 RGB888 图片。
  *
@@ -14,6 +21,19 @@
  */
 int image_render_draw(struct bmp_display *display,
                       const struct image_data *image, unsigned int rotation);
+
+/**
+ * @brief 按指定缩放策略等比例居中绘制 RGB888 图片。
+ * @param display 显示设备上下文。
+ * @param image 已解码的 RGB888 图片。
+ * @param rotation 顺时针旋转角度，必须是 0、90、180 或 270。
+ * @param mode FIT、FILL 或 ORIGINAL 缩放策略。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int image_render_draw_mode(struct bmp_display *display,
+                           const struct image_data *image,
+                           unsigned int rotation,
+                           enum image_render_mode mode);
 
 /**
  * @brief 等比例缩放 RGB888 图片到指定最大尺寸。

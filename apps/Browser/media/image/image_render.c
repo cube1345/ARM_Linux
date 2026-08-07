@@ -115,19 +115,37 @@ int image_render_draw_region(struct bmp_display *display,
 int image_render_draw(struct bmp_display *display,
                       const struct image_data *image, unsigned int rotation)
 {
+    return image_render_draw_mode(display, image, rotation,
+                                  IMAGE_RENDER_FIT);
+}
+
+/**
+ * @brief 按指定缩放策略等比例居中绘制 RGB888 图片。
+ * @param display 显示设备上下文。
+ * @param image 已解码的 RGB888 图片。
+ * @param rotation 顺时针旋转角度，必须是 0、90、180 或 270。
+ * @param mode FIT、FILL 或 ORIGINAL 缩放策略。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int image_render_draw_mode(struct bmp_display *display,
+                           const struct image_data *image,
+                           unsigned int rotation,
+                           enum image_render_mode mode)
+{
     uint32_t rotated_width;
     uint32_t rotated_height;
-    uint32_t target_width;
-    uint32_t target_height;
-    uint32_t start_x;
-    uint32_t start_y;
-    uint32_t target_y;
+    uint64_t target_width;
+    uint64_t target_height;
+    int64_t start_x;
+    int64_t start_y;
+    uint32_t screen_y;
 
     if (display == NULL || !image_is_valid(image) ||
         display->variable_info.xres == 0 ||
         display->variable_info.yres == 0 ||
         (rotation != 0 && rotation != 90 && rotation != 180 &&
-         rotation != 270)) {
+         rotation != 270) || mode < IMAGE_RENDER_FIT ||
+        mode > IMAGE_RENDER_ORIGINAL) {
         errno = EINVAL;
         return -1;
     }
@@ -136,37 +154,49 @@ int image_render_draw(struct bmp_display *display,
                     image->height : image->width;
     rotated_height = rotation == 90 || rotation == 270 ?
                      image->width : image->height;
-    target_width = display->variable_info.xres;
-    target_height = (uint32_t)((uint64_t)rotated_height * target_width /
-                               rotated_width);
-
-    if (target_height > display->variable_info.yres) {
-        target_height = display->variable_info.yres;
-        target_width = (uint32_t)((uint64_t)rotated_width * target_height /
-                                  rotated_height);
+    if (mode == IMAGE_RENDER_ORIGINAL) {
+        target_width = rotated_width;
+        target_height = rotated_height;
+    } else {
+        target_width = display->variable_info.xres;
+        target_height = (uint64_t)rotated_height * target_width /
+                        rotated_width;
+        if ((mode == IMAGE_RENDER_FIT &&
+             target_height > display->variable_info.yres) ||
+            (mode == IMAGE_RENDER_FILL &&
+             target_height < display->variable_info.yres)) {
+            target_height = display->variable_info.yres;
+            target_width = (uint64_t)rotated_width * target_height /
+                           rotated_height;
+        }
     }
-
-    if (target_width == 0) {
-        target_width = 1;
-    }
-    if (target_height == 0) {
-        target_height = 1;
-    }
-
-    start_x = (display->variable_info.xres - target_width) / 2;
-    start_y = (display->variable_info.yres - target_height) / 2;
+    if (target_width == 0) target_width = 1;
+    if (target_height == 0) target_height = 1;
+    start_x = ((int64_t)display->variable_info.xres -
+               (int64_t)target_width) / 2;
+    start_y = ((int64_t)display->variable_info.yres -
+               (int64_t)target_height) / 2;
     bmp_display_clear(display, 0, 0, 0);
 
-    for (target_y = 0; target_y < target_height; target_y++) {
-        uint32_t rotated_y = (uint32_t)((uint64_t)target_y * rotated_height /
-                                        target_height);
-        uint32_t target_x;
+    for (screen_y = 0; screen_y < display->variable_info.yres; screen_y++) {
+        int64_t relative_y = (int64_t)screen_y - start_y;
+        uint32_t rotated_y;
+        uint32_t screen_x;
 
-        for (target_x = 0; target_x < target_width; target_x++) {
-            uint32_t rotated_x = (uint32_t)(
-                (uint64_t)target_x * rotated_width / target_width);
+        if (relative_y < 0 || (uint64_t)relative_y >= target_height) continue;
+        rotated_y = (uint32_t)((uint64_t)relative_y * rotated_height /
+                               target_height);
+        for (screen_x = 0; screen_x < display->variable_info.xres;
+             screen_x++) {
+            int64_t relative_x = (int64_t)screen_x - start_x;
+            uint32_t rotated_x;
             uint32_t source_x;
             uint32_t source_y;
+
+            if (relative_x < 0 ||
+                (uint64_t)relative_x >= target_width) continue;
+            rotated_x = (uint32_t)((uint64_t)relative_x * rotated_width /
+                                   target_width);
 
             if (rotation == 90) {
                 source_x = rotated_y;
@@ -186,8 +216,7 @@ int image_render_draw(struct bmp_display *display,
                                    (size_t)source_x * image->channels;
 
             if (bmp_display_put_rgb(display,
-                                    (int)(start_x + target_x),
-                                    (int)(start_y + target_y),
+                                    (int)screen_x, (int)screen_y,
                                     pixel[0], pixel[1], pixel[2]) < 0) {
                 return -1;
             }

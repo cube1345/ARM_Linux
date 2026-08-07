@@ -14,6 +14,7 @@
 #include "font_renderer.h"
 #include "gif_animation.h"
 #include "image_data.h"
+#include "image_render.h"
 #include "input_keyboard.h"
 #include "media_player.h"
 #include "text_reader.h"
@@ -107,6 +108,8 @@ struct browser_app {
     uint64_t last_audio_refresh_ms;
     uint64_t last_media_refresh_ms;
     uint64_t media_frame_serial;
+    enum image_render_mode video_render_mode;
+    int video_fullscreen;
 };
 
 /**

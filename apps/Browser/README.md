@@ -21,6 +21,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - Player 触摸页提供 `PLAY/PAUSE`、进度条和音量条；文件页提供 `UP` 父目录和
   `HOME` 桌面入口，适合不接键盘的设备。
 - 视频帧按容器 PTS 和单调时钟控制显示节奏，带音轨和纯视频文件均按正常速度播放。
+- 视频画面支持 FIT 留边、FILL 裁切铺满和 1:1 原始大小，并可隐藏控件全屏播放。
 - 启动后进入简约软件桌面，Gallery、Player、Files、Reader、Diagnostics、Tools、
   Settings 按功能提供独立入口。
 - Tools 应用以白名单方式运行现有 Linux ARM 命令，可查看 ALSA、mpg123、strace、
@@ -120,7 +121,7 @@ make
 
 Host smoke test 会生成 4/8/24/32-bit、RLE4/RLE8 BMP、PNG、JPEG、GIF、WAV
 和 ID3 标签，并使用 Buildroot target 中已有的 MP3/MP4，检查正常解码、配置
-读写、文件排序/搜索、音频元数据、空目录和损坏文件拒绝逻辑：
+读写、文件排序/搜索、音频元数据、三种画面缩放模式、空目录和损坏文件拒绝逻辑：
 
 ```sh
 cd /home/cube/WorkSpace/Linux/ARM_Linux_WS/apps/Browser
@@ -286,6 +287,8 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 | Player 媒体 | `Left` / `Right` | 后退 / 前进 10 秒 |
 | Player 媒体 | `Up` / `Down` | 上一个 / 下一个媒体 |
 | Player 媒体 | `-` / `+` | 音量降低 / 增加 5% |
+| Player 视频 | `R` | 循环切换 FIT、FILL、1:1 缩放模式 |
+| Player 视频 | `Enter` | 进入 / 退出隐藏控件的全屏模式 |
 | Settings | `Left` / `Right` 或 `-` / `+` | 音量降低 / 增加 5% |
 | Settings | `Up` / `Down` | 字体增大 / 缩小 |
 | Settings | `R` | 循环切换单次、单曲循环、列表循环和随机播放 |
@@ -310,6 +313,8 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 | 音频 | 点击或拖动音量条 | 设置软件音量 |
 | Player 媒体 | 点击或拖动进度条 | seek 视频或 FFmpeg 音频 |
 | Player 媒体 | 点击或拖动音量条 | 设置软件音量 |
+| Player 视频 | 顶部 `FIT/FILL/1:1` | 循环切换画面缩放模式 |
+| Player 视频 | 顶部 `FULL` | 进入全屏；全屏中点击任意位置退出 |
 | Settings | 点击音量条或 `- 5` / `+ 5` | 设置软件音量 |
 | Settings | 点击 `A -` / `A +` | 缩小 / 增大全局字体 |
 | Settings | 点击 `CHANGE` | 循环切换播放模式 |
@@ -336,6 +341,8 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 - 带 ID3 标签的 MP3 可显示标题、艺术家和专辑；无标签文件回退显示文件名。
 - 音频或视频播放超过 3 秒后退出，在距离结尾 3 秒以上时重新打开同一文件可从
   上次位置继续播放；接近开头或结尾不保存断点。
+- 视频页可通过 `R`/缩放按钮检查 FIT、FILL、1:1，通过 `Enter`/`FULL` 检查
+  隐藏控件的全屏显示；全屏时 `Esc` 或点击画面只退出全屏，不关闭媒体。
 - 图片页 `Space` 或 `AUTO ON/OFF` 可切换自动播放，约 3 秒自动切换下一张。
 - BMP/JPEG/PNG 相邻切换可复用后台预解码结果；GIF 继续由动画 decoder 实时播放。
 - `BROWSER_LOG_LEVEL=debug` 启动时可看到 input、decoder、audio 和文件列表等模块日志。

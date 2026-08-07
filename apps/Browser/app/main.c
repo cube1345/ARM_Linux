@@ -17,6 +17,7 @@
 #include "page_gallery.h"
 #include "page_file.h"
 #include "page_image.h"
+#include "page_video.h"
 #include "text_reader.h"
 #include "ui_draw.h"
 
@@ -147,6 +148,10 @@ static int dispatch_input(const struct page_manager *pages,
             return 1;
         }
         if (input->action == INPUT_ACTION_BACK) {
+            if (app->page == BROWSER_PAGE_VIDEO && app->video_fullscreen) {
+                app->video_fullscreen = 0;
+                return render_video_page(app);
+            }
             if (browser_page_is_media(app->page)) {
                 return browser_app_close_media_page(app);
             }
@@ -163,7 +168,8 @@ static int dispatch_input(const struct page_manager *pages,
     }
     if (input->touch != TOUCH_ACTION_NONE) {
         if (input->touch == TOUCH_ACTION_TAP &&
-            input->x < UI_BUTTON_SIZE && input->y < UI_BUTTON_SIZE) {
+            input->x < UI_BUTTON_SIZE && input->y < UI_BUTTON_SIZE &&
+            !(app->page == BROWSER_PAGE_VIDEO && app->video_fullscreen)) {
             if (browser_page_is_media(app->page)) {
                 return browser_app_close_media_page(app);
             }

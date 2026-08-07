@@ -113,6 +113,7 @@ int browser_app_close_media_page(struct browser_app *app)
         media_player_stop(&app->media);
         image_data_destroy(&app->media_frame);
         app->media_frame_serial = 0;
+        app->video_fullscreen = 0;
     }
     (void)browser_app_save_config(app);
     app->page = BROWSER_PAGE_FILES;
@@ -137,6 +138,7 @@ int browser_app_return_to_desktop(struct browser_app *app)
         media_player_stop(&app->media);
         image_data_destroy(&app->media_frame);
         app->media_frame_serial = 0;
+        app->video_fullscreen = 0;
     }
     (void)browser_app_save_config(app);
     app->active_app = DESKTOP_APP_NONE;

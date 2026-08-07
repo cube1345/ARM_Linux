@@ -13,7 +13,47 @@
 #define VIDEO_BAR_HEIGHT 12
 #define VIDEO_BAR_INSET 28
 #define VIDEO_PANEL_HEIGHT 220
-#define VIDEO_PLAY_BUTTON_WIDTH 112
+#define VIDEO_PLAY_BUTTON_WIDTH 92
+#define VIDEO_SCALE_BUTTON_WIDTH 72
+#define VIDEO_FULLSCREEN_BUTTON_WIDTH 72
+#define VIDEO_HEADER_BUTTON_HEIGHT 42
+#define VIDEO_HEADER_BUTTON_GAP 4
+
+/** @brief 获取视频缩放模式的短标签。 */
+static const char *video_render_mode_name(enum image_render_mode mode)
+{
+    if (mode == IMAGE_RENDER_FILL) return "FILL";
+    if (mode == IMAGE_RENDER_ORIGINAL) return "1:1";
+    return "FIT";
+}
+
+/** @brief 循环切换 FIT、FILL 和原始大小缩放模式。 */
+static void cycle_video_render_mode(struct browser_app *app)
+{
+    app->video_render_mode =
+        (enum image_render_mode)(((int)app->video_render_mode + 1) % 3);
+}
+
+/** @brief 获取播放暂停按钮左坐标。 */
+static int video_play_button_x(const struct browser_app *app)
+{
+    return (int)app->display.variable_info.xres - UI_MARGIN -
+           VIDEO_PLAY_BUTTON_WIDTH;
+}
+
+/** @brief 获取全屏按钮左坐标。 */
+static int video_fullscreen_button_x(const struct browser_app *app)
+{
+    return video_play_button_x(app) - VIDEO_HEADER_BUTTON_GAP -
+           VIDEO_FULLSCREEN_BUTTON_WIDTH;
+}
+
+/** @brief 获取缩放模式按钮左坐标。 */
+static int video_scale_button_x(const struct browser_app *app)
+{
+    return video_fullscreen_button_x(app) - VIDEO_HEADER_BUTTON_GAP -
+           VIDEO_SCALE_BUTTON_WIDTH;
+}
 
 static int video_bar_x(void)
 {
@@ -156,7 +196,11 @@ int render_video_page(struct browser_app *app)
     uint64_t serial = 0;
     int has_frame;
     char title[FILE_LIST_NAME_SIZE + 64];
-    int screen_width = (int)app->display.variable_info.xres;
+    int title_x = UI_BUTTON_SIZE + 16;
+    int scale_x = video_scale_button_x(app);
+    int fullscreen_x = video_fullscreen_button_x(app);
+    int play_x = video_play_button_x(app);
+    int title_width;
 
     media_player_get_status(&app->media, &status);
     if (status.frame_serial != app->media_frame_serial) {
@@ -166,7 +210,8 @@ int render_video_page(struct browser_app *app)
         if (has_frame) app->media_frame_serial = serial;
     }
     if (app->media_frame.pixels != NULL) {
-        if (image_render_draw(&app->display, &app->media_frame, 0) < 0) {
+        if (image_render_draw_mode(&app->display, &app->media_frame, 0,
+                                   app->video_render_mode) < 0) {
             return -1;
         }
     } else {
@@ -182,27 +227,43 @@ int render_video_page(struct browser_app *app)
                      UI_MARGIN + 28, video_panel_y(app) + 104, 300,
                      UI_TEXT, UI_SURFACE);
     }
+    if (app->video_fullscreen && app->media_frame.pixels != NULL) {
+        app->last_media_refresh_ms = monotonic_ms();
+        return 0;
+    }
     if (status.width > 0 && status.height > 0) {
+        title_width = scale_x - title_x - VIDEO_HEADER_BUTTON_GAP;
         snprintf(title, sizeof(title), "PLAYER  %s  %ux%u  %.1ffps",
                  app->files.entries[app->selected].name,
                  status.width, status.height, status.frame_rate);
     } else {
+        title_width = play_x - title_x - VIDEO_HEADER_BUTTON_GAP;
         snprintf(title, sizeof(title), "PLAYER  %s",
                  app->files.entries[app->selected].name);
     }
     browser_ui_draw_back_button(&app->display, &app->font);
-    ui_draw_text(&app->display, &app->font, title, UI_BUTTON_SIZE + 16,
-                 40, screen_width - UI_BUTTON_SIZE -
-                 VIDEO_PLAY_BUTTON_WIDTH - 48,
-                 UI_TEXT, UI_BACKGROUND);
+    if (title_width > 0) {
+        ui_draw_text(&app->display, &app->font, title, title_x, 40,
+                     title_width, UI_TEXT, UI_BACKGROUND);
+    }
+    if (status.width > 0 && status.height > 0) {
+        browser_ui_draw_button(&app->display, &app->font, scale_x, 10,
+                               VIDEO_SCALE_BUTTON_WIDTH,
+                               VIDEO_HEADER_BUTTON_HEIGHT,
+                               video_render_mode_name(app->video_render_mode),
+                               UI_HEADER);
+        browser_ui_draw_button(&app->display, &app->font, fullscreen_x, 10,
+                               VIDEO_FULLSCREEN_BUTTON_WIDTH,
+                               VIDEO_HEADER_BUTTON_HEIGHT, "FULL", UI_HEADER);
+    }
     browser_ui_draw_button(&app->display, &app->font,
-                           screen_width - UI_MARGIN - VIDEO_PLAY_BUTTON_WIDTH,
-                           10, VIDEO_PLAY_BUTTON_WIDTH, 42,
+                           play_x, 10, VIDEO_PLAY_BUTTON_WIDTH,
+                           VIDEO_HEADER_BUTTON_HEIGHT,
                            status.state == MEDIA_PLAYER_PAUSED ? "PLAY" :
                            "PAUSE", UI_HEADER);
     draw_video_controls(app, &status);
     browser_ui_draw_footer_hint(&app->display, &app->font,
-                                "Space pause  ↑/↓ track  ←/→ 10s  +/- volume");
+                                "Space pause  R scale  Enter full  ←/→ 10s");
     app->last_media_refresh_ms = monotonic_ms();
     return bmp_display_flush(&app->display);
 }
@@ -226,6 +287,12 @@ int handle_video_key(struct browser_app *app, enum input_action action)
     media_player_get_status(&app->media, &status);
     if (action == INPUT_ACTION_TOGGLE) {
         media_player_toggle_pause(&app->media);
+    } else if (action == INPUT_ACTION_OPEN && status.width > 0 &&
+               status.height > 0) {
+        app->video_fullscreen = !app->video_fullscreen;
+    } else if (action == INPUT_ACTION_ROTATE && status.width > 0 &&
+               status.height > 0) {
+        cycle_video_render_mode(app);
     } else if (action == INPUT_ACTION_UP) {
         return media_play_previous(app);
     } else if (action == INPUT_ACTION_DOWN) {
@@ -279,9 +346,18 @@ int handle_video_touch(struct browser_app *app,
     int bar_width = video_bar_width(app);
     int play_x = (int)app->display.variable_info.xres - UI_MARGIN -
                  VIDEO_PLAY_BUTTON_WIDTH;
+    int fullscreen_x = video_fullscreen_button_x(app);
+    int scale_x = video_scale_button_x(app);
     int percent;
 
     if (input->touch != TOUCH_ACTION_TAP && input->touch != TOUCH_ACTION_MOVE) {
+        return 0;
+    }
+    if (app->video_fullscreen) {
+        if (input->touch == TOUCH_ACTION_TAP) {
+            app->video_fullscreen = 0;
+            return render_video_page(app);
+        }
         return 0;
     }
     percent = browser_ui_bar_percent_at(input->x, bar_x, bar_width);
@@ -294,10 +370,20 @@ int handle_video_touch(struct browser_app *app,
     } else if (input->touch == TOUCH_ACTION_TAP && input->y < UI_HEADER_HEIGHT &&
                input->x >= play_x && input->x < play_x + VIDEO_PLAY_BUTTON_WIDTH) {
         media_player_toggle_pause(&app->media);
+    } else if (input->touch == TOUCH_ACTION_TAP &&
+               input->y < UI_HEADER_HEIGHT && input->x >= fullscreen_x &&
+               input->x < fullscreen_x + VIDEO_FULLSCREEN_BUTTON_WIDTH) {
+        media_player_get_status(&app->media, &status);
+        if (status.width == 0 || status.height == 0) return 0;
+        app->video_fullscreen = 1;
+    } else if (input->touch == TOUCH_ACTION_TAP &&
+               input->y < UI_HEADER_HEIGHT && input->x >= scale_x &&
+               input->x < scale_x + VIDEO_SCALE_BUTTON_WIDTH) {
+        media_player_get_status(&app->media, &status);
+        if (status.width == 0 || status.height == 0) return 0;
+        cycle_video_render_mode(app);
     } else {
         return 0;
     }
-    media_player_get_status(&app->media, &status);
-    (void)status;
     return render_video_page(app);
 }
