@@ -282,12 +282,12 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 | 音频 | `Up` / `Down` | 上一首 / 下一首 |
 | 音频 | `-` / `+` | 音量降低 / 增加 5% |
 | Player 媒体 | `Space` | 暂停 / 继续 |
-| Player 媒体 | `Left` / `Right` | 后退 / 前进 5% |
+| Player 媒体 | `Left` / `Right` | 后退 / 前进 10 秒 |
 | Player 媒体 | `Up` / `Down` | 上一个 / 下一个媒体 |
 | Player 媒体 | `-` / `+` | 音量降低 / 增加 5% |
 | Settings | `Left` / `Right` 或 `-` / `+` | 音量降低 / 增加 5% |
 | Settings | `Up` / `Down` | 字体增大 / 缩小 |
-| Settings | `R` | 循环切换单次、列表循环和随机播放 |
+| Settings | `R` | 循环切换单次、单曲循环、列表循环和随机播放 |
 | Tools | `Up` / `Down` | 选择外部命令 |
 | Tools | `Enter` | 运行选中命令并显示输出 |
 | Tools | `Esc` / `Backspace` | 返回桌面 |
