@@ -12,7 +12,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - GIF 支持动画循环、透明、局部帧、帧延时以及 disposal 0/1/2/3。
 - 图片等比例缩放、居中显示，支持顺时针 90 度旋转、自动播放和
   BMP/JPEG/PNG 下一张图片后台预解码。
-- 使用 FreeType 分页显示 UTF-8 文本，支持中文。
+- 使用 FreeType 分页显示 UTF-8 文本，支持中文；Settings 可调整全局字体大小。
 - 后台播放 PCM WAV 和 MP3，支持暂停、软件音量、进度显示和 seek。
 - Player 支持 MP4、MOV、MKV、AVI、WebM、M4V 视频，以及 AAC、M4A、FLAC、OGG、
   Opus 音频；FFmpeg 负责解复用、视频转 RGB 和音频重采样。
@@ -24,7 +24,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - Tools 应用以白名单方式运行现有 Linux ARM 命令，可查看 ALSA、mpg123、strace、
   framebuffer 截图和 input 查询等工具输出。
 - 同时支持 Linux Input 键盘、标准输入、绝对坐标触摸与相对坐标鼠标设备，
-  并以 input operation 链表统一分发。
+  可用 `auto` 自动发现 evdev 节点，并以 input operation 链表统一分发。
 - 使用 framebuffer 离屏缓冲区完成整帧刷新。
 - 提供统一日志模块，支持通过 `BROWSER_LOG_LEVEL` 控制 ERROR/WARN/INFO/DEBUG。
 - 采用深色简约 UI：顶栏、文件卡片、彩色类型标签、底部操作提示、按钮和进度条。
@@ -38,6 +38,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 | --- | --- |
 | `app/main.c` | CLI 参数解析、初始化/释放、周期刷新和主事件循环 |
 | `app/browser_app.c/.h` | 共享上下文、页面枚举、文件类型 helper 和跨页面资源收尾 |
+| `core/debug_manager.c/.h` | Diagnostics 状态 operation 注册、设备/FFmpeg/工具状态采集 |
 | `core/desktop_app.c/.h` | Gallery、Player、Files、Reader、Diagnostics、Tools、Settings 应用注册 |
 | `pages/desktop/page_desktop.c/.h` | 软件桌面卡片、应用选择、键盘和触摸入口 |
 | `core/page_manager.c/.h` | 页面 operation 注册、查找、渲染、输入分发、周期任务和事件等待时间调整 |
@@ -54,8 +55,10 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 | `media/animation/*` | 动画 decoder manager 与 GIF 帧合成、延时和 disposal 状态 |
 | `media/audio/audio_player.c/.h` | WAV/MP3 后台播放线程、backend 表、暂停、音量、seek 与状态快照 |
 | `platform/display/*` | Framebuffer 设备、mmap 显存和 video buffer 离屏刷新 |
-| `platform/input/*` | Linux Input 键盘、stdin、绝对触摸和相对鼠标归一化 |
+| `platform/display/display_manager.c/.h` | framebuffer 显示 operation 注册、打开/关闭和当前设备状态 |
+| `platform/input/*` | Linux Input 键盘、stdin、绝对触摸、相对鼠标和 evdev 自动发现 |
 | `platform/font/*` | FreeType 字体加载、UTF-8 解码和文字绘制 |
+| `platform/font/font_manager.c/.h` | FreeType/UTF-8 字体 operation 注册、打开和像素大小切换 |
 | `media/image/*` | BMP/JPEG/PNG 图片数据、decoder manager 和缩放渲染 |
 
 新增格式时优先新增 decoder/backend 并注册到 manager；新增交互时优先放在对应
@@ -170,9 +173,9 @@ ls -l /dev/fb0 /dev/input/event* /dev/snd/pcmC0D0p
 cat /proc/bus/input/devices
 ```
 
-启动程序。第 2 个参数可传键盘 event、`stdin` 或 `-`；第 7 个参数可传绝对坐标
-触摸或相对坐标鼠标 event，也可省略或使用 `-` 禁用。键盘/stdin 与指针设备不能
-同时禁用：
+启动程序。第 2 个参数可传键盘 event、`stdin`、`auto` 或 `-`；第 7 个参数可传
+绝对坐标触摸/相对坐标鼠标 event、`auto`，也可省略或使用 `-` 禁用。
+键盘/stdin 与指针设备不能同时禁用：
 
 ```sh
 /usr/bin/media-browser \
@@ -182,6 +185,19 @@ cat /proc/bus/input/devices
     /usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc \
     default \
     /dev/input/event1
+```
+
+QEMU 或上板调试时可以先使用自动发现，程序会扫描 `/dev/input/event0` 到
+`/dev/input/event31`：
+
+```sh
+/usr/bin/media-browser \
+    /dev/fb0 \
+    auto \
+    /root/media \
+    /usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc \
+    default \
+    auto
 ```
 
 兼容原来的五参数或六参数命令行；不传最后一个参数时只使用键盘或 stdin。
@@ -235,6 +251,8 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 | Player 媒体 | `Space` | 暂停 / 继续 |
 | Player 媒体 | `Left` / `Right` | 后退 / 前进 5% |
 | Player 媒体 | `-` / `+` | 音量降低 / 增加 5% |
+| Settings | `Left` / `Right` 或 `-` / `+` | 音量降低 / 增加 5% |
+| Settings | `Up` / `Down` | 字体增大 / 缩小 |
 | Tools | `Up` / `Down` | 选择外部命令 |
 | Tools | `Enter` | 运行选中命令并显示输出 |
 | Tools | `Esc` / `Backspace` | 返回桌面 |
@@ -256,6 +274,8 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 | 音频 | 点击或拖动音量条 | 设置软件音量 |
 | Player 媒体 | 点击或拖动进度条 | seek 视频或 FFmpeg 音频 |
 | Player 媒体 | 点击或拖动音量条 | 设置软件音量 |
+| Settings | 点击音量条或 `- 5` / `+ 5` | 设置软件音量 |
+| Settings | 点击 `A -` / `A +` | 缩小 / 增大全局字体 |
 | Tools | 点击命令条目 | 运行选中命令并显示输出 |
 | 媒体页面 | 左上角 `<` | 返回文件列表 |
 | Player 媒体 | 顶部 `PLAY/PAUSE` | 暂停 / 继续 |

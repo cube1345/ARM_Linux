@@ -92,8 +92,9 @@ struct input_manager {
 /**
  * @brief 打开可选键盘、标准输入和指针设备。
  * @param manager 输入管理器。
- * @param keyboard_path 键盘节点，"stdin" 表示标准输入，"-" 表示禁用。
- * @param touch_path 触摸或鼠标节点，NULL 或 "-" 表示禁用。
+ * @param keyboard_path 键盘节点，"stdin" 表示标准输入，"auto" 表示自动查找，
+ *                      "-" 表示禁用。
+ * @param touch_path 触摸或鼠标节点，"auto" 表示自动查找，NULL 或 "-" 表示禁用。
  * @param screen_width framebuffer 宽度。
  * @param screen_height framebuffer 高度。
  * @return 成功返回 0，失败返回 -1。

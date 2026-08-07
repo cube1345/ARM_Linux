@@ -2,13 +2,10 @@
 
 #include "browser_app.h"
 #include "browser_ui.h"
-#include "input_keyboard.h"
+#include "debug_manager.h"
 #include "ui_draw.h"
 
-#include <libavutil/avutil.h>
 #include <stdio.h>
-#include <string.h>
-#include <unistd.h>
 
 #define DIAGNOSTICS_ROW_TOP (UI_HEADER_HEIGHT + 22)
 #define DIAGNOSTICS_ROW_HEIGHT 58
@@ -44,74 +41,34 @@ static void draw_diagnostics_row(struct browser_app *app, int row,
 }
 
 /**
- * @brief 生成输入 operation 摘要。
- * @param app 浏览器上下文。
- * @param output 输出字符串。
- * @param output_size 输出缓冲区大小。
- */
-static void input_summary(const struct browser_app *app, char *output,
-                          size_t output_size)
-{
-    struct input_operation *operation;
-    size_t used = 0;
-
-    output[0] = '\0';
-    for (operation = app->input.operations; operation != NULL;
-         operation = operation->next) {
-        int written = snprintf(output + used, output_size - used,
-                               used == 0 ? "%s" : " + %s",
-                               operation->name);
-
-        if (written < 0 || (size_t)written >= output_size - used) {
-            break;
-        }
-        used += (size_t)written;
-    }
-    if (used == 0) {
-        snprintf(output, output_size, "No input operation");
-    }
-}
-
-/**
  * @brief 绘制设备与运行环境诊断页面。
  * @param app 浏览器上下文。
  * @return 成功返回 0，失败返回 -1。
  */
 int render_diagnostics_page(struct browser_app *app)
 {
-    char display[96];
-    char input[96];
-    char audio[128];
-    char ffmpeg[96];
-    char tools[160];
-    int tools_ready;
+    size_t index;
 
-    snprintf(display, sizeof(display), "%ux%u  %u bpp  framebuffer",
-             app->display.variable_info.xres,
-             app->display.variable_info.yres,
-             app->display.variable_info.bits_per_pixel);
-    input_summary(app, input, sizeof(input));
-    snprintf(audio, sizeof(audio), "%s  /dev/snd: %s",
-             app->alsa_device,
-             access("/dev/snd", F_OK) == 0 ? "READY" : "NOT FOUND");
-    snprintf(ffmpeg, sizeof(ffmpeg), "libavutil %s  software decode",
-             av_version_info());
-    tools_ready = access("/usr/bin/evtest", X_OK) == 0 &&
-                  access("/usr/bin/fbgrab", X_OK) == 0 &&
-                  access("/usr/bin/strace", X_OK) == 0;
-    snprintf(tools, sizeof(tools), "evtest / fbgrab / strace: %s",
-             tools_ready ? "READY" : "CHECK ROOTFS");
     bmp_display_clear(&app->display, (uint8_t)(UI_BACKGROUND >> 16),
                       (uint8_t)(UI_BACKGROUND >> 8),
                       (uint8_t)UI_BACKGROUND);
     browser_ui_draw_navigation_header(&app->display, &app->font,
                                       "Diagnostics",
                                       "Runtime devices and support tools");
-    draw_diagnostics_row(app, 0, "DISPLAY", display, UI_ACCENT);
-    draw_diagnostics_row(app, 1, "INPUT", input, UI_ACCENT_2);
-    draw_diagnostics_row(app, 2, "AUDIO", audio, UI_WARNING);
-    draw_diagnostics_row(app, 3, "FFMPEG", ffmpeg, UI_ACCENT_2);
-    draw_diagnostics_row(app, 4, "TOOLS", tools, UI_SELECTED_BORDER);
+    for (index = 0; index < app->debug.count; index++) {
+        const struct debug_operation *operation =
+            debug_manager_at(&app->debug, index);
+        char value[180];
+
+        if (operation == NULL) {
+            continue;
+        }
+        if (operation->status(app, value, sizeof(value)) < 0) {
+            snprintf(value, sizeof(value), "unavailable");
+        }
+        draw_diagnostics_row(app, (int)index, operation->name, value,
+                             operation->color);
+    }
     browser_ui_draw_footer_hint(&app->display, &app->font,
                                 "Esc or top-left button returns to desktop");
     return bmp_display_flush(&app->display);

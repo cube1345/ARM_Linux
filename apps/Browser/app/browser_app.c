@@ -66,3 +66,43 @@ void browser_app_set_volume(struct browser_app *app, int volume)
     audio_player_set_volume(&app->audio, volume);
     media_player_set_volume(&app->media, volume);
 }
+
+/**
+ * @brief 设置全局 UI 与文本阅读字体大小。
+ * @param app 浏览器上下文。
+ * @param pixel_size 字体像素高度，自动限制在允许范围。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int browser_app_set_font_size(struct browser_app *app, uint32_t pixel_size)
+{
+    if (app == NULL) {
+        return -1;
+    }
+    if (pixel_size < BROWSER_FONT_MIN_SIZE) {
+        pixel_size = BROWSER_FONT_MIN_SIZE;
+    } else if (pixel_size > BROWSER_FONT_MAX_SIZE) {
+        pixel_size = BROWSER_FONT_MAX_SIZE;
+    }
+    return font_manager_set_size(&app->fonts, &app->font, pixel_size);
+}
+
+/**
+ * @brief 按步长调整全局 UI 与文本阅读字体大小。
+ * @param app 浏览器上下文。
+ * @param delta 像素高度增量。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int browser_app_adjust_font_size(struct browser_app *app, int delta)
+{
+    uint32_t next_size;
+
+    if (app == NULL) {
+        return -1;
+    }
+    if (delta < 0 && (uint32_t)(-delta) > app->font.pixel_size) {
+        next_size = 0;
+    } else {
+        next_size = (uint32_t)((int)app->font.pixel_size + delta);
+    }
+    return browser_app_set_font_size(app, next_size);
+}

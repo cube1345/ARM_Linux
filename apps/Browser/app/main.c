@@ -32,8 +32,8 @@
 static void print_usage(const char *program_name)
 {
     fprintf(stderr,
-            "Usage: %s <fb> <keyboard|stdin|-> <root> <font> "
-            "[ALSA device] [touch|mouse device]\n", program_name);
+            "Usage: %s <fb> <keyboard|stdin|auto|-> <root> <font> "
+            "[ALSA device] [touch|mouse|auto device]\n", program_name);
 }
 
 /**
@@ -198,15 +198,25 @@ int main(int argc, char *argv[])
     app.file_filter = FILE_LIST_FILTER_ALL;
     app.alsa_device = argc >= 6 ? argv[5] : "default";
     touch_path = argc >= 7 ? argv[6] : NULL;
+    display_manager_init(&app.display_devices);
+    font_manager_init(&app.fonts);
+    debug_manager_init(&app.debug);
+    if (display_manager_register_builtin(&app.display_devices) < 0 ||
+        font_manager_register_builtin(&app.fonts) < 0 ||
+        debug_manager_register_builtin(&app.debug) < 0) {
+        return EXIT_FAILURE;
+    }
     if (realpath(argv[3], app.root) == NULL ||
         file_list_scan(app.root, &app.files) < 0) {
         browser_log_errno(BROWSER_LOG_ERROR, argv[3]);
         return EXIT_FAILURE;
     }
-    if (bmp_display_open(&app.display, argv[1]) < 0) {
+    if (display_manager_open(&app.display_devices, &app.display,
+                             argv[1]) < 0) {
         return EXIT_FAILURE;
     }
-    if (font_renderer_open(&app.font, argv[4], 24) < 0) {
+    if (font_manager_open(&app.fonts, &app.font, argv[4],
+                          BROWSER_FONT_DEFAULT_SIZE) < 0) {
         goto cleanup_display;
     }
     if (input_manager_open(&app.input, argv[2], touch_path,
@@ -246,8 +256,8 @@ cleanup_audio_player:
 cleanup_input:
     input_manager_close(&app.input);
 cleanup_font:
-    font_renderer_close(&app.font);
+    font_manager_close(&app.fonts, &app.font);
 cleanup_display:
-    bmp_display_close(&app.display);
+    display_manager_close(&app.display_devices, &app.display);
     return result == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

@@ -5,13 +5,19 @@
 #include "browser_ui.h"
 #include "ui_draw.h"
 
+#include <stdint.h>
 #include <stdio.h>
 
 #define SETTINGS_PANEL_TOP (UI_HEADER_HEIGHT + 30)
-#define SETTINGS_PANEL_HEIGHT 210
+#define SETTINGS_PANEL_HEIGHT 330
 #define SETTINGS_BUTTON_WIDTH 118
 #define SETTINGS_BUTTON_HEIGHT 48
-#define SETTINGS_VOLUME_Y (SETTINGS_PANEL_TOP + 118)
+#define SETTINGS_VOLUME_LABEL_Y (SETTINGS_PANEL_TOP + 52)
+#define SETTINGS_VOLUME_BAR_Y (SETTINGS_PANEL_TOP + 94)
+#define SETTINGS_VOLUME_BUTTON_Y (SETTINGS_PANEL_TOP + 120)
+#define SETTINGS_FONT_LABEL_Y (SETTINGS_PANEL_TOP + 192)
+#define SETTINGS_FONT_BUTTON_Y (SETTINGS_PANEL_TOP + 220)
+#define SETTINGS_SAMPLE_Y (SETTINGS_PANEL_TOP + 300)
 
 /**
  * @brief 获取设置页面按钮起始 X 坐标。
@@ -37,10 +43,13 @@ int render_settings_page(struct browser_app *app)
     int panel_width = width - UI_MARGIN * 2;
     int button_x = settings_button_x(app);
     char volume[48];
+    char font_size[64];
     char device[180];
 
     audio_player_get_status(&app->audio, &status);
     snprintf(volume, sizeof(volume), "Desktop volume  %d%%", status.volume);
+    snprintf(font_size, sizeof(font_size), "Font size  %upx",
+             app->font.pixel_size);
     snprintf(device, sizeof(device), "ALSA output: %s", app->alsa_device);
     bmp_display_clear(&app->display, (uint8_t)(UI_BACKGROUND >> 16),
                       (uint8_t)(UI_BACKGROUND >> 8),
@@ -52,21 +61,37 @@ int render_settings_page(struct browser_app *app)
                           panel_width, SETTINGS_PANEL_HEIGHT,
                           UI_SURFACE, UI_BORDER);
     ui_draw_text(&app->display, &app->font, volume, UI_MARGIN + 24,
-                 SETTINGS_PANEL_TOP + (int)app->font.pixel_size + 30,
+                 SETTINGS_VOLUME_LABEL_Y,
                  panel_width - 48, UI_TEXT, UI_SURFACE);
     browser_ui_draw_progress_bar(&app->display, UI_MARGIN + 24,
-                                 SETTINGS_VOLUME_Y,
+                                 SETTINGS_VOLUME_BAR_Y,
                                  panel_width - 48, 14,
                                  status.volume, UI_ACCENT);
     browser_ui_draw_button(&app->display, &app->font, button_x,
-                           SETTINGS_PANEL_TOP + 158,
+                           SETTINGS_VOLUME_BUTTON_Y,
                            SETTINGS_BUTTON_WIDTH, SETTINGS_BUTTON_HEIGHT,
                            "- 5", UI_HEADER);
     browser_ui_draw_button(&app->display, &app->font,
                            button_x + SETTINGS_BUTTON_WIDTH + 20,
-                           SETTINGS_PANEL_TOP + 158,
+                           SETTINGS_VOLUME_BUTTON_Y,
                            SETTINGS_BUTTON_WIDTH, SETTINGS_BUTTON_HEIGHT,
                            "+ 5", UI_HEADER);
+    ui_draw_text(&app->display, &app->font, font_size, UI_MARGIN + 24,
+                 SETTINGS_FONT_LABEL_Y, panel_width - 48,
+                 UI_TEXT, UI_SURFACE);
+    browser_ui_draw_button(&app->display, &app->font, button_x,
+                           SETTINGS_FONT_BUTTON_Y,
+                           SETTINGS_BUTTON_WIDTH, SETTINGS_BUTTON_HEIGHT,
+                           "A -", UI_HEADER);
+    browser_ui_draw_button(&app->display, &app->font,
+                           button_x + SETTINGS_BUTTON_WIDTH + 20,
+                           SETTINGS_FONT_BUTTON_Y,
+                           SETTINGS_BUTTON_WIDTH, SETTINGS_BUTTON_HEIGHT,
+                           "A +", UI_HEADER);
+    ui_draw_text(&app->display, &app->font,
+                 "Sample: embedded Linux media desktop",
+                 UI_MARGIN + 24, SETTINGS_SAMPLE_Y,
+                 panel_width - 48, UI_MUTED, UI_SURFACE);
     browser_ui_draw_panel(&app->display, UI_MARGIN,
                           SETTINGS_PANEL_TOP + SETTINGS_PANEL_HEIGHT + 12,
                           panel_width, 72, UI_SURFACE_ALT, UI_BORDER);
@@ -76,7 +101,7 @@ int render_settings_page(struct browser_app *app)
                  panel_width - 48, UI_MUTED, UI_SURFACE_ALT);
     browser_ui_draw_footer_hint(
         &app->display, &app->font,
-        "Left/Right or +/- adjusts volume  Esc returns to desktop");
+        "Left/Right or +/- volume  Up/Down font  Esc returns");
     return bmp_display_flush(&app->display);
 }
 
@@ -97,6 +122,16 @@ int handle_settings_key(struct browser_app *app, enum input_action action)
     } else if (action == INPUT_ACTION_NEXT ||
                action == INPUT_ACTION_VOLUME_UP) {
         browser_app_set_volume(app, status.volume + 5);
+    } else if (action == INPUT_ACTION_UP) {
+        if (browser_app_adjust_font_size(app,
+                                         (int)BROWSER_FONT_STEP_SIZE) < 0) {
+            return -1;
+        }
+    } else if (action == INPUT_ACTION_DOWN) {
+        if (browser_app_adjust_font_size(app,
+                                         -(int)BROWSER_FONT_STEP_SIZE) < 0) {
+            return -1;
+        }
     } else {
         return 0;
     }
@@ -116,31 +151,51 @@ int handle_settings_touch(struct browser_app *app,
     int width = (int)app->display.variable_info.xres;
     int panel_width = width - UI_MARGIN * 2;
     int button_x = settings_button_x(app);
-    int button_y = SETTINGS_PANEL_TOP + 158;
 
     if ((input->touch == TOUCH_ACTION_MOVE ||
          input->touch == TOUCH_ACTION_TAP) &&
         input->x >= UI_MARGIN + 24 &&
         input->x <= UI_MARGIN + 24 + panel_width - 48 &&
-        browser_ui_touches_bar(input, SETTINGS_VOLUME_Y)) {
+        browser_ui_touches_bar(input, SETTINGS_VOLUME_BAR_Y)) {
         browser_app_set_volume(app,
                                browser_ui_bar_percent_at(input->x,
                                                         UI_MARGIN + 24,
                                                         panel_width - 48));
         return render_settings_page(app);
     }
-    if (input->touch != TOUCH_ACTION_TAP ||
-        input->y < button_y ||
-        input->y > button_y + SETTINGS_BUTTON_HEIGHT) {
+    if (input->touch != TOUCH_ACTION_TAP) {
         return 0;
     }
     audio_player_get_status(&app->audio, &status);
-    if (input->x >= button_x &&
-        input->x <= button_x + SETTINGS_BUTTON_WIDTH) {
-        browser_app_set_volume(app, status.volume - 5);
-    } else if (input->x >= button_x + SETTINGS_BUTTON_WIDTH + 20 &&
-               input->x <= button_x + SETTINGS_BUTTON_WIDTH * 2 + 20) {
-        browser_app_set_volume(app, status.volume + 5);
+    if (input->y >= SETTINGS_VOLUME_BUTTON_Y &&
+        input->y <= SETTINGS_VOLUME_BUTTON_Y + SETTINGS_BUTTON_HEIGHT) {
+        if (input->x >= button_x &&
+            input->x <= button_x + SETTINGS_BUTTON_WIDTH) {
+            browser_app_set_volume(app, status.volume - 5);
+        } else if (input->x >= button_x + SETTINGS_BUTTON_WIDTH + 20 &&
+                   input->x <= button_x + SETTINGS_BUTTON_WIDTH * 2 + 20) {
+            browser_app_set_volume(app, status.volume + 5);
+        } else {
+            return 0;
+        }
+    } else if (input->y >= SETTINGS_FONT_BUTTON_Y &&
+               input->y <= SETTINGS_FONT_BUTTON_Y +
+               SETTINGS_BUTTON_HEIGHT) {
+        if (input->x >= button_x &&
+            input->x <= button_x + SETTINGS_BUTTON_WIDTH) {
+            if (browser_app_adjust_font_size(
+                    app, -(int)BROWSER_FONT_STEP_SIZE) < 0) {
+                return -1;
+            }
+        } else if (input->x >= button_x + SETTINGS_BUTTON_WIDTH + 20 &&
+                   input->x <= button_x + SETTINGS_BUTTON_WIDTH * 2 + 20) {
+            if (browser_app_adjust_font_size(
+                    app, (int)BROWSER_FONT_STEP_SIZE) < 0) {
+                return -1;
+            }
+        } else {
+            return 0;
+        }
     } else {
         return 0;
     }

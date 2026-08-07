@@ -18,6 +18,8 @@
 #define INPUT_NAME_SIZE 128
 #define INPUT_BITS_PER_LONG ((int)(sizeof(unsigned long) * CHAR_BIT))
 #define INPUT_STDIN_PATH "stdin"
+#define INPUT_AUTO_PATH "auto"
+#define INPUT_EVENT_SCAN_LIMIT 32
 
 static int read_keyboard(struct input_manager *manager,
                          struct input_operation *operation,
@@ -203,6 +205,85 @@ static int configure_relative_mouse(int fd)
 }
 
 /**
+ * @brief 判断 Input 节点是否像浏览器键盘。
+ * @param fd 输入设备文件描述符。
+ * @return 是键盘返回 1，否则返回 0。
+ */
+static int input_device_is_keyboard(int fd)
+{
+    unsigned long key_bits[(KEY_MAX + INPUT_BITS_PER_LONG) /
+                           INPUT_BITS_PER_LONG];
+
+    memset(key_bits, 0, sizeof(key_bits));
+    if (ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(key_bits)), key_bits) < 0) {
+        return 0;
+    }
+    return (input_bit_is_set(key_bits, KEY_ENTER) ||
+            input_bit_is_set(key_bits, KEY_KPENTER)) &&
+           input_bit_is_set(key_bits, KEY_UP) &&
+           input_bit_is_set(key_bits, KEY_DOWN) &&
+           input_bit_is_set(key_bits, KEY_LEFT) &&
+           input_bit_is_set(key_bits, KEY_RIGHT);
+}
+
+/**
+ * @brief 判断 Input 节点是否像触摸屏或鼠标。
+ * @param fd 输入设备文件描述符。
+ * @return 是指针设备返回 1，否则返回 0。
+ */
+static int input_device_is_pointer(int fd)
+{
+    struct input_manager probe;
+
+    memset(&probe, 0, sizeof(probe));
+    if (configure_axes(&probe, fd) == 0) {
+        return 1;
+    }
+    return configure_relative_mouse(fd) == 0;
+}
+
+/**
+ * @brief 自动扫描 /dev/input/event* 并选择匹配设备。
+ * @param match 设备匹配回调。
+ * @param kind 日志中显示的设备类别。
+ * @param output 输出路径缓冲区。
+ * @param output_size 输出路径缓冲区大小。
+ * @return 找到返回 0，失败返回 -1。
+ */
+static int find_input_device(int (*match)(int fd), const char *kind,
+                             char *output, size_t output_size)
+{
+    int index;
+
+    if (match == NULL || kind == NULL || output == NULL ||
+        output_size == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    for (index = 0; index < INPUT_EVENT_SCAN_LIMIT; index++) {
+        char path[PATH_MAX];
+        int fd;
+
+        snprintf(path, sizeof(path), "/dev/input/event%d", index);
+        fd = open(path, O_RDONLY | O_NONBLOCK);
+        if (fd < 0) {
+            continue;
+        }
+        if (match(fd)) {
+            close(fd);
+            snprintf(output, output_size, "%s", path);
+            browser_log(BROWSER_LOG_INFO, "auto %s input: %s", kind,
+                        output);
+            return 0;
+        }
+        close(fd);
+    }
+    browser_log(BROWSER_LOG_WARN, "auto %s input not found", kind);
+    errno = ENODEV;
+    return -1;
+}
+
+/**
  * @brief 注册一个输入 operation。
  * @param manager 输入管理器。
  * @param operation 输入 operation。
@@ -315,6 +396,11 @@ int input_manager_open(struct input_manager *manager,
                        const char *keyboard_path, const char *touch_path,
                        int screen_width, int screen_height)
 {
+    char keyboard_auto_path[PATH_MAX];
+    char touch_auto_path[PATH_MAX];
+    const char *resolved_keyboard_path;
+    const char *resolved_touch_path = touch_path;
+
     if (manager == NULL || keyboard_path == NULL || screen_width <= 0 ||
         screen_height <= 0) {
         errno = EINVAL;
@@ -326,14 +412,31 @@ int input_manager_open(struct input_manager *manager,
     manager->stdin_flags = -1;
     manager->screen_width = screen_width;
     manager->screen_height = screen_height;
-    if (strcmp(keyboard_path, "-") != 0) {
-        if (strcmp(keyboard_path, INPUT_STDIN_PATH) == 0) {
+    resolved_keyboard_path = keyboard_path;
+    if (strcmp(keyboard_path, INPUT_AUTO_PATH) == 0) {
+        if (find_input_device(input_device_is_keyboard, "keyboard",
+                              keyboard_auto_path,
+                              sizeof(keyboard_auto_path)) < 0) {
+            return -1;
+        }
+        resolved_keyboard_path = keyboard_auto_path;
+    }
+    if (touch_path != NULL && strcmp(touch_path, INPUT_AUTO_PATH) == 0) {
+        if (find_input_device(input_device_is_pointer, "pointer",
+                              touch_auto_path, sizeof(touch_auto_path)) == 0) {
+            resolved_touch_path = touch_auto_path;
+        } else {
+            resolved_touch_path = NULL;
+        }
+    }
+    if (strcmp(resolved_keyboard_path, "-") != 0) {
+        if (strcmp(resolved_keyboard_path, INPUT_STDIN_PATH) == 0) {
             manager->keyboard.fd = open_stdin(manager);
             manager->keyboard.name = "stdin";
             manager->keyboard.read = read_stdin;
             manager->keyboard.close = close_input_operation;
         } else {
-            manager->keyboard.fd = open_input(keyboard_path);
+            manager->keyboard.fd = open_input(resolved_keyboard_path);
             manager->keyboard.name = "keyboard";
             manager->keyboard.read = read_keyboard;
             manager->keyboard.close = close_input_operation;
@@ -348,8 +451,8 @@ int input_manager_open(struct input_manager *manager,
             return -1;
         }
     }
-    if (touch_path != NULL && strcmp(touch_path, "-") != 0) {
-        manager->touch.fd = open_input(touch_path);
+    if (resolved_touch_path != NULL && strcmp(resolved_touch_path, "-") != 0) {
+        manager->touch.fd = open_input(resolved_touch_path);
         if (manager->touch.fd < 0) {
             input_manager_close(manager);
             return -1;

@@ -3,19 +3,34 @@
 
 #include "animation_decoder.h"
 #include "audio_player.h"
-#include "media_player.h"
 #include "bmp_display.h"
+#include "debug_manager.h"
 #include "desktop_app.h"
+#include "display_manager.h"
 #include "file_list.h"
+#include "font_manager.h"
 #include "font_renderer.h"
 #include "gif_animation.h"
 #include "image_data.h"
 #include "input_keyboard.h"
+#include "media_player.h"
 #include "text_reader.h"
 
 #include <limits.h>
 #include <pthread.h>
 #include <stdint.h>
+
+/** @brief 默认字体像素高度。 */
+#define BROWSER_FONT_DEFAULT_SIZE 24U
+
+/** @brief 用户可调最小字体像素高度。 */
+#define BROWSER_FONT_MIN_SIZE 18U
+
+/** @brief 用户可调最大字体像素高度。 */
+#define BROWSER_FONT_MAX_SIZE 34U
+
+/** @brief 设置页每次调整的字体像素步长。 */
+#define BROWSER_FONT_STEP_SIZE 2U
 
 /** @brief 浏览器当前页面。 */
 enum browser_page {
@@ -32,6 +47,9 @@ enum browser_page {
 
 /** @brief 多媒体文件浏览器完整运行上下文。 */
 struct browser_app {
+    struct display_manager display_devices;
+    struct font_manager fonts;
+    struct debug_manager debug;
     struct bmp_display display;
     struct input_manager input;
     struct font_renderer font;
@@ -133,5 +151,21 @@ int browser_app_return_to_desktop(struct browser_app *app);
  * @param volume 音量百分比，自动限制到 0 到 100。
  */
 void browser_app_set_volume(struct browser_app *app, int volume);
+
+/**
+ * @brief 设置全局 UI 与文本阅读字体大小。
+ * @param app 浏览器上下文。
+ * @param pixel_size 字体像素高度，自动限制在允许范围。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int browser_app_set_font_size(struct browser_app *app, uint32_t pixel_size);
+
+/**
+ * @brief 按步长调整全局 UI 与文本阅读字体大小。
+ * @param app 浏览器上下文。
+ * @param delta 像素高度增量。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int browser_app_adjust_font_size(struct browser_app *app, int delta);
 
 #endif
