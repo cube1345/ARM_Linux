@@ -20,10 +20,42 @@
 #include <errno.h>
 #include <limits.h>
 #include <stdint.h>
+#include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+
+static volatile sig_atomic_t browser_shutdown_requested;
+
+/**
+ * @brief 记录终止信号并交给主循环执行资源清理。
+ * @param signal_number 收到的信号编号。
+ */
+static void handle_shutdown_signal(int signal_number)
+{
+    (void)signal_number;
+    browser_shutdown_requested = 1;
+}
+
+/**
+ * @brief 安装可安全退出的终止信号处理器。
+ * @return 成功返回 0，失败返回 -1。
+ */
+static int install_shutdown_handlers(void)
+{
+    struct sigaction action;
+
+    memset(&action, 0, sizeof(action));
+    action.sa_handler = handle_shutdown_signal;
+    sigemptyset(&action.sa_mask);
+    if (sigaction(SIGINT, &action, NULL) < 0 ||
+        sigaction(SIGTERM, &action, NULL) < 0 ||
+        sigaction(SIGHUP, &action, NULL) < 0) {
+        return -1;
+    }
+    return 0;
+}
 
 /**
  * @brief 输出程序用法。
@@ -148,10 +180,11 @@ static int dispatch_input(const struct page_manager *pages,
 static int run_browser(const struct page_manager *pages,
                        struct browser_app *app)
 {
+    browser_shutdown_requested = 0;
     if (page_manager_render(pages, app) < 0) {
         return -1;
     }
-    while (1) {
+    while (!browser_shutdown_requested) {
         struct browser_input input;
         uint64_t now = monotonic_ms();
         int wait_result = input_manager_wait(
@@ -173,6 +206,8 @@ static int run_browser(const struct page_manager *pages,
             return -1;
         }
     }
+    browser_log(BROWSER_LOG_INFO, "shutdown signal received; cleaning up");
+    return 0;
 }
 
 /**
@@ -189,6 +224,9 @@ int main(int argc, char *argv[])
     int result = -1;
 
     browser_log_init_from_env();
+    if (install_shutdown_handlers() < 0) {
+        browser_log_errno(BROWSER_LOG_WARN, "install signal handlers");
+    }
     if (argc < 5 || argc > 7) {
         print_usage(argv[0]);
         return EXIT_FAILURE;

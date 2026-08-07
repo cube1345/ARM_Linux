@@ -876,9 +876,10 @@ int input_manager_wait(struct input_manager *manager,
         errno = ENODEV;
         return -1;
     }
-    do {
-        poll_result = poll(descriptors, (nfds_t)count, timeout_ms);
-    } while (poll_result < 0 && errno == EINTR);
+    poll_result = poll(descriptors, (nfds_t)count, timeout_ms);
+    if (poll_result < 0 && errno == EINTR) {
+        return 0;
+    }
     if (poll_result <= 0) {
         return poll_result;
     }
