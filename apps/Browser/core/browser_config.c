@@ -32,10 +32,25 @@ static int parse_unsigned(const char *value, unsigned long *output)
     char *end;
     unsigned long parsed;
 
+    if (*value == '-') return -1;
     errno = 0;
     parsed = strtoul(value, &end, 10);
     if (errno != 0 || end == value || *trim(end) != '\0') return -1;
     *output = parsed;
+    return 0;
+}
+
+/** @brief 解析一个 64 位非负整数。 */
+static int parse_uint64(const char *value, uint64_t *output)
+{
+    char *end;
+    unsigned long long parsed;
+
+    if (*value == '-') return -1;
+    errno = 0;
+    parsed = strtoull(value, &end, 10);
+    if (errno != 0 || end == value || *trim(end) != '\0') return -1;
+    *output = (uint64_t)parsed;
     return 0;
 }
 
@@ -47,6 +62,8 @@ void browser_config_defaults(struct browser_config *config)
     config->volume = 80;
     config->file_sort = FILE_LIST_SORT_NAME;
     config->playback_mode = BROWSER_PLAYBACK_REPEAT_ALL;
+    config->resume_path[0] = '\0';
+    config->resume_position_ms = 0;
 }
 
 /** @brief 解析一行配置键值。 */
@@ -77,6 +94,11 @@ static void parse_line(char *line, struct browser_config *config)
     } else if (strcmp(key, "playback_mode") == 0 &&
                parse_unsigned(value, &parsed) == 0 && parsed <= 3U) {
         config->playback_mode = (enum browser_playback_mode)parsed;
+    } else if (strcmp(key, "resume_path") == 0) {
+        snprintf(config->resume_path, sizeof(config->resume_path), "%s",
+                 value);
+    } else if (strcmp(key, "resume_position_ms") == 0) {
+        (void)parse_uint64(value, &config->resume_position_ms);
     }
 }
 
@@ -84,7 +106,7 @@ static void parse_line(char *line, struct browser_config *config)
 int browser_config_load(const char *path, struct browser_config *config)
 {
     FILE *stream;
-    char line[256];
+    char line[PATH_MAX + 64];
 
     if (path == NULL || config == NULL) {
         errno = EINVAL;
@@ -121,9 +143,10 @@ int browser_config_save(const char *path,
     }
     stream = fopen(temporary, "w");
     if (stream == NULL) return -1;
-    if (fprintf(stream, "# media-browser settings\nfont_size=%u\nvolume=%d\nsort=%d\nplayback_mode=%d\n",
+    if (fprintf(stream, "# media-browser settings\nfont_size=%u\nvolume=%d\nsort=%d\nplayback_mode=%d\nresume_path=%s\nresume_position_ms=%llu\n",
                 config->font_size, config->volume, (int)config->file_sort,
-                (int)config->playback_mode) < 0 ||
+                (int)config->playback_mode, config->resume_path,
+                (unsigned long long)config->resume_position_ms) < 0 ||
         fflush(stream) != 0) {
         fclose(stream);
         remove(temporary);

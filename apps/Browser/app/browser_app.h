@@ -166,6 +166,21 @@ int browser_app_close_media_page(struct browser_app *app);
 int browser_app_return_to_desktop(struct browser_app *app);
 
 /**
+ * @brief 记录当前音频或 FFmpeg 媒体的断点位置。
+ * @param app 浏览器上下文。
+ */
+void browser_app_remember_playback(struct browser_app *app);
+
+/**
+ * @brief 恢复指定音频或 FFmpeg 媒体的断点位置。
+ * @param app 浏览器上下文。
+ * @param path 媒体文件绝对路径。
+ * @param page 目标播放器页面。
+ */
+void browser_app_restore_playback(struct browser_app *app, const char *path,
+                                  enum browser_page page);
+
+/**
  * @brief 同时设置传统音频和 FFmpeg 播放器的软件音量。
  * @param app 浏览器上下文。
  * @param volume 音量百分比，自动限制到 0 到 100。

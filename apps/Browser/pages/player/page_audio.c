@@ -178,6 +178,8 @@ static int start_audio_index(struct browser_app *app, size_t index)
         app->selected = previous;
         return -1;
     }
+    snprintf(app->current_path, sizeof(app->current_path), "%s", path);
+    browser_app_restore_playback(app, path, BROWSER_PAGE_AUDIO);
     (void)audio_metadata_read(path, &app->audio_metadata);
     app->selected = index;
     app->page = BROWSER_PAGE_AUDIO;

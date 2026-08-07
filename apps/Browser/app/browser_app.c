@@ -9,6 +9,92 @@
 #include "page_video.h"
 #include "text_reader.h"
 
+#include <stdio.h>
+#include <string.h>
+
+#define BROWSER_RESUME_MIN_POSITION_MS 3000U
+#define BROWSER_RESUME_END_MARGIN_MS 3000U
+
+/**
+ * @brief 记录当前音频或 FFmpeg 媒体的断点位置。
+ * @param app 浏览器上下文。
+ */
+void browser_app_remember_playback(struct browser_app *app)
+{
+    uint64_t position_ms;
+    uint64_t duration_ms;
+
+    if (app == NULL || app->current_path[0] == '\0') return;
+    if (app->page == BROWSER_PAGE_AUDIO) {
+        struct audio_player_status status;
+
+        audio_player_get_status(&app->audio, &status);
+        position_ms = status.position_ms;
+        duration_ms = status.duration_ms;
+    } else if (app->page == BROWSER_PAGE_VIDEO) {
+        struct media_player_status status;
+
+        media_player_get_status(&app->media, &status);
+        position_ms = status.position_ms;
+        duration_ms = status.duration_ms;
+    } else {
+        return;
+    }
+    if (position_ms >= BROWSER_RESUME_MIN_POSITION_MS &&
+        duration_ms > BROWSER_RESUME_END_MARGIN_MS &&
+        position_ms < duration_ms - BROWSER_RESUME_END_MARGIN_MS) {
+        snprintf(app->config.resume_path, sizeof(app->config.resume_path),
+                 "%s", app->current_path);
+        app->config.resume_position_ms = position_ms;
+    } else if (strcmp(app->config.resume_path, app->current_path) == 0) {
+        app->config.resume_path[0] = '\0';
+        app->config.resume_position_ms = 0;
+    }
+}
+
+/**
+ * @brief 取出并消费指定媒体文件的断点位置。
+ * @param app 浏览器上下文。
+ * @param path 媒体文件绝对路径。
+ * @return 可恢复的位置毫秒值，无匹配断点返回 0。
+ */
+static uint64_t take_resume_position(struct browser_app *app,
+                                     const char *path)
+{
+    uint64_t position_ms;
+
+    if (app == NULL || path == NULL ||
+        strcmp(app->config.resume_path, path) != 0) {
+        return 0;
+    }
+    position_ms = app->config.resume_position_ms;
+    app->config.resume_path[0] = '\0';
+    app->config.resume_position_ms = 0;
+    return position_ms;
+}
+
+/**
+ * @brief 恢复指定音频或 FFmpeg 媒体的断点位置。
+ * @param app 浏览器上下文。
+ * @param path 媒体文件绝对路径。
+ * @param page 目标播放器页面。
+ */
+void browser_app_restore_playback(struct browser_app *app, const char *path,
+                                  enum browser_page page)
+{
+    uint64_t position_ms;
+
+    if (page != BROWSER_PAGE_AUDIO && page != BROWSER_PAGE_VIDEO) return;
+    position_ms = take_resume_position(app, path);
+    if (position_ms == 0) return;
+    if (page == BROWSER_PAGE_AUDIO) {
+        audio_player_seek_ms(&app->audio, (int64_t)position_ms);
+    } else {
+        media_player_seek_ms(&app->media, (int64_t)position_ms);
+    }
+    (void)browser_app_save_config(app);
+}
+
 /**
  * @brief 关闭当前媒体资源并返回文件列表页。
  * @param app 浏览器上下文。
@@ -16,6 +102,7 @@
  */
 int browser_app_close_media_page(struct browser_app *app)
 {
+    browser_app_remember_playback(app);
     if (app->page == BROWSER_PAGE_IMAGE) {
         close_image(app);
     } else if (app->page == BROWSER_PAGE_TEXT) {
@@ -27,6 +114,7 @@ int browser_app_close_media_page(struct browser_app *app)
         image_data_destroy(&app->media_frame);
         app->media_frame_serial = 0;
     }
+    (void)browser_app_save_config(app);
     app->page = BROWSER_PAGE_FILES;
     return render_file_page(app);
 }
@@ -38,6 +126,7 @@ int browser_app_close_media_page(struct browser_app *app)
  */
 int browser_app_return_to_desktop(struct browser_app *app)
 {
+    browser_app_remember_playback(app);
     if (app->page == BROWSER_PAGE_IMAGE) {
         close_image(app);
     } else if (app->page == BROWSER_PAGE_TEXT) {
@@ -49,6 +138,7 @@ int browser_app_return_to_desktop(struct browser_app *app)
         image_data_destroy(&app->media_frame);
         app->media_frame_serial = 0;
     }
+    (void)browser_app_save_config(app);
     app->active_app = DESKTOP_APP_NONE;
     app->file_filter = FILE_LIST_FILTER_ALL;
     app->search_active = 0;

@@ -74,6 +74,13 @@ void audio_player_set_volume(struct audio_player *player, int volume);
 void audio_player_seek_percent(struct audio_player *player, int percent);
 
 /**
+ * @brief 请求跳转到指定毫秒位置。
+ * @param player 播放器上下文。
+ * @param position_ms 目标位置，自动限制为非负值。
+ */
+void audio_player_seek_ms(struct audio_player *player, int64_t position_ms);
+
+/**
  * @brief 原子读取播放器状态。
  * @param player 播放器上下文。
  * @param status 输出状态快照。

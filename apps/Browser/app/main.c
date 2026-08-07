@@ -301,6 +301,7 @@ int main(int argc, char *argv[])
     }
     result = run_browser(&pages, &app);
 cleanup_media_player:
+    browser_app_remember_playback(&app);
     (void)browser_app_save_config(&app);
     gallery_cache_clear(&app);
     close_image(&app);

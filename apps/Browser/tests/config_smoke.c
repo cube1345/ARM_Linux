@@ -16,12 +16,17 @@ int main(int argc, char **argv)
     expected.volume = 37;
     expected.file_sort = FILE_LIST_SORT_SIZE;
     expected.playback_mode = BROWSER_PLAYBACK_SHUFFLE;
+    snprintf(expected.resume_path, sizeof(expected.resume_path),
+             "/root/media/album/track 01.mp3");
+    expected.resume_position_ms = 123456U;
     if (browser_config_save(argv[1], &expected) < 0 ||
         browser_config_load(argv[1], &loaded) < 0 ||
         loaded.font_size != expected.font_size ||
         loaded.volume != expected.volume ||
         loaded.file_sort != expected.file_sort ||
-        loaded.playback_mode != expected.playback_mode) {
+        loaded.playback_mode != expected.playback_mode ||
+        strcmp(loaded.resume_path, expected.resume_path) != 0 ||
+        loaded.resume_position_ms != expected.resume_position_ms) {
         fprintf(stderr, "FAIL config round trip\n");
         return EXIT_FAILURE;
     }

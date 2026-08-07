@@ -3,6 +3,7 @@
 
 #include "file_list.h"
 
+#include <limits.h>
 #include <stddef.h>
 #include <stdint.h>
 
@@ -20,6 +21,8 @@ struct browser_config {
     int volume;
     enum file_list_sort file_sort;
     enum browser_playback_mode playback_mode;
+    char resume_path[PATH_MAX];
+    uint64_t resume_position_ms;
 };
 
 /**

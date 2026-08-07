@@ -690,6 +690,26 @@ void audio_player_seek_percent(struct audio_player *player, int percent)
 }
 
 /**
+ * @brief 请求跳转到指定毫秒位置。
+ * @param player 播放器上下文。
+ * @param position_ms 目标位置，自动限制为非负值。
+ */
+void audio_player_seek_ms(struct audio_player *player, int64_t position_ms)
+{
+    if (player == NULL) return;
+    if (position_ms < 0) position_ms = 0;
+    pthread_mutex_lock(&player->mutex);
+    if (player->duration_ms > 0 &&
+        (uint64_t)position_ms > player->duration_ms) {
+        position_ms = (int64_t)player->duration_ms;
+    }
+    player->seek_ms = position_ms;
+    player->position_ms = (uint64_t)position_ms;
+    pthread_cond_broadcast(&player->condition);
+    pthread_mutex_unlock(&player->mutex);
+}
+
+/**
  * @brief 原子读取播放器状态。
  * @param player 播放器上下文。
  * @param status 输出状态快照。

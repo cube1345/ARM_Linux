@@ -361,6 +361,8 @@ int open_selected(struct browser_app *app)
                                    app->alsa_device) < 0) {
                 return -1;
             }
+            browser_app_restore_playback(app, app->current_path,
+                                         BROWSER_PAGE_VIDEO);
             app->page = BROWSER_PAGE_VIDEO;
             return render_video_page(app);
         }
@@ -368,6 +370,8 @@ int open_selected(struct browser_app *app)
                                app->alsa_device) < 0) {
             return -1;
         }
+        browser_app_restore_playback(app, app->current_path,
+                                     BROWSER_PAGE_AUDIO);
         (void)audio_metadata_read(app->current_path, &app->audio_metadata);
         app->page = BROWSER_PAGE_AUDIO;
         return render_audio_page(app);
@@ -377,6 +381,8 @@ int open_selected(struct browser_app *app)
                                app->alsa_device) < 0) {
             return -1;
         }
+        browser_app_restore_playback(app, app->current_path,
+                                     BROWSER_PAGE_VIDEO);
         app->page = BROWSER_PAGE_VIDEO;
         return render_video_page(app);
     }

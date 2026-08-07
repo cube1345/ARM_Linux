@@ -14,7 +14,8 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
   BMP/JPEG/PNG 下一张图片后台预解码。
 - 使用 FreeType 分页显示 UTF-8 文本，支持中文；Settings 可调整全局字体大小和播放模式。
 - 后台播放 PCM WAV 和 MP3，支持暂停、软件音量、进度显示和 seek；MP3 页面读取
-  ID3v2.3、ID3v2.4 和 ID3v1 的标题、艺术家与专辑标签。
+  ID3v2.3、ID3v2.4 和 ID3v1 的标题、艺术家与专辑标签，并在正常退出媒体页时
+  保存断点位置。
 - Player 支持 MP4、MOV、MKV、AVI、WebM、M4V 视频，以及 AAC、M4A、FLAC、OGG、
   Opus 音频；FFmpeg 负责解复用、视频转 RGB 和音频重采样。
 - Player 触摸页提供 `PLAY/PAUSE`、进度条和音量条；文件页提供 `UP` 父目录和
@@ -30,7 +31,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - 文件列表支持递归搜索：按 `/` 或顶部 `SEARCH` 进入，输入文件名片段，按退格删除。
 - 使用 framebuffer 离屏缓冲区完成整帧刷新。
 - 提供统一日志模块，支持通过 `BROWSER_LOG_LEVEL` 控制 ERROR/WARN/INFO/DEBUG。
-- Settings 会持久化字体大小、音量、文件排序和播放模式；默认路径为
+- Settings 会持久化字体大小、音量、文件排序、播放模式和最近一次媒体断点；默认路径为
   `/etc/media-browser.conf`，可用 `BROWSER_CONFIG_PATH` 指定可写路径。
 - 采用深色简约 UI：顶栏、文件卡片、彩色类型标签、底部操作提示、按钮和进度条。
 
@@ -333,6 +334,8 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 - QEMU 中使用 `default` ALSA device 启动，文件列表、图片/GIF、文本、
   WAV/MP3、FFmpeg 媒体页面、键盘和触摸路径均可进入对应页面。
 - 带 ID3 标签的 MP3 可显示标题、艺术家和专辑；无标签文件回退显示文件名。
+- 音频或视频播放超过 3 秒后退出，在距离结尾 3 秒以上时重新打开同一文件可从
+  上次位置继续播放；接近开头或结尾不保存断点。
 - 图片页 `Space` 或 `AUTO ON/OFF` 可切换自动播放，约 3 秒自动切换下一张。
 - BMP/JPEG/PNG 相邻切换可复用后台预解码结果；GIF 继续由动画 decoder 实时播放。
 - `BROWSER_LOG_LEVEL=debug` 启动时可看到 input、decoder、audio 和文件列表等模块日志。
