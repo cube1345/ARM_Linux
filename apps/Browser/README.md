@@ -22,6 +22,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
   `HOME` 桌面入口，适合不接键盘的设备。
 - 视频帧按容器 PTS 和单调时钟控制显示节奏，带音轨和纯视频文件均按正常速度播放。
 - 视频画面支持 FIT 留边、FILL 裁切铺满和 1:1 原始大小，并可隐藏控件全屏播放。
+- 视频自动加载同目录、同 basename 的 UTF-8 `.srt` 字幕并按播放时间显示。
 - 启动后进入简约软件桌面，Gallery、Player、Files、Reader、Diagnostics、Tools、
   Settings 按功能提供独立入口。
 - Tools 应用以白名单方式运行现有 Linux ARM 命令，可查看 ALSA、mpg123、strace、
@@ -55,6 +56,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 | `pages/player/page_audio.c/.h` | 音频页渲染、播放暂停、seek 和音量控制 |
 | `media/audio/audio_metadata.c/.h` | MP3 ID3v2/ID3v1 标题、艺术家和专辑标签解析 |
 | `media/video/media_player.c/.h` | FFmpeg 容器、视频和音频解码线程、RGB 帧快照和 ALSA 输出 |
+| `media/video/subtitle.c/.h` | SRT sidecar 路径解析、时间轴加载和当前字幕查询 |
 | `pages/player/page_video.c/.h` | 通用媒体页面、视频帧显示、进度和音量控制 |
 | `pages/tools/page_tools.c/.h` | 外部 Linux 命令白名单、命令执行、输出采集和工具页输入处理 |
 | `ui/browser_ui.c/.h` / `ui/ui_draw.c/.h` | 公共 UI 常量、按钮/进度条 helper、矩形与文字绘制 |
@@ -121,7 +123,8 @@ make
 
 Host smoke test 会生成 4/8/24/32-bit、RLE4/RLE8 BMP、PNG、JPEG、GIF、WAV
 和 ID3 标签，并使用 Buildroot target 中已有的 MP3/MP4，检查正常解码、配置
-读写、文件排序/搜索、音频元数据、三种画面缩放模式、空目录和损坏文件拒绝逻辑：
+读写、文件排序/搜索、音频元数据、三种画面缩放模式、SRT 时间轴、空目录和损坏
+文件拒绝逻辑：
 
 ```sh
 cd /home/cube/WorkSpace/Linux/ARM_Linux_WS/apps/Browser
@@ -343,6 +346,8 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
   上次位置继续播放；接近开头或结尾不保存断点。
 - 视频页可通过 `R`/缩放按钮检查 FIT、FILL、1:1，通过 `Enter`/`FULL` 检查
   隐藏控件的全屏显示；全屏时 `Esc` 或点击画面只退出全屏，不关闭媒体。
+- 将 `sample.srt` 与 `sample.mp4` 放在同一目录后，普通和全屏模式均按 SRT
+  起止时间显示 UTF-8 字幕；删除 sidecar 后视频仍可正常播放。
 - 图片页 `Space` 或 `AUTO ON/OFF` 可切换自动播放，约 3 秒自动切换下一张。
 - BMP/JPEG/PNG 相邻切换可复用后台预解码结果；GIF 继续由动画 decoder 实时播放。
 - `BROWSER_LOG_LEVEL=debug` 启动时可看到 input、decoder、audio 和文件列表等模块日志。

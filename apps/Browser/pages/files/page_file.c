@@ -363,6 +363,8 @@ int open_selected(struct browser_app *app)
             }
             browser_app_restore_playback(app, app->current_path,
                                          BROWSER_PAGE_VIDEO);
+            (void)subtitle_track_load_for_media(&app->subtitles,
+                                                app->current_path);
             app->page = BROWSER_PAGE_VIDEO;
             return render_video_page(app);
         }
@@ -383,6 +385,8 @@ int open_selected(struct browser_app *app)
         }
         browser_app_restore_playback(app, app->current_path,
                                      BROWSER_PAGE_VIDEO);
+        (void)subtitle_track_load_for_media(&app->subtitles,
+                                            app->current_path);
         app->page = BROWSER_PAGE_VIDEO;
         return render_video_page(app);
     }

@@ -111,6 +111,7 @@ int browser_app_close_media_page(struct browser_app *app)
         audio_player_stop(&app->audio);
     } else if (app->page == BROWSER_PAGE_VIDEO) {
         media_player_stop(&app->media);
+        subtitle_track_close(&app->subtitles);
         image_data_destroy(&app->media_frame);
         app->media_frame_serial = 0;
         app->video_fullscreen = 0;
@@ -136,6 +137,7 @@ int browser_app_return_to_desktop(struct browser_app *app)
         audio_player_stop(&app->audio);
     } else if (app->page == BROWSER_PAGE_VIDEO) {
         media_player_stop(&app->media);
+        subtitle_track_close(&app->subtitles);
         image_data_destroy(&app->media_frame);
         app->media_frame_serial = 0;
         app->video_fullscreen = 0;

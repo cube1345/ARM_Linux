@@ -147,6 +147,7 @@ static int start_media_index(struct browser_app *app, size_t index)
     }
     snprintf(app->current_path, sizeof(app->current_path), "%s", path);
     browser_app_restore_playback(app, path, BROWSER_PAGE_VIDEO);
+    (void)subtitle_track_load_for_media(&app->subtitles, path);
     app->selected = index;
     app->page = BROWSER_PAGE_VIDEO;
     return 0;
@@ -190,6 +191,28 @@ static void draw_video_controls(struct browser_app *app,
                  width, UI_MUTED, UI_BACKGROUND);
 }
 
+/** @brief 在视频底部绘制当前 SRT 字幕。 */
+static void draw_video_subtitle(struct browser_app *app,
+                                const struct media_player_status *status)
+{
+    const char *text = subtitle_track_text_at(&app->subtitles,
+                                               status->position_ms);
+    int width;
+    int baseline;
+
+    if (text == NULL || status->width == 0 || status->height == 0) return;
+    width = (int)app->display.variable_info.xres - UI_MARGIN * 2;
+    baseline = app->video_fullscreen ?
+               (int)app->display.variable_info.yres - UI_MARGIN - 8 :
+               (int)app->display.variable_info.yres - UI_FOOTER_HEIGHT - 92;
+    ui_draw_rect(&app->display, UI_MARGIN - 6,
+                 baseline - (int)app->font.pixel_size - 6,
+                 width + 12, (int)app->font.pixel_size + 14,
+                 UI_BACKGROUND);
+    ui_draw_text(&app->display, &app->font, text, UI_MARGIN, baseline,
+                 width, UI_TEXT, UI_BACKGROUND);
+}
+
 int render_video_page(struct browser_app *app)
 {
     struct media_player_status status;
@@ -227,9 +250,10 @@ int render_video_page(struct browser_app *app)
                      UI_MARGIN + 28, video_panel_y(app) + 104, 300,
                      UI_TEXT, UI_SURFACE);
     }
+    draw_video_subtitle(app, &status);
     if (app->video_fullscreen && app->media_frame.pixels != NULL) {
         app->last_media_refresh_ms = monotonic_ms();
-        return 0;
+        return bmp_display_flush(&app->display);
     }
     if (status.width > 0 && status.height > 0) {
         title_width = scale_x - title_x - VIDEO_HEADER_BUTTON_GAP;

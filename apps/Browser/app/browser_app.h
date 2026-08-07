@@ -17,6 +17,7 @@
 #include "image_render.h"
 #include "input_keyboard.h"
 #include "media_player.h"
+#include "subtitle.h"
 #include "text_reader.h"
 
 #include <limits.h>
@@ -63,6 +64,7 @@ struct browser_app {
     struct audio_metadata audio_metadata;
     struct audio_player audio;
     struct media_player media;
+    struct subtitle_track subtitles;
     struct image_data media_frame;
     struct browser_config config;
     char config_path[PATH_MAX];

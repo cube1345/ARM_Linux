@@ -312,6 +312,7 @@ cleanup_media_player:
     gallery_cache_clear(&app);
     close_image(&app);
     text_reader_close(&app.text);
+    subtitle_track_close(&app.subtitles);
     image_data_destroy(&app.media_frame);
     media_player_destroy(&app.media);
 cleanup_audio_player:
