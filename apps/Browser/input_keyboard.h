@@ -2,6 +2,7 @@
 #define INPUT_KEYBOARD_H
 
 #include <linux/input.h>
+#include <termios.h>
 
 /** @brief 浏览器内部命令动作。 */
 enum input_action {
@@ -27,7 +28,14 @@ enum touch_action {
     TOUCH_ACTION_SWIPE
 };
 
-/** @brief 一次归一化后的键盘或触摸输入。 */
+/** @brief 指针设备类型。 */
+enum input_pointer_mode {
+    INPUT_POINTER_NONE = 0,
+    INPUT_POINTER_ABSOLUTE,
+    INPUT_POINTER_RELATIVE
+};
+
+/** @brief 一次归一化后的键盘、标准输入或指针设备输入。 */
 struct browser_input {
     enum input_action action;
     enum touch_action touch;
@@ -45,6 +53,7 @@ struct input_manager;
 struct input_operation {
     const char *name;
     int fd;
+    int owns_fd;
     int (*read)(struct input_manager *manager,
                 struct input_operation *operation,
                 struct browser_input *output);
@@ -52,11 +61,12 @@ struct input_operation {
     struct input_operation *next;
 };
 
-/** @brief 键盘与绝对坐标触摸设备 operation 管理器。 */
+/** @brief 键盘、标准输入与指针设备 operation 管理器。 */
 struct input_manager {
     struct input_operation *operations;
     struct input_operation keyboard;
     struct input_operation touch;
+    enum input_pointer_mode pointer_mode;
     int screen_width;
     int screen_height;
     int abs_x_code;
@@ -73,13 +83,17 @@ struct input_manager {
     int last_y;
     int touching;
     int release_pending;
+    int stdin_flags;
+    int stdin_raw_enabled;
+    int stdin_escape_state;
+    struct termios stdin_original;
 };
 
 /**
- * @brief 打开可选键盘和触摸设备。
+ * @brief 打开可选键盘、标准输入和指针设备。
  * @param manager 输入管理器。
- * @param keyboard_path 键盘节点，"-" 表示禁用。
- * @param touch_path 触摸节点，NULL 或 "-" 表示禁用。
+ * @param keyboard_path 键盘节点，"stdin" 表示标准输入，"-" 表示禁用。
+ * @param touch_path 触摸或鼠标节点，NULL 或 "-" 表示禁用。
  * @param screen_width framebuffer 宽度。
  * @param screen_height framebuffer 高度。
  * @return 成功返回 0，失败返回 -1。

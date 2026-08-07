@@ -32,8 +32,8 @@
 static void print_usage(const char *program_name)
 {
     fprintf(stderr,
-            "Usage: %s <fb> <keyboard|-> <root> <font> "
-            "[ALSA device] [touch device]\n", program_name);
+            "Usage: %s <fb> <keyboard|stdin|-> <root> <font> "
+            "[ALSA device] [touch|mouse device]\n", program_name);
 }
 
 /**

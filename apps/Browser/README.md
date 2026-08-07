@@ -23,8 +23,8 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
   Settings 按功能提供独立入口。
 - Tools 应用以白名单方式运行现有 Linux ARM 命令，可查看 ALSA、mpg123、strace、
   framebuffer 截图和 input 查询等工具输出。
-- 同时支持 Linux Input 键盘与绝对坐标触摸设备，并以 input operation
-  链表统一分发。
+- 同时支持 Linux Input 键盘、标准输入、绝对坐标触摸与相对坐标鼠标设备，
+  并以 input operation 链表统一分发。
 - 使用 framebuffer 离屏缓冲区完成整帧刷新。
 - 提供统一日志模块，支持通过 `BROWSER_LOG_LEVEL` 控制 ERROR/WARN/INFO/DEBUG。
 - 采用深色简约 UI：顶栏、文件卡片、彩色类型标签、底部操作提示、按钮和进度条。
@@ -53,7 +53,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 | `image_decoder.c/.h` | 静态图片 decoder manager，当前注册 BMP、JPEG、PNG |
 | `animation_decoder.c/.h` / `gif_animation.c/.h` | 动画 decoder manager 与 GIF 帧合成/延时/disposal 状态 |
 | `audio_player.c/.h` | WAV/MP3 后台播放线程、backend 表、暂停、音量、seek 与状态快照 |
-| `input_keyboard.c/.h` | input operation 注册、poll 遍历、Linux Input 键盘与绝对坐标触摸设备归一化 |
+| `input_keyboard.c/.h` | input operation 注册、poll 遍历、Linux Input 键盘、stdin、绝对触摸与相对鼠标归一化 |
 
 新增格式时优先新增 decoder/backend 并注册到 manager；新增交互时优先放在对应
 `page_*.c` 页面模块，避免重新膨胀主循环。
@@ -167,7 +167,9 @@ ls -l /dev/fb0 /dev/input/event* /dev/snd/pcmC0D0p
 cat /proc/bus/input/devices
 ```
 
-启动程序。键盘参数和触摸参数都可使用 `-` 禁用，但不能同时禁用：
+启动程序。第 2 个参数可传键盘 event、`stdin` 或 `-`；第 7 个参数可传绝对坐标
+触摸或相对坐标鼠标 event，也可省略或使用 `-` 禁用。键盘/stdin 与指针设备不能
+同时禁用：
 
 ```sh
 /usr/bin/media-browser \
@@ -179,7 +181,12 @@ cat /proc/bus/input/devices
     /dev/input/event1
 ```
 
-兼容原来的五参数或六参数命令行；不传最后一个参数时只使用键盘。
+兼容原来的五参数或六参数命令行；不传最后一个参数时只使用键盘或 stdin。
+串口/终端调试时可用标准输入替代 evdev 键盘：
+
+```sh
+/usr/bin/media-browser /dev/fb0 stdin /root/media /usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc default -
+```
 
 ## 设备调试工具
 
@@ -214,6 +221,7 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 | 文件列表 | `Up` / `Down` | 选择条目 |
 | 文件列表 | `Enter` | 打开目录或媒体 |
 | 文件列表 | `Esc` / `Backspace` | 返回父目录；根目录退出 |
+| stdin | `W/A/S/D`、`H/J/K/L`、`Enter`、`B`、`Q` | 上下左右、打开、返回、退出 |
 | 图片 | `Left` / `Right` | 上一张 / 下一张 |
 | 图片 | `Space` | 开启 / 关闭自动播放 |
 | 图片 | `R` | 顺时针旋转 90 度 |
