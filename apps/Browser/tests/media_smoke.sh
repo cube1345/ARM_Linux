@@ -28,6 +28,8 @@ if [ -z "$mp3" ] || [ -z "$mp4" ]; then
 fi
 cp "$mp3" "$WORK_DIR/valid/sample.mp3"
 cp "$mp4" "$WORK_DIR/valid/sample.mp4"
+mkdir "$WORK_DIR/valid/nested"
+cp "$WORK_DIR/valid/sample.png" "$WORK_DIR/valid/nested/nested.png"
 mkdir "$WORK_DIR/empty"
 
 pkg_flags=$(pkg-config --cflags --libs libpng libjpeg)

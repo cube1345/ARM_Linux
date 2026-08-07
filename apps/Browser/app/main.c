@@ -14,6 +14,7 @@
 #include "input_keyboard.h"
 #include "page_manager.h"
 #include "page_gallery.h"
+#include "page_file.h"
 #include "page_image.h"
 #include "text_reader.h"
 #include "ui_draw.h"
@@ -136,6 +137,10 @@ static int dispatch_input(const struct page_manager *pages,
                           struct browser_app *app,
                           const struct browser_input *input)
 {
+    if (input->text_length > 0 && app->page == BROWSER_PAGE_FILES &&
+        app->search_active) {
+        return handle_file_text(app, input->text, input->text_length);
+    }
     if (input->action != INPUT_ACTION_NONE) {
         if (input->action == INPUT_ACTION_EXIT) {
             return 1;

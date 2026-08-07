@@ -3,6 +3,7 @@
 #include "browser_log.h"
 
 #include <errno.h>
+#include <ctype.h>
 #include <fcntl.h>
 #include <limits.h>
 #include <linux/input.h>
@@ -65,6 +66,8 @@ static enum input_action key_action(const struct input_event *event)
     case KEY_ESC: return INPUT_ACTION_BACK;
     case KEY_SPACE: return INPUT_ACTION_TOGGLE;
     case KEY_R: return INPUT_ACTION_ROTATE;
+    case KEY_SLASH:
+    case KEY_KPSLASH: return INPUT_ACTION_SEARCH;
     case KEY_TAB: return INPUT_ACTION_SORT;
     case KEY_EQUAL:
     case KEY_KPPLUS:
@@ -75,6 +78,23 @@ static enum input_action key_action(const struct input_event *event)
     case KEY_Q: return INPUT_ACTION_EXIT;
     default: return INPUT_ACTION_NONE;
     }
+}
+
+/** @brief 将常见键盘字母数字事件转换为搜索字符。 */
+static char key_event_text(const struct input_event *event)
+{
+    if (!key_event_is_active(event)) return '\0';
+    if (event->code >= KEY_A && event->code <= KEY_Z) {
+        return (char)('a' + event->code - KEY_A);
+    }
+    if (event->code >= KEY_1 && event->code <= KEY_9) {
+        return (char)('1' + event->code - KEY_1);
+    }
+    if (event->code == KEY_0) return '0';
+    if (event->code == KEY_SPACE) return ' ';
+    if (event->code == KEY_DOT) return '.';
+    if (event->code == KEY_MINUS) return '-';
+    return '\0';
 }
 
 /**
@@ -112,6 +132,7 @@ static enum input_action stdin_char_action(unsigned char value)
     case ' ': return INPUT_ACTION_TOGGLE;
     case 'r':
     case 'R': return INPUT_ACTION_ROTATE;
+    case '/': return INPUT_ACTION_SEARCH;
     case 'o':
     case 'O': return INPUT_ACTION_SORT;
     case '+':
@@ -806,6 +827,15 @@ static int read_stdin(struct input_manager *manager,
         }
         if (action != INPUT_ACTION_NONE) {
             output->action = action;
+            if (isprint(value) != 0) {
+                output->text[0] = (char)value;
+                output->text_length = 1;
+            }
+            return 1;
+        }
+        if (isprint(value) != 0) {
+            output->text[0] = (char)value;
+            output->text_length = 1;
             return 1;
         }
     }
@@ -836,7 +866,11 @@ static int read_keyboard(struct input_manager *manager,
         return -1;
     }
     output->action = key_action(&event);
-    return output->action != INPUT_ACTION_NONE;
+    if (key_event_text(&event) != '\0') {
+        output->text[0] = key_event_text(&event);
+        output->text_length = 1;
+    }
+    return output->action != INPUT_ACTION_NONE || output->text_length > 0;
 }
 
 /**
@@ -946,6 +980,7 @@ const char *input_action_name(enum input_action action)
     case INPUT_ACTION_ROTATE: return "rotate";
     case INPUT_ACTION_VOLUME_UP: return "volume-up";
     case INPUT_ACTION_VOLUME_DOWN: return "volume-down";
+    case INPUT_ACTION_SEARCH: return "search";
     case INPUT_ACTION_SORT: return "sort";
     case INPUT_ACTION_EXIT: return "exit";
     case INPUT_ACTION_NONE:

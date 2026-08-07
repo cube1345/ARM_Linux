@@ -29,6 +29,7 @@
 /** @brief 用户可调最大字体像素高度。 */
 #define BROWSER_FONT_MAX_SIZE 34U
 #define BROWSER_GALLERY_CACHE_COUNT 12U
+#define BROWSER_SEARCH_QUERY_SIZE 64U
 
 /** @brief 设置页每次调整的字体像素步长。 */
 #define BROWSER_FONT_STEP_SIZE 2U
@@ -61,6 +62,9 @@ struct browser_app {
     struct image_data media_frame;
     /** @brief 当前文件页排序方式。 */
     enum file_list_sort file_sort;
+    /** @brief 文件页递归搜索状态。 */
+    int search_active;
+    char search_query[BROWSER_SEARCH_QUERY_SIZE];
     /** @brief Gallery 缩略图缓存槽。 */
     struct {
         char path[PATH_MAX];

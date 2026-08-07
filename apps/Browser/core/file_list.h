@@ -92,6 +92,17 @@ int file_list_scan_filtered(const char *directory, struct file_list *list,
                             unsigned int filter);
 
 /**
+ * @brief 递归扫描目录中的可浏览普通文件。
+ * @param directory 起始目录。
+ * @param list 输出文件列表，条目名称使用相对路径。
+ * @param filter 文件类型过滤位。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int file_list_scan_recursive_filtered(const char *directory,
+                                      struct file_list *list,
+                                      unsigned int filter);
+
+/**
  * @brief 按指定方式对已扫描的文件列表排序。
  * @param list 文件列表。
  * @param sort 排序方式，目录始终排在普通文件之前。

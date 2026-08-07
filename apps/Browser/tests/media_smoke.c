@@ -192,6 +192,31 @@ static int check_file_list_metadata_and_sort(const char *directory)
     return result;
 }
 
+/** @brief 验证递归扫描能够返回子目录中的媒体文件。 */
+static int check_recursive_scan(const char *directory)
+{
+    struct file_list list;
+    size_t index;
+    int found_nested = 0;
+
+    if (file_list_scan_recursive_filtered(directory, &list,
+                                          FILE_LIST_FILTER_ALL) < 0) {
+        return -1;
+    }
+    for (index = 0; index < list.count; index++) {
+        if (strchr(list.entries[index].name, '/') != NULL) {
+            found_nested = 1;
+            break;
+        }
+    }
+    if (!found_nested) {
+        fprintf(stderr, "FAIL recursive file scan\n");
+        return -1;
+    }
+    printf("PASS recursive file scan\n");
+    return 0;
+}
+
 /** @brief 媒体解码 smoke test 入口。 */
 int main(int argc, char **argv)
 {
@@ -203,6 +228,7 @@ int main(int argc, char **argv)
     browser_log_init_from_env();
     if (check_directory(argv[1]) < 0 ||
         check_file_list_metadata_and_sort(argv[1]) < 0 ||
+        check_recursive_scan(argv[1]) < 0 ||
         check_negative_cases(argv[2], argv[3]) < 0) {
         return EXIT_FAILURE;
     }

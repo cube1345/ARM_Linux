@@ -2,6 +2,7 @@
 #define INPUT_KEYBOARD_H
 
 #include <linux/input.h>
+#include <stddef.h>
 #include <termios.h>
 
 /** @brief 浏览器内部命令动作。 */
@@ -17,6 +18,7 @@ enum input_action {
     INPUT_ACTION_ROTATE,
     INPUT_ACTION_VOLUME_UP,
     INPUT_ACTION_VOLUME_DOWN,
+    INPUT_ACTION_SEARCH,
     INPUT_ACTION_SORT,
     INPUT_ACTION_EXIT
 };
@@ -40,6 +42,8 @@ enum input_pointer_mode {
 struct browser_input {
     enum input_action action;
     enum touch_action touch;
+    char text[32];
+    size_t text_length;
     int x;
     int y;
     int start_x;

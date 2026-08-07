@@ -26,6 +26,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - 同时支持 Linux Input 键盘、标准输入、绝对坐标触摸与相对坐标鼠标设备，
   可用 `auto` 自动发现 evdev 节点，并以 input operation 链表统一分发。
 - 文件列表显示文件大小与修改时间，支持名称、类型、时间和大小排序。
+- 文件列表支持递归搜索：按 `/` 或顶部 `SEARCH` 进入，输入文件名片段，按退格删除。
 - 使用 framebuffer 离屏缓冲区完成整帧刷新。
 - 提供统一日志模块，支持通过 `BROWSER_LOG_LEVEL` 控制 ERROR/WARN/INFO/DEBUG。
 - 采用深色简约 UI：顶栏、文件卡片、彩色类型标签、底部操作提示、按钮和进度条。
@@ -265,6 +266,7 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 | 文件列表 | `Up` / `Down` | 选择条目 |
 | 文件列表 | `Enter` | 打开目录或媒体 |
 | 文件列表 | `Tab` 或 stdin `O` | 循环切换名称/类型/时间/大小排序 |
+| 文件列表 | `/` | 递归搜索文件名；搜索模式下直接输入字符 |
 | 文件列表 | `Esc` / `Backspace` | 返回父目录；根目录退出 |
 | stdin | `W/A/S/D`、`H/J/K/L`、`Enter`、`B`、`Q` | 上下左右、打开、返回、退出 |
 | 图片 | `Left` / `Right` | 上一张 / 下一张 |

@@ -197,6 +197,110 @@ void file_list_sort(struct file_list *list, enum file_list_sort sort)
     }
 }
 
+/** @brief 递归收集指定目录中的普通媒体文件。 */
+static int scan_recursive_directory(const char *directory,
+                                    const char *relative_directory,
+                                    struct file_list *list,
+                                    unsigned int filter)
+{
+    DIR *stream = opendir(directory);
+
+    if (stream == NULL) {
+        browser_log_errno(BROWSER_LOG_WARN, directory);
+        return 0;
+    }
+    while (list->count < FILE_LIST_MAX_COUNT) {
+        struct dirent *entry;
+        struct stat status;
+        char path[PATH_MAX];
+        char relative_name[FILE_LIST_NAME_SIZE];
+        enum file_type type;
+        int written;
+
+        errno = 0;
+        entry = readdir(stream);
+        if (entry == NULL) {
+            if (errno != 0) {
+                browser_log_errno(BROWSER_LOG_WARN, "readdir");
+                closedir(stream);
+                return -1;
+            }
+            break;
+        }
+        if (entry->d_name[0] == '.' &&
+            (entry->d_name[1] == '\0' ||
+             (entry->d_name[1] == '.' && entry->d_name[2] == '\0'))) {
+            continue;
+        }
+        if (join_path(directory, entry->d_name, path, sizeof(path)) < 0 ||
+            lstat(path, &status) < 0) {
+            continue;
+        }
+        written = snprintf(relative_name, sizeof(relative_name),
+                           relative_directory[0] == '\0' ? "%s" : "%s/%s",
+                           relative_directory[0] == '\0' ? entry->d_name :
+                           relative_directory,
+                           relative_directory[0] == '\0' ? "" : entry->d_name);
+        if (written < 0 || (size_t)written >= sizeof(relative_name)) {
+            continue;
+        }
+        if (S_ISDIR(status.st_mode)) {
+            if (scan_recursive_directory(path, relative_name, list, filter) <
+                0) {
+                closedir(stream);
+                return -1;
+            }
+            continue;
+        }
+        if (!S_ISREG(status.st_mode)) continue;
+        type = detect_file_type(entry->d_name);
+        if (type == FILE_TYPE_UNKNOWN ||
+            !file_type_matches_filter(type, filter)) {
+            continue;
+        }
+        snprintf(list->entries[list->count].name,
+                 sizeof(list->entries[list->count].name), "%s",
+                 relative_name);
+        list->entries[list->count].type = type;
+        list->entries[list->count].size_bytes = status.st_size > 0 ?
+            (uint64_t)status.st_size : 0U;
+        list->entries[list->count].modified_time = status.st_mtime;
+        list->count++;
+    }
+    if (closedir(stream) < 0) {
+        browser_log_errno(BROWSER_LOG_WARN, "closedir");
+        return -1;
+    }
+    return 0;
+}
+
+/**
+ * @brief 递归扫描目录中的可浏览普通文件。
+ * @param directory 起始目录。
+ * @param list 输出文件列表，条目名称使用相对路径。
+ * @param filter 文件类型过滤位。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int file_list_scan_recursive_filtered(const char *directory,
+                                      struct file_list *list,
+                                      unsigned int filter)
+{
+    if (directory == NULL || list == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    memset(list, 0, sizeof(*list));
+    if (realpath(directory, list->directory) == NULL) {
+        browser_log_errno(BROWSER_LOG_ERROR, directory);
+        return -1;
+    }
+    if (scan_recursive_directory(list->directory, "", list, filter) < 0) {
+        return -1;
+    }
+    file_list_sort(list, FILE_LIST_SORT_NAME);
+    return 0;
+}
+
 /**
  * @brief 扫描目录并按“目录优先、名称排序”生成文件列表。
  *

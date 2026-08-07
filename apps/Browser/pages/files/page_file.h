@@ -34,6 +34,16 @@ int enter_parent(struct browser_app *app);
 int handle_file_key(struct browser_app *app, enum input_action action);
 
 /**
+ * @brief 处理文件搜索模式下输入的字符。
+ * @param app 浏览器上下文。
+ * @param text 输入字符。
+ * @param text_length 字符数量。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int handle_file_text(struct browser_app *app, const char *text,
+                     size_t text_length);
+
+/**
  * @brief 处理文件列表触摸手势。
  * @param app 浏览器上下文。
  * @param input 触摸输入。

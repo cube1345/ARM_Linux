@@ -16,6 +16,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 #include <time.h>
 
 #define FILE_PAGE_LIST_TOP (UI_HEADER_HEIGHT + 12)
@@ -23,6 +24,7 @@
 #define FILE_PAGE_UP_WIDTH 72
 #define FILE_PAGE_HOME_WIDTH 104
 #define FILE_PAGE_SORT_WIDTH 104
+#define FILE_PAGE_SEARCH_WIDTH 104
 
 /** @brief 获取文件列表行高。 */
 static int file_page_row_height(const struct browser_app *app)
@@ -101,6 +103,78 @@ static void apply_file_sort(struct browser_app *app)
     }
 }
 
+/** @brief 判断文件名是否包含忽略大小写的搜索词。 */
+static int file_name_matches(const char *name, const char *query)
+{
+    size_t name_length = strlen(name);
+    size_t query_length = strlen(query);
+    size_t offset;
+
+    if (query_length == 0) return 1;
+    if (query_length > name_length) return 0;
+    for (offset = 0; offset + query_length <= name_length; offset++) {
+        if (strncasecmp(name + offset, query, query_length) == 0) return 1;
+    }
+    return 0;
+}
+
+/** @brief 重新递归扫描并应用当前搜索词。 */
+static int refresh_file_search(struct browser_app *app)
+{
+    char directory[PATH_MAX];
+    size_t read_index;
+    size_t write_index = 0;
+
+    snprintf(directory, sizeof(directory), "%s", app->files.directory);
+    if (file_list_scan_recursive_filtered(directory, &app->files,
+                                          app->file_filter) < 0) {
+        return -1;
+    }
+    for (read_index = 0; read_index < app->files.count; read_index++) {
+        if (!file_name_matches(app->files.entries[read_index].name,
+                               app->search_query)) {
+            continue;
+        }
+        if (write_index != read_index) {
+            app->files.entries[write_index] = app->files.entries[read_index];
+        }
+        write_index++;
+    }
+    app->files.count = write_index;
+    apply_file_sort(app);
+    app->selected = 0;
+    return 0;
+}
+
+/** @brief 开启当前目录的递归文件名搜索。 */
+static int begin_file_search(struct browser_app *app)
+{
+    app->search_active = 1;
+    app->search_query[0] = '\0';
+    if (refresh_file_search(app) < 0) {
+        app->search_active = 0;
+        return -1;
+    }
+    return 0;
+}
+
+/** @brief 退出搜索并恢复当前目录的普通列表。 */
+static int end_file_search(struct browser_app *app)
+{
+    char directory[PATH_MAX];
+
+    snprintf(directory, sizeof(directory), "%s", app->files.directory);
+    app->search_active = 0;
+    app->search_query[0] = '\0';
+    if (file_list_scan_filtered(directory, &app->files,
+                                app->file_filter) < 0) {
+        return -1;
+    }
+    apply_file_sort(app);
+    app->selected = 0;
+    return 0;
+}
+
 /**
  * @brief 获取文件类型标签颜色。
  * @param type 文件类型。
@@ -145,23 +219,36 @@ int render_file_page(struct browser_app *app)
     int card_width = width - UI_MARGIN * 2;
     int sort_x = width - UI_MARGIN - FILE_PAGE_HOME_WIDTH -
                  FILE_PAGE_UP_WIDTH - FILE_PAGE_SORT_WIDTH - 24;
+    int search_x = sort_x - FILE_PAGE_SEARCH_WIDTH - 12;
     char subtitle[FILE_LIST_NAME_SIZE + 64];
     size_t visible = file_page_visible_rows(app);
     size_t first = app->selected / visible * visible;
     size_t index;
 
-    snprintf(subtitle, sizeof(subtitle), "%zu items  sort:%s  %.150s",
-             app->files.count, file_sort_name(app->file_sort),
-             app->files.directory);
+    if (app->search_active) {
+        snprintf(subtitle, sizeof(subtitle), "Search: %s  %zu files  %.110s",
+                 app->search_query[0] == '\0' ? "*" : app->search_query,
+                 app->files.count, app->files.directory);
+    } else {
+        snprintf(subtitle, sizeof(subtitle), "%zu items  sort:%s  %.150s",
+                 app->files.count, file_sort_name(app->file_sort),
+                 app->files.directory);
+    }
     bmp_display_clear(&app->display, (uint8_t)(UI_BACKGROUND >> 16),
                       (uint8_t)(UI_BACKGROUND >> 8),
                       (uint8_t)UI_BACKGROUND);
     browser_ui_draw_header(&app->display, &app->font,
                            application == NULL ? "Files" : application->name,
                            subtitle);
-    browser_ui_draw_button(&app->display, &app->font,
-                           sort_x, 10, FILE_PAGE_SORT_WIDTH, 42,
-                           file_sort_name(app->file_sort), UI_HEADER);
+    if (width >= 640) {
+        browser_ui_draw_button(&app->display, &app->font,
+                               search_x, 10, FILE_PAGE_SEARCH_WIDTH, 42,
+                               app->search_active ? "CLOSE" : "SEARCH",
+                               UI_HEADER);
+        browser_ui_draw_button(&app->display, &app->font,
+                               sort_x, 10, FILE_PAGE_SORT_WIDTH, 42,
+                               file_sort_name(app->file_sort), UI_HEADER);
+    }
     browser_ui_draw_button(&app->display, &app->font,
                            width - UI_MARGIN - FILE_PAGE_HOME_WIDTH -
                            FILE_PAGE_UP_WIDTH - 12, 10,
@@ -223,7 +310,9 @@ int render_file_page(struct browser_app *app)
                      card_width - 36, UI_MUTED, UI_SURFACE);
     }
     browser_ui_draw_footer_hint(&app->display, &app->font,
-                                "↑↓ select  Enter open  O/Tab sort  Esc back");
+                                app->search_active ?
+                                "Type to search  Backspace edit  Esc close" :
+                                "↑↓ select  Enter open  O/Tab sort  / search");
     return bmp_display_flush(&app->display);
 }
 
@@ -334,6 +423,25 @@ int handle_file_key(struct browser_app *app, enum input_action action)
     if (app->active_app == DESKTOP_APP_GALLERY) {
         return handle_gallery_key(app, action);
     }
+    if (action == INPUT_ACTION_SEARCH) {
+        if (app->search_active) {
+            if (end_file_search(app) < 0) return -1;
+        } else if (begin_file_search(app) < 0) {
+            return -1;
+        }
+        return render_file_page(app);
+    }
+    if (app->search_active && action == INPUT_ACTION_BACK) {
+        size_t length = strlen(app->search_query);
+
+        if (length > 0) {
+            app->search_query[length - 1U] = '\0';
+            if (refresh_file_search(app) < 0) return -1;
+            return render_file_page(app);
+        }
+        if (end_file_search(app) < 0) return -1;
+        return render_file_page(app);
+    }
     if (action == INPUT_ACTION_UP && app->files.count > 0) {
         app->selected = (app->selected + app->files.count - 1U) %
                         app->files.count;
@@ -363,6 +471,35 @@ int handle_file_key(struct browser_app *app, enum input_action action)
 }
 
 /**
+ * @brief 处理文件搜索模式下输入的字符。
+ * @param app 浏览器上下文。
+ * @param text 输入字符。
+ * @param text_length 字符数量。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int handle_file_text(struct browser_app *app, const char *text,
+                     size_t text_length)
+{
+    size_t current_length;
+    size_t copy_length;
+
+    if (app == NULL || text == NULL || text_length == 0 ||
+        !app->search_active) {
+        return 0;
+    }
+    current_length = strlen(app->search_query);
+    if (current_length >= BROWSER_SEARCH_QUERY_SIZE - 1U) return 0;
+    copy_length = text_length;
+    if (copy_length > BROWSER_SEARCH_QUERY_SIZE - 1U - current_length) {
+        copy_length = BROWSER_SEARCH_QUERY_SIZE - 1U - current_length;
+    }
+    memcpy(app->search_query + current_length, text, copy_length);
+    app->search_query[current_length + copy_length] = '\0';
+    if (refresh_file_search(app) < 0) return -1;
+    return render_file_page(app);
+}
+
+/**
  * @brief 处理文件列表触摸手势。
  * @param app 浏览器上下文。
  * @param input 触摸输入。
@@ -378,7 +515,14 @@ int handle_file_touch(struct browser_app *app,
     size_t visible = file_page_visible_rows(app);
     int sort_x = width - UI_MARGIN - FILE_PAGE_HOME_WIDTH -
                  FILE_PAGE_UP_WIDTH - FILE_PAGE_SORT_WIDTH - 24;
+    int search_x = sort_x - FILE_PAGE_SEARCH_WIDTH - 12;
 
+    if (input->touch == TOUCH_ACTION_TAP &&
+        input->y < UI_HEADER_HEIGHT &&
+        width >= 640 && input->x >= search_x &&
+        input->x < search_x + FILE_PAGE_SEARCH_WIDTH) {
+        return handle_file_key(app, INPUT_ACTION_SEARCH);
+    }
     if (input->touch == TOUCH_ACTION_TAP &&
         input->y < UI_HEADER_HEIGHT &&
         input->x >= sort_x && input->x < sort_x + FILE_PAGE_SORT_WIDTH) {
