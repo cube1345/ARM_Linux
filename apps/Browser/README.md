@@ -162,8 +162,15 @@ QEMU 已验证 rootfs、动态库、FreeType 字体、测试 MP4 和 Browser usa
 ## 嵌入式设备 QEMU 虚拟机启动
 
 ```sh
-cd /home/cube/WorkSpace/Linux/ARM_Linux/images
-./start-qemu-scp.sh --fb
+cd /home/cube/WorkSpace/Linux/ARM_Linux_WS/apps/Browser
+./scripts/start-qemu.sh --fb
+```
+
+启动脚本会检查旧 QEMU 进程和 SSH 端口。如果需要并行启动或避免修改
+`rootfs.ext4`，可以使用备用端口和临时快照：
+
+```sh
+./scripts/start-qemu.sh --vnc --ssh-port 2223 --vnc-display 1 --readonly
 ```
 
 目标机检查设备节点：

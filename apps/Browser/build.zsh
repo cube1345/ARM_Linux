@@ -6,8 +6,8 @@ make DESTDIR=/home/cube/WorkSpace/Linux/ARM_Linux/target install
 cd /home/cube/WorkSpace/Linux/ARM_Linux
 make
 
-cd images
-./start-qemu-scp.sh --fb
+cd /home/cube/WorkSpace/Linux/ARM_Linux_WS/apps/Browser
+./scripts/start-qemu.sh --fb
 
 
 
