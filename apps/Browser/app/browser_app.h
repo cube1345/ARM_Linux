@@ -2,6 +2,7 @@
 #define BROWSER_APP_H
 
 #include "animation_decoder.h"
+#include "audio_metadata.h"
 #include "audio_player.h"
 #include "browser_config.h"
 #include "bmp_display.h"
@@ -58,6 +59,7 @@ struct browser_app {
     struct font_renderer font;
     struct file_list files;
     struct text_reader text;
+    struct audio_metadata audio_metadata;
     struct audio_player audio;
     struct media_player media;
     struct image_data media_frame;

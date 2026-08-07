@@ -25,7 +25,8 @@ SOURCES := app/main.c app/browser_app.c \
 	   media/image/jpeg_decoder.c media/image/png_decoder.c \
 	   media/image/image_decoder.c media/image/image_render.c \
 	   media/animation/gif_animation.c media/animation/animation_decoder.c \
-	   media/audio/audio_player.c media/video/media_player.c \
+	   media/audio/audio_metadata.c media/audio/audio_player.c \
+	   media/video/media_player.c \
 	   pages/desktop/page_desktop.c pages/files/page_file.c \
 	   pages/gallery/page_gallery.c pages/gallery/page_image.c \
 	   pages/reader/page_text.c \
@@ -39,7 +40,7 @@ CPPFLAGS := $(shell $(PKG_CONFIG) --cflags-only-I $(PACKAGES)) \
 	       $(addprefix -I,$(INCLUDE_DIRS))
 LDLIBS := $(shell $(PKG_CONFIG) --libs $(PACKAGES)) -lgif -pthread
 
-.PHONY: all clean install test test-media test-config test-input
+.PHONY: all clean install test test-media test-config test-metadata test-input
 
 all: $(TARGET)
 
@@ -52,13 +53,16 @@ $(TARGET): $(OBJECTS)
 install: $(TARGET)
 	install -D -m 0755 $(TARGET) $(DESTDIR)/usr/bin/media-browser
 
-test: test-media test-config
+test: test-media test-config test-metadata
 
 test-media:
 	CC="$(HOST_CC)" ./tests/media_smoke.sh "$(TEST_MEDIA_DIR)"
 
 test-config:
 	CC="$(HOST_CC)" ./tests/config_smoke.sh
+
+test-metadata:
+	CC="$(HOST_CC)" ./tests/audio_metadata_smoke.sh
 
 test-input:
 	./tests/input_auto_smoke.sh

@@ -178,6 +178,7 @@ static int start_audio_index(struct browser_app *app, size_t index)
         app->selected = previous;
         return -1;
     }
+    (void)audio_metadata_read(path, &app->audio_metadata);
     app->selected = index;
     app->page = BROWSER_PAGE_AUDIO;
     return 0;
@@ -249,6 +250,10 @@ int render_audio_page(struct browser_app *app)
     char duration[16];
     char timing[40];
     char volume[32];
+    char metadata_line[AUDIO_METADATA_TEXT_SIZE * 2 + 8];
+    const char *title = app->audio_metadata.title[0] != '\0' ?
+                        app->audio_metadata.title :
+                        app->files.entries[app->selected].name;
 
     audio_player_get_status(&app->audio, &status);
     progress = audio_status_progress(&status);
@@ -256,6 +261,15 @@ int render_audio_page(struct browser_app *app)
     browser_ui_format_time(status.duration_ms, duration, sizeof(duration));
     snprintf(timing, sizeof(timing), "%s / %s", elapsed, duration);
     snprintf(volume, sizeof(volume), "Volume %d%%", status.volume);
+    if (app->audio_metadata.artist[0] != '\0' &&
+        app->audio_metadata.album[0] != '\0') {
+        snprintf(metadata_line, sizeof(metadata_line), "%s - %s",
+                 app->audio_metadata.artist, app->audio_metadata.album);
+    } else {
+        snprintf(metadata_line, sizeof(metadata_line), "%s",
+                 app->audio_metadata.artist[0] != '\0' ?
+                 app->audio_metadata.artist : app->audio_metadata.album);
+    }
     bmp_display_clear(&app->display, (uint8_t)(UI_BACKGROUND >> 16),
                       (uint8_t)(UI_BACKGROUND >> 8),
                       (uint8_t)UI_BACKGROUND);
@@ -269,11 +283,18 @@ int render_audio_page(struct browser_app *app)
                  panel_y + 28 + (int)app->font.pixel_size + 7,
                  58, UI_BACKGROUND, UI_ACCENT_2);
     ui_draw_text(&app->display, &app->font,
-                 app->files.entries[app->selected].name,
+                 title,
                  UI_MARGIN + AUDIO_PANEL_INSET + 92,
                  panel_y + 28 + (int)app->font.pixel_size + 4,
                  panel_width - AUDIO_PANEL_INSET * 2 - 92,
                  UI_TEXT, UI_SURFACE);
+    if (metadata_line[0] != '\0') {
+        ui_draw_text(&app->display, &app->font, metadata_line,
+                     UI_MARGIN + AUDIO_PANEL_INSET + 92,
+                     panel_y + 62 + (int)app->font.pixel_size,
+                     panel_width - AUDIO_PANEL_INSET * 2 - 92,
+                     UI_MUTED, UI_SURFACE);
+    }
     ui_draw_text(&app->display, &app->font,
                  audio_player_state_name(status.state),
                  UI_MARGIN + AUDIO_PANEL_INSET,

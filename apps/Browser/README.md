@@ -13,7 +13,8 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - 图片等比例缩放、居中显示，支持顺时针 90 度旋转、自动播放和
   BMP/JPEG/PNG 下一张图片后台预解码。
 - 使用 FreeType 分页显示 UTF-8 文本，支持中文；Settings 可调整全局字体大小和播放模式。
-- 后台播放 PCM WAV 和 MP3，支持暂停、软件音量、进度显示和 seek。
+- 后台播放 PCM WAV 和 MP3，支持暂停、软件音量、进度显示和 seek；MP3 页面读取
+  ID3v2.3、ID3v2.4 和 ID3v1 的标题、艺术家与专辑标签。
 - Player 支持 MP4、MOV、MKV、AVI、WebM、M4V 视频，以及 AAC、M4A、FLAC、OGG、
   Opus 音频；FFmpeg 负责解复用、视频转 RGB 和音频重采样。
 - Player 触摸页提供 `PLAY/PAUSE`、进度条和音量条；文件页提供 `UP` 父目录和
@@ -50,6 +51,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 | `pages/gallery/page_image.c/.h` | 图片/GIF 打开关闭、相邻图片选择、自动播放、预解码和旋转 |
 | `pages/reader/page_text.c/.h` | UTF-8 文本分页渲染、键盘和触摸翻页处理 |
 | `pages/player/page_audio.c/.h` | 音频页渲染、播放暂停、seek 和音量控制 |
+| `media/audio/audio_metadata.c/.h` | MP3 ID3v2/ID3v1 标题、艺术家和专辑标签解析 |
 | `media/video/media_player.c/.h` | FFmpeg 容器、视频和音频解码线程、RGB 帧快照和 ALSA 输出 |
 | `pages/player/page_video.c/.h` | 通用媒体页面、视频帧显示、进度和音量控制 |
 | `pages/tools/page_tools.c/.h` | 外部 Linux 命令白名单、命令执行、输出采集和工具页输入处理 |
@@ -115,9 +117,9 @@ make
 
 ## 自动化验证
 
-Host smoke test 会生成 4/8/24/32-bit、RLE4/RLE8 BMP、PNG、JPEG、GIF 和
-WAV，并使用 Buildroot target 中已有的 MP3/MP4，检查正常解码、空目录和损坏
-文件拒绝逻辑：
+Host smoke test 会生成 4/8/24/32-bit、RLE4/RLE8 BMP、PNG、JPEG、GIF、WAV
+和 ID3 标签，并使用 Buildroot target 中已有的 MP3/MP4，检查正常解码、配置
+读写、文件排序/搜索、音频元数据、空目录和损坏文件拒绝逻辑：
 
 ```sh
 cd /home/cube/WorkSpace/Linux/ARM_Linux_WS/apps/Browser
@@ -330,6 +332,7 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
   `images/rootfs.ext4`。
 - QEMU 中使用 `default` ALSA device 启动，文件列表、图片/GIF、文本、
   WAV/MP3、FFmpeg 媒体页面、键盘和触摸路径均可进入对应页面。
+- 带 ID3 标签的 MP3 可显示标题、艺术家和专辑；无标签文件回退显示文件名。
 - 图片页 `Space` 或 `AUTO ON/OFF` 可切换自动播放，约 3 秒自动切换下一张。
 - BMP/JPEG/PNG 相邻切换可复用后台预解码结果；GIF 继续由动画 decoder 实时播放。
 - `BROWSER_LOG_LEVEL=debug` 启动时可看到 input、decoder、audio 和文件列表等模块日志。

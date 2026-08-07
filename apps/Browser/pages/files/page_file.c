@@ -368,6 +368,7 @@ int open_selected(struct browser_app *app)
                                app->alsa_device) < 0) {
             return -1;
         }
+        (void)audio_metadata_read(app->current_path, &app->audio_metadata);
         app->page = BROWSER_PAGE_AUDIO;
         return render_audio_page(app);
     }
