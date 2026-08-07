@@ -135,6 +135,7 @@ int handle_settings_key(struct browser_app *app, enum input_action action)
     } else {
         return 0;
     }
+    (void)browser_app_save_config(app);
     return render_settings_page(app);
 }
 
@@ -199,5 +200,6 @@ int handle_settings_touch(struct browser_app *app,
     } else {
         return 0;
     }
+    (void)browser_app_save_config(app);
     return render_settings_page(app);
 }

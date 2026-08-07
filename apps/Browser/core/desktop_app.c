@@ -25,7 +25,6 @@ static int launch_file_application(
     }
     app->active_app = operation->id;
     app->file_filter = operation->file_filter;
-    app->file_sort = FILE_LIST_SORT_NAME;
     app->search_active = 0;
     app->search_query[0] = '\0';
     file_list_sort(&app->files, app->file_sort);

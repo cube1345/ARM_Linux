@@ -14,7 +14,8 @@ INCLUDE_DIRS := app core platform/display platform/input platform/font \
 	       pages/desktop pages/files pages/gallery pages/reader pages/player \
 	       pages/diagnostics pages/tools pages/settings ui
 SOURCES := app/main.c app/browser_app.c \
-	   core/browser_log.c core/debug_manager.c core/desktop_app.c \
+	   core/browser_config.c core/browser_log.c core/debug_manager.c \
+	   core/desktop_app.c \
 	   core/file_list.c core/page_manager.c \
 	   platform/display/bmp_display.c platform/display/video_buffer.c \
 	   platform/display/display_manager.c \
@@ -38,7 +39,7 @@ CPPFLAGS := $(shell $(PKG_CONFIG) --cflags-only-I $(PACKAGES)) \
 	       $(addprefix -I,$(INCLUDE_DIRS))
 LDLIBS := $(shell $(PKG_CONFIG) --libs $(PACKAGES)) -lgif -pthread
 
-.PHONY: all clean install test test-media test-input
+.PHONY: all clean install test test-media test-config test-input
 
 all: $(TARGET)
 
@@ -51,10 +52,13 @@ $(TARGET): $(OBJECTS)
 install: $(TARGET)
 	install -D -m 0755 $(TARGET) $(DESTDIR)/usr/bin/media-browser
 
-test: test-media
+test: test-media test-config
 
 test-media:
 	CC="$(HOST_CC)" ./tests/media_smoke.sh "$(TEST_MEDIA_DIR)"
+
+test-config:
+	CC="$(HOST_CC)" ./tests/config_smoke.sh
 
 test-input:
 	./tests/input_auto_smoke.sh

@@ -1,6 +1,8 @@
 #include "browser_app.h"
 
 #include "audio_player.h"
+#include "browser_config.h"
+#include "browser_log.h"
 #include "page_desktop.h"
 #include "page_file.h"
 #include "page_image.h"
@@ -107,4 +109,25 @@ int browser_app_adjust_font_size(struct browser_app *app, int delta)
         next_size = (uint32_t)((int)app->font.pixel_size + delta);
     }
     return browser_app_set_font_size(app, next_size);
+}
+
+/**
+ * @brief 保存当前音量、字体和文件排序设置。
+ * @param app 浏览器上下文。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int browser_app_save_config(struct browser_app *app)
+{
+    struct audio_player_status status;
+
+    if (app == NULL || app->config_path[0] == '\0') return -1;
+    audio_player_get_status(&app->audio, &status);
+    app->config.font_size = app->font.pixel_size;
+    app->config.volume = status.volume;
+    app->config.file_sort = app->file_sort;
+    if (browser_config_save(app->config_path, &app->config) < 0) {
+        browser_log_errno(BROWSER_LOG_WARN, "save browser config");
+        return -1;
+    }
+    return 0;
 }

@@ -29,6 +29,8 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - 文件列表支持递归搜索：按 `/` 或顶部 `SEARCH` 进入，输入文件名片段，按退格删除。
 - 使用 framebuffer 离屏缓冲区完成整帧刷新。
 - 提供统一日志模块，支持通过 `BROWSER_LOG_LEVEL` 控制 ERROR/WARN/INFO/DEBUG。
+- Settings 会持久化字体大小、音量和文件排序；默认路径为
+  `/etc/media-browser.conf`，可用 `BROWSER_CONFIG_PATH` 指定可写路径。
 - 采用深色简约 UI：顶栏、文件卡片、彩色类型标签、底部操作提示、按钮和进度条。
 
 ## 架构

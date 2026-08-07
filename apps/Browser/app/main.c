@@ -1,6 +1,7 @@
 #include "animation_decoder.h"
 #include "audio_player.h"
 #include "browser_app.h"
+#include "browser_config.h"
 #include "browser_log.h"
 #include "browser_ui.h"
 #include "bmp_display.h"
@@ -240,7 +241,13 @@ int main(int argc, char *argv[])
     memset(&app, 0, sizeof(app));
     app.display.fd = -1;
     app.file_filter = FILE_LIST_FILTER_ALL;
-    app.file_sort = FILE_LIST_SORT_NAME;
+    browser_config_defaults(&app.config);
+    if (browser_config_path(app.config_path, sizeof(app.config_path)) < 0 ||
+        browser_config_load(app.config_path, &app.config) < 0) {
+        browser_log_errno(BROWSER_LOG_WARN, "load browser config");
+        browser_config_defaults(&app.config);
+    }
+    app.file_sort = app.config.file_sort;
     app.alsa_device = argc >= 6 ? argv[5] : "default";
     touch_path = argc >= 7 ? argv[6] : NULL;
     display_manager_init(&app.display_devices);
@@ -261,7 +268,7 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
     if (font_manager_open(&app.fonts, &app.font, argv[4],
-                          BROWSER_FONT_DEFAULT_SIZE) < 0) {
+                          app.config.font_size) < 0) {
         goto cleanup_display;
     }
     if (input_manager_open(&app.input, argv[2], touch_path,
@@ -282,6 +289,7 @@ int main(int argc, char *argv[])
     if (media_player_init(&app.media) < 0) {
         goto cleanup_audio_player;
     }
+    browser_app_set_volume(&app, app.config.volume);
     desktop_app_manager_init(&app.desktop_apps);
     if (desktop_app_register_builtin(&app.desktop_apps) < 0) {
         goto cleanup_media_player;
@@ -292,6 +300,7 @@ int main(int argc, char *argv[])
     }
     result = run_browser(&pages, &app);
 cleanup_media_player:
+    (void)browser_app_save_config(&app);
     gallery_cache_clear(&app);
     close_image(&app);
     text_reader_close(&app.text);

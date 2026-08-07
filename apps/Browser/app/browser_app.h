@@ -3,6 +3,7 @@
 
 #include "animation_decoder.h"
 #include "audio_player.h"
+#include "browser_config.h"
 #include "bmp_display.h"
 #include "debug_manager.h"
 #include "desktop_app.h"
@@ -60,6 +61,8 @@ struct browser_app {
     struct audio_player audio;
     struct media_player media;
     struct image_data media_frame;
+    struct browser_config config;
+    char config_path[PATH_MAX];
     /** @brief 当前文件页排序方式。 */
     enum file_list_sort file_sort;
     /** @brief 文件页递归搜索状态。 */
@@ -181,5 +184,12 @@ int browser_app_set_font_size(struct browser_app *app, uint32_t pixel_size);
  * @return 成功返回 0，失败返回 -1。
  */
 int browser_app_adjust_font_size(struct browser_app *app, int delta);
+
+/**
+ * @brief 保存当前音量、字体和文件排序设置。
+ * @param app 浏览器上下文。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int browser_app_save_config(struct browser_app *app);
 
 #endif

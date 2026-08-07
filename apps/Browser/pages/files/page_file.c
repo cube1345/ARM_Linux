@@ -453,6 +453,7 @@ int handle_file_key(struct browser_app *app, enum input_action action)
         app->file_sort = file_sort_next(app->file_sort);
         apply_file_sort(app);
         app->selected = 0;
+        (void)browser_app_save_config(app);
     } else if (action == INPUT_ACTION_BACK) {
         int result = enter_parent(app);
 
@@ -529,6 +530,7 @@ int handle_file_touch(struct browser_app *app,
         app->file_sort = file_sort_next(app->file_sort);
         apply_file_sort(app);
         app->selected = 0;
+        (void)browser_app_save_config(app);
         return render_file_page(app);
     }
 
