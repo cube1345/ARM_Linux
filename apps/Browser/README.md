@@ -36,24 +36,27 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 
 | 模块 | 职责 |
 | --- | --- |
-| `image_browser.c` | CLI 参数解析、初始化/释放、周期刷新、页面 manager 调度和主事件循环 |
-| `browser_app.c/.h` | `browser_app` 共享上下文、页面枚举、文件类型 helper 和跨页面资源收尾 |
-| `desktop_app.c/.h` | Gallery、Player、Files、Reader、Diagnostics、Tools、Settings 应用注册和启动 |
-| `page_desktop.c/.h` | 软件桌面卡片、应用选择、键盘和触摸入口 |
-| `page_manager.c/.h` | 页面 operation 注册、查找、渲染、输入分发、周期任务和事件等待时间调整 |
-| `page_file.c/.h` | 文件列表渲染、目录进入/返回、文件页键盘和触摸处理 |
-| `page_image.c/.h` | 图片/GIF 打开关闭、图片渲染、相邻图片选择、自动播放、静态图预解码、旋转和图片页输入处理 |
-| `page_text.c/.h` | UTF-8 文本分页渲染、文本翻页键盘和触摸处理 |
-| `page_audio.c/.h` | 音频页渲染、播放暂停、seek、音量条和音频页输入处理 |
-| `media_player.c/.h` | FFmpeg 容器、视频和音频解码线程、RGB 帧快照、ALSA 输出 |
-| `page_video.c/.h` | 通用媒体页面、视频帧显示、进度/音量控制 |
-| `page_tools.c/.h` | 外部 Linux 命令白名单、命令执行、输出采集和工具页输入处理 |
-| `browser_ui.c/.h` / `ui_draw.c/.h` | 公共 UI 常量、按钮/进度条 helper、矩形与文字绘制 |
-| `browser_log.c/.h` | 统一日志等级、环境变量初始化和 errno 日志输出 |
-| `image_decoder.c/.h` | 静态图片 decoder manager，当前注册 BMP、JPEG、PNG |
-| `animation_decoder.c/.h` / `gif_animation.c/.h` | 动画 decoder manager 与 GIF 帧合成/延时/disposal 状态 |
-| `audio_player.c/.h` | WAV/MP3 后台播放线程、backend 表、暂停、音量、seek 与状态快照 |
-| `input_keyboard.c/.h` | input operation 注册、poll 遍历、Linux Input 键盘、stdin、绝对触摸与相对鼠标归一化 |
+| `app/main.c` | CLI 参数解析、初始化/释放、周期刷新和主事件循环 |
+| `app/browser_app.c/.h` | 共享上下文、页面枚举、文件类型 helper 和跨页面资源收尾 |
+| `core/desktop_app.c/.h` | Gallery、Player、Files、Reader、Diagnostics、Tools、Settings 应用注册 |
+| `pages/desktop/page_desktop.c/.h` | 软件桌面卡片、应用选择、键盘和触摸入口 |
+| `core/page_manager.c/.h` | 页面 operation 注册、查找、渲染、输入分发、周期任务和事件等待时间调整 |
+| `pages/files/page_file.c/.h` | 文件列表渲染、目录进入/返回、文件页键盘和触摸处理 |
+| `pages/gallery/page_image.c/.h` | 图片/GIF 打开关闭、相邻图片选择、自动播放、预解码和旋转 |
+| `pages/reader/page_text.c/.h` | UTF-8 文本分页渲染、键盘和触摸翻页处理 |
+| `pages/player/page_audio.c/.h` | 音频页渲染、播放暂停、seek 和音量控制 |
+| `media/video/media_player.c/.h` | FFmpeg 容器、视频和音频解码线程、RGB 帧快照和 ALSA 输出 |
+| `pages/player/page_video.c/.h` | 通用媒体页面、视频帧显示、进度和音量控制 |
+| `pages/tools/page_tools.c/.h` | 外部 Linux 命令白名单、命令执行、输出采集和工具页输入处理 |
+| `ui/browser_ui.c/.h` / `ui/ui_draw.c/.h` | 公共 UI 常量、按钮/进度条 helper、矩形与文字绘制 |
+| `core/browser_log.c/.h` | 统一日志等级、环境变量初始化和 errno 日志输出 |
+| `media/image/image_decoder.c/.h` | 静态图片 decoder manager，当前注册 BMP、JPEG、PNG |
+| `media/animation/*` | 动画 decoder manager 与 GIF 帧合成、延时和 disposal 状态 |
+| `media/audio/audio_player.c/.h` | WAV/MP3 后台播放线程、backend 表、暂停、音量、seek 与状态快照 |
+| `platform/display/*` | Framebuffer 设备、mmap 显存和 video buffer 离屏刷新 |
+| `platform/input/*` | Linux Input 键盘、stdin、绝对触摸和相对鼠标归一化 |
+| `platform/font/*` | FreeType 字体加载、UTF-8 解码和文字绘制 |
+| `media/image/*` | BMP/JPEG/PNG 图片数据、decoder manager 和缩放渲染 |
 
 新增格式时优先新增 decoder/backend 并注册到 manager；新增交互时优先放在对应
 `page_*.c` 页面模块，避免重新膨胀主循环。

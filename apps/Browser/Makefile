@@ -7,17 +7,29 @@ TARGET := image_browser
 PKG_CONFIG ?= $(BUILDROOT_OUTPUT)/host/bin/pkg-config
 PACKAGES := freetype2 alsa libjpeg libpng libmpg123 libavformat libavcodec \
 	    libavutil libswscale libswresample
-SOURCES := image_browser.c browser_app.c bmp_display.c video_buffer.c input_keyboard.c \
-	   image_data.c bmp_decoder.c jpeg_decoder.c png_decoder.c \
-	   gif_animation.c animation_decoder.c image_decoder.c \
-	   image_render.c file_list.c font_renderer.c ui_draw.c browser_ui.c browser_log.c \
-	   desktop_app.c page_manager.c page_desktop.c page_file.c page_image.c \
-	   page_text.c page_audio.c page_diagnostics.c page_tools.c \
-	   page_settings.c text_reader.c \
-	   audio_player.c media_player.c page_video.c
+INCLUDE_DIRS := app core platform/display platform/input platform/font \
+	       media/image media/animation media/audio media/video \
+	       pages/desktop pages/files pages/gallery pages/reader pages/player \
+	       pages/diagnostics pages/tools pages/settings ui
+SOURCES := app/main.c app/browser_app.c \
+	   core/browser_log.c core/desktop_app.c core/file_list.c core/page_manager.c \
+	   platform/display/bmp_display.c platform/display/video_buffer.c \
+	   platform/input/input_keyboard.c platform/font/font_renderer.c \
+	   media/image/image_data.c media/image/bmp_decoder.c \
+	   media/image/jpeg_decoder.c media/image/png_decoder.c \
+	   media/image/image_decoder.c media/image/image_render.c \
+	   media/animation/gif_animation.c media/animation/animation_decoder.c \
+	   media/audio/audio_player.c media/video/media_player.c \
+	   pages/desktop/page_desktop.c pages/files/page_file.c \
+	   pages/gallery/page_image.c pages/reader/page_text.c \
+	   pages/reader/text_reader.c pages/player/page_audio.c \
+	   pages/player/page_video.c pages/diagnostics/page_diagnostics.c \
+	   pages/tools/page_tools.c pages/settings/page_settings.c \
+	   ui/ui_draw.c ui/browser_ui.c
 OBJECTS := $(SOURCES:.c=.o)
 CFLAGS ?= -Wall -Wextra -Wpedantic -O2
-CPPFLAGS := $(shell $(PKG_CONFIG) --cflags-only-I $(PACKAGES))
+CPPFLAGS := $(shell $(PKG_CONFIG) --cflags-only-I $(PACKAGES)) \
+	       $(addprefix -I,$(INCLUDE_DIRS))
 LDLIBS := $(shell $(PKG_CONFIG) --libs $(PACKAGES)) -lgif -pthread
 
 .PHONY: all clean install
