@@ -4,6 +4,8 @@ CROSS_COMPILE ?= $(BUILDROOT_OUTPUT)/host/bin/$(TARGET_TRIPLE)-
 CC := $(CROSS_COMPILE)gcc
 
 TARGET := image_browser
+HOST_CC ?= cc
+TEST_MEDIA_DIR ?= $(BUILDROOT_OUTPUT)/target/root/media
 PKG_CONFIG ?= $(BUILDROOT_OUTPUT)/host/bin/pkg-config
 PACKAGES := freetype2 alsa libjpeg libpng libmpg123 libavformat libavcodec \
 	    libavutil libswscale libswresample
@@ -35,7 +37,7 @@ CPPFLAGS := $(shell $(PKG_CONFIG) --cflags-only-I $(PACKAGES)) \
 	       $(addprefix -I,$(INCLUDE_DIRS))
 LDLIBS := $(shell $(PKG_CONFIG) --libs $(PACKAGES)) -lgif -pthread
 
-.PHONY: all clean install
+.PHONY: all clean install test test-media test-input
 
 all: $(TARGET)
 
@@ -47,6 +49,14 @@ $(TARGET): $(OBJECTS)
 
 install: $(TARGET)
 	install -D -m 0755 $(TARGET) $(DESTDIR)/usr/bin/media-browser
+
+test: test-media
+
+test-media:
+	CC="$(HOST_CC)" ./tests/media_smoke.sh "$(TEST_MEDIA_DIR)"
+
+test-input:
+	./tests/input_auto_smoke.sh
 
 clean:
 	rm -f $(TARGET) $(OBJECTS)

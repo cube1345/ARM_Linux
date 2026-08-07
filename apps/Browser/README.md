@@ -109,6 +109,23 @@ cd /home/cube/WorkSpace/Linux/ARM_Linux
 make
 ```
 
+## 自动化验证
+
+Host smoke test 会生成 4/8/24/32-bit、RLE4/RLE8 BMP、PNG、JPEG、GIF 和
+WAV，并使用 Buildroot target 中已有的 MP3/MP4，检查正常解码、空目录和损坏
+文件拒绝逻辑：
+
+```sh
+cd /home/cube/WorkSpace/Linux/ARM_Linux_WS/apps/Browser
+make test
+```
+
+QEMU 或开发板中可以运行输入自动发现和 SIGTERM 资源清理测试：
+
+```sh
+./tests/input_auto_smoke.sh
+```
+
 ## RK3506 移植准备
 
 代码只依赖标准 Linux 用户态接口，没有 AArch64 汇编或 QEMU 专用调用。切换到
