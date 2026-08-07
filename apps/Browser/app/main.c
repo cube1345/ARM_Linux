@@ -248,6 +248,7 @@ int main(int argc, char *argv[])
         browser_config_defaults(&app.config);
     }
     app.file_sort = app.config.file_sort;
+    app.playback_mode = app.config.playback_mode;
     app.alsa_device = argc >= 6 ? argv[5] : "default";
     touch_path = argc >= 7 ? argv[6] : NULL;
     display_manager_init(&app.display_devices);

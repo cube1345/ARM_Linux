@@ -46,6 +46,7 @@ void browser_config_defaults(struct browser_config *config)
     config->font_size = 24U;
     config->volume = 80;
     config->file_sort = FILE_LIST_SORT_NAME;
+    config->playback_mode = BROWSER_PLAYBACK_REPEAT_ALL;
 }
 
 /** @brief 解析一行配置键值。 */
@@ -73,6 +74,9 @@ static void parse_line(char *line, struct browser_config *config)
     } else if (strcmp(key, "sort") == 0 &&
                parse_unsigned(value, &parsed) == 0 && parsed <= 3U) {
         config->file_sort = (enum file_list_sort)parsed;
+    } else if (strcmp(key, "playback_mode") == 0 &&
+               parse_unsigned(value, &parsed) == 0 && parsed <= 3U) {
+        config->playback_mode = (enum browser_playback_mode)parsed;
     }
 }
 
@@ -117,8 +121,9 @@ int browser_config_save(const char *path,
     }
     stream = fopen(temporary, "w");
     if (stream == NULL) return -1;
-    if (fprintf(stream, "# media-browser settings\nfont_size=%u\nvolume=%d\nsort=%d\n",
-                config->font_size, config->volume, (int)config->file_sort) < 0 ||
+    if (fprintf(stream, "# media-browser settings\nfont_size=%u\nvolume=%d\nsort=%d\nplayback_mode=%d\n",
+                config->font_size, config->volume, (int)config->file_sort,
+                (int)config->playback_mode) < 0 ||
         fflush(stream) != 0) {
         fclose(stream);
         remove(temporary);

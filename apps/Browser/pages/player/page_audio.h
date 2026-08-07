@@ -27,6 +27,27 @@ void seek_relative(struct browser_app *app, int delta_percent);
 int handle_audio_key(struct browser_app *app, enum input_action action);
 
 /**
+ * @brief 打开当前播放列表中的下一首 WAV/MP3。
+ * @param app 浏览器上下文。
+ * @return 成功返回 0，无下一首或失败返回 -1。
+ */
+int audio_play_next(struct browser_app *app);
+
+/**
+ * @brief 打开当前播放列表中的上一首 WAV/MP3。
+ * @param app 浏览器上下文。
+ * @return 成功返回 0，无上一首或失败返回 -1。
+ */
+int audio_play_previous(struct browser_app *app);
+
+/**
+ * @brief 根据播放模式处理当前音频自然结束。
+ * @param app 浏览器上下文。
+ * @return 已切换或重播返回 0，无动作或失败返回 -1。
+ */
+int audio_handle_completion(struct browser_app *app);
+
+/**
  * @brief 处理音频页面触摸手势。
  * @param app 浏览器上下文。
  * @param input 触摸输入。

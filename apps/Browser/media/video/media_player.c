@@ -230,6 +230,11 @@ static int open_context(struct media_player *player,
     }
     if (context->video != NULL) {
         stream = context->format->streams[context->video_stream];
+        pthread_mutex_lock(&player->mutex);
+        player->media_width = (uint32_t)context->video->width;
+        player->media_height = (uint32_t)context->video->height;
+        player->frame_rate = av_q2d(stream->avg_frame_rate);
+        pthread_mutex_unlock(&player->mutex);
         context->sws = sws_getContext(context->video->width, context->video->height,
                                       context->video->pix_fmt, context->video->width,
                                       context->video->height, AV_PIX_FMT_RGB24,
@@ -473,6 +478,9 @@ int media_player_start(struct media_player *player, const char *path,
     player->position_ms = 0;
     player->duration_ms = 0;
     player->frame_serial = 0;
+    player->media_width = 0;
+    player->media_height = 0;
+    player->frame_rate = 0.0;
     player->seek_ms = -1;
     player->stop_requested = 0;
     pthread_mutex_unlock(&player->mutex);
@@ -525,6 +533,27 @@ void media_player_seek_percent(struct media_player *player, int percent)
     pthread_mutex_unlock(&player->mutex);
 }
 
+/**
+ * @brief 请求跳转到指定毫秒位置。
+ * @param player 播放器上下文。
+ * @param position_ms 目标位置，自动限制到媒体时长。
+ */
+void media_player_seek_ms(struct media_player *player, int64_t position_ms)
+{
+    uint64_t duration;
+
+    if (player == NULL) return;
+    pthread_mutex_lock(&player->mutex);
+    duration = player->duration_ms;
+    if (position_ms < 0) position_ms = 0;
+    if (duration > 0 && (uint64_t)position_ms > duration) {
+        position_ms = (int64_t)duration;
+    }
+    player->seek_ms = position_ms;
+    pthread_cond_broadcast(&player->condition);
+    pthread_mutex_unlock(&player->mutex);
+}
+
 void media_player_get_status(struct media_player *player,
                              struct media_player_status *status)
 {
@@ -535,8 +564,9 @@ void media_player_get_status(struct media_player *player,
     status->position_ms = player->position_ms;
     status->duration_ms = player->duration_ms;
     status->frame_serial = player->frame_serial;
-    status->width = player->frame.width;
-    status->height = player->frame.height;
+    status->width = player->media_width;
+    status->height = player->media_height;
+    status->frame_rate = player->frame_rate;
     status->has_video = player->frame.pixels != NULL;
     pthread_mutex_unlock(&player->mutex);
 }

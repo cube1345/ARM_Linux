@@ -125,6 +125,7 @@ int browser_app_save_config(struct browser_app *app)
     app->config.font_size = app->font.pixel_size;
     app->config.volume = status.volume;
     app->config.file_sort = app->file_sort;
+    app->config.playback_mode = app->playback_mode;
     if (browser_config_save(app->config_path, &app->config) < 0) {
         browser_log_errno(BROWSER_LOG_WARN, "save browser config");
         return -1;

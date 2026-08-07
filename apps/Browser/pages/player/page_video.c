@@ -46,6 +46,79 @@ static int status_progress(const struct media_player_status *status)
     return (int)((status->position_ms * 100U) / status->duration_ms);
 }
 
+/** @brief 判断条目是否属于 FFmpeg 播放列表。 */
+static int media_entry_supported(enum file_type type)
+{
+    return browser_file_type_is_audio(type) || browser_file_type_is_video(type);
+}
+
+/** @brief 查找播放列表中相邻的 FFmpeg 媒体条目。 */
+static int find_adjacent_media(const struct browser_app *app, int direction)
+{
+    size_t count = app->files.count;
+    size_t offset;
+    size_t index;
+
+    if (count == 0 || app->selected >= count) return -1;
+    if (app->playback_mode == BROWSER_PLAYBACK_SHUFFLE && direction > 0) {
+        size_t candidate = (size_t)(monotonic_ms() % count);
+
+        for (offset = 0; offset < count; offset++) {
+            index = (candidate + offset) % count;
+            if (index != app->selected &&
+                media_entry_supported(app->files.entries[index].type)) {
+                return (int)index;
+            }
+        }
+        return -1;
+    }
+    for (offset = 1; offset <= count; offset++) {
+        if (direction > 0) {
+            if (app->playback_mode == BROWSER_PLAYBACK_ONCE &&
+                app->selected + offset >= count) return -1;
+            index = (app->selected + offset) % count;
+        } else {
+            if (app->playback_mode == BROWSER_PLAYBACK_ONCE &&
+                offset > app->selected) return -1;
+            index = (app->selected + count - offset) % count;
+        }
+        if (media_entry_supported(app->files.entries[index].type)) {
+            return (int)index;
+        }
+    }
+    return -1;
+}
+
+/** @brief 启动指定 FFmpeg 播放列表条目。 */
+static int start_media_index(struct browser_app *app, size_t index)
+{
+    char path[PATH_MAX];
+    size_t previous = app->selected;
+
+    if (file_list_path(&app->files, index, path, sizeof(path)) < 0) {
+        return -1;
+    }
+    media_player_stop(&app->media);
+    image_data_destroy(&app->media_frame);
+    app->media_frame_serial = 0;
+    if (media_player_start(&app->media, path, app->alsa_device) < 0) {
+        app->selected = previous;
+        return -1;
+    }
+    app->selected = index;
+    app->page = BROWSER_PAGE_VIDEO;
+    return 0;
+}
+
+/** @brief 打开相邻 FFmpeg 媒体条目。 */
+static int play_adjacent_media(struct browser_app *app, int direction)
+{
+    int index = find_adjacent_media(app, direction);
+
+    if (index < 0 || start_media_index(app, (size_t)index) < 0) return -1;
+    return render_video_page(app);
+}
+
 static void draw_video_controls(struct browser_app *app,
                                 const struct media_player_status *status)
 {
@@ -80,7 +153,7 @@ int render_video_page(struct browser_app *app)
     struct media_player_status status;
     uint64_t serial = 0;
     int has_frame;
-    char title[FILE_LIST_NAME_SIZE + 16];
+    char title[FILE_LIST_NAME_SIZE + 64];
     int screen_width = (int)app->display.variable_info.xres;
 
     media_player_get_status(&app->media, &status);
@@ -107,8 +180,14 @@ int render_video_page(struct browser_app *app)
                      UI_MARGIN + 28, video_panel_y(app) + 104, 300,
                      UI_TEXT, UI_SURFACE);
     }
-    snprintf(title, sizeof(title), "PLAYER  %s",
-             app->files.entries[app->selected].name);
+    if (status.width > 0 && status.height > 0) {
+        snprintf(title, sizeof(title), "PLAYER  %s  %ux%u  %.1ffps",
+                 app->files.entries[app->selected].name,
+                 status.width, status.height, status.frame_rate);
+    } else {
+        snprintf(title, sizeof(title), "PLAYER  %s",
+                 app->files.entries[app->selected].name);
+    }
     browser_ui_draw_back_button(&app->display, &app->font);
     ui_draw_text(&app->display, &app->font, title, UI_BUTTON_SIZE + 16,
                  40, screen_width - UI_BUTTON_SIZE -
@@ -121,13 +200,19 @@ int render_video_page(struct browser_app *app)
                            "PAUSE", UI_HEADER);
     draw_video_controls(app, &status);
     browser_ui_draw_footer_hint(&app->display, &app->font,
-                                "Space play/pause  ←/→ seek  +/- volume");
+                                "Space pause  ↑/↓ track  ←/→ 10s  +/- volume");
     app->last_media_refresh_ms = monotonic_ms();
     return bmp_display_flush(&app->display);
 }
 
 int update_video_page(struct browser_app *app, uint64_t now_ms)
 {
+    struct media_player_status status;
+
+    media_player_get_status(&app->media, &status);
+    if (status.state == MEDIA_PLAYER_ENDED) {
+        if (media_handle_completion(app) == 0) return 0;
+    }
     if (now_ms - app->last_media_refresh_ms < UI_AUDIO_REFRESH_MS) return 0;
     return render_video_page(app);
 }
@@ -135,17 +220,19 @@ int update_video_page(struct browser_app *app, uint64_t now_ms)
 int handle_video_key(struct browser_app *app, enum input_action action)
 {
     struct media_player_status status;
-    int percent = 0;
 
     media_player_get_status(&app->media, &status);
     if (action == INPUT_ACTION_TOGGLE) {
         media_player_toggle_pause(&app->media);
+    } else if (action == INPUT_ACTION_UP) {
+        return media_play_previous(app);
+    } else if (action == INPUT_ACTION_DOWN) {
+        return media_play_next(app);
     } else if (action == INPUT_ACTION_PREVIOUS || action == INPUT_ACTION_NEXT) {
-        if (status.duration_ms > 0) {
-            percent = (int)(status.position_ms * 100U / status.duration_ms);
-        }
-        percent += action == INPUT_ACTION_NEXT ? 5 : -5;
-        media_player_seek_percent(&app->media, percent);
+        int64_t target = (int64_t)status.position_ms +
+                         (action == INPUT_ACTION_NEXT ? 10000 : -10000);
+
+        media_player_seek_ms(&app->media, target);
     } else if (action == INPUT_ACTION_VOLUME_UP) {
         browser_app_set_volume(app, status.volume + 5);
     } else if (action == INPUT_ACTION_VOLUME_DOWN) {
@@ -154,6 +241,29 @@ int handle_video_key(struct browser_app *app, enum input_action action)
         return 0;
     }
     return render_video_page(app);
+}
+
+/** @brief 打开当前媒体列表中的下一项。 */
+int media_play_next(struct browser_app *app)
+{
+    return play_adjacent_media(app, 1);
+}
+
+/** @brief 打开当前媒体列表中的上一项。 */
+int media_play_previous(struct browser_app *app)
+{
+    return play_adjacent_media(app, -1);
+}
+
+/** @brief 根据播放模式处理当前媒体自然结束。 */
+int media_handle_completion(struct browser_app *app)
+{
+    if (app->playback_mode == BROWSER_PLAYBACK_ONCE) return -1;
+    if (app->playback_mode == BROWSER_PLAYBACK_REPEAT_ONE) {
+        if (start_media_index(app, app->selected) < 0) return -1;
+        return render_video_page(app);
+    }
+    return media_play_next(app);
 }
 
 int handle_video_touch(struct browser_app *app,

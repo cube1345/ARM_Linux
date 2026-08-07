@@ -15,11 +15,13 @@ int main(int argc, char **argv)
     expected.font_size = 34U;
     expected.volume = 37;
     expected.file_sort = FILE_LIST_SORT_SIZE;
+    expected.playback_mode = BROWSER_PLAYBACK_SHUFFLE;
     if (browser_config_save(argv[1], &expected) < 0 ||
         browser_config_load(argv[1], &loaded) < 0 ||
         loaded.font_size != expected.font_size ||
         loaded.volume != expected.volume ||
-        loaded.file_sort != expected.file_sort) {
+        loaded.file_sort != expected.file_sort ||
+        loaded.playback_mode != expected.playback_mode) {
         fprintf(stderr, "FAIL config round trip\n");
         return EXIT_FAILURE;
     }

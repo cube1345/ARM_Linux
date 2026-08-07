@@ -6,11 +6,20 @@
 #include <stddef.h>
 #include <stdint.h>
 
+/** @brief 播放列表到达结尾后的处理方式。 */
+enum browser_playback_mode {
+    BROWSER_PLAYBACK_ONCE = 0,
+    BROWSER_PLAYBACK_REPEAT_ONE,
+    BROWSER_PLAYBACK_REPEAT_ALL,
+    BROWSER_PLAYBACK_SHUFFLE
+};
+
 /** @brief 浏览器可持久化的用户设置。 */
 struct browser_config {
     uint32_t font_size;
     int volume;
     enum file_list_sort file_sort;
+    enum browser_playback_mode playback_mode;
 };
 
 /**

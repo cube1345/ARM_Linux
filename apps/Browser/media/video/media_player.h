@@ -24,6 +24,7 @@ struct media_player_status {
     uint64_t frame_serial;
     uint32_t width;
     uint32_t height;
+    double frame_rate;
     int has_video;
 };
 
@@ -39,6 +40,9 @@ struct media_player {
     uint64_t position_ms;
     uint64_t duration_ms;
     uint64_t frame_serial;
+    uint32_t media_width;
+    uint32_t media_height;
+    double frame_rate;
     int volume;
     int64_t seek_ms;
     int stop_requested;
@@ -61,6 +65,13 @@ void media_player_set_volume(struct media_player *player, int volume);
 
 /** @brief 按总时长百分比请求跳转。 */
 void media_player_seek_percent(struct media_player *player, int percent);
+
+/**
+ * @brief 请求跳转到指定毫秒位置。
+ * @param player 播放器上下文。
+ * @param position_ms 目标位置，自动限制到媒体时长。
+ */
+void media_player_seek_ms(struct media_player *player, int64_t position_ms);
 
 /** @brief 读取播放器状态快照。 */
 void media_player_get_status(struct media_player *player,

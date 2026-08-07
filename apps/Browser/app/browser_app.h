@@ -65,6 +65,7 @@ struct browser_app {
     char config_path[PATH_MAX];
     /** @brief 当前文件页排序方式。 */
     enum file_list_sort file_sort;
+    enum browser_playback_mode playback_mode;
     /** @brief 文件页递归搜索状态。 */
     int search_active;
     char search_query[BROWSER_SEARCH_QUERY_SIZE];

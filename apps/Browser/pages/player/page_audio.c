@@ -125,6 +125,74 @@ static int audio_status_progress(const struct audio_player_status *status)
     return progress > 100U ? 100 : (int)progress;
 }
 
+/** @brief 查找播放列表中相邻的 WAV/MP3 条目。 */
+static int find_adjacent_audio(const struct browser_app *app, int direction)
+{
+    size_t count = app->files.count;
+    size_t offset;
+    size_t index;
+
+    if (count == 0 || app->selected >= count) return -1;
+    if (app->playback_mode == BROWSER_PLAYBACK_SHUFFLE && direction > 0) {
+        size_t candidate = (size_t)(monotonic_ms() % count);
+
+        for (offset = 0; offset < count; offset++) {
+            index = (candidate + offset) % count;
+            if (index != app->selected &&
+                (app->files.entries[index].type == FILE_TYPE_WAV ||
+                 app->files.entries[index].type == FILE_TYPE_MP3)) {
+                return (int)index;
+            }
+        }
+        return -1;
+    }
+    for (offset = 1; offset <= count; offset++) {
+        if (direction > 0) {
+            if (app->playback_mode == BROWSER_PLAYBACK_ONCE &&
+                app->selected + offset >= count) return -1;
+            index = (app->selected + offset) % count;
+        } else {
+            if (app->playback_mode == BROWSER_PLAYBACK_ONCE &&
+                offset > app->selected) return -1;
+            index = (app->selected + count - offset) % count;
+        }
+        if (app->files.entries[index].type == FILE_TYPE_WAV ||
+            app->files.entries[index].type == FILE_TYPE_MP3) {
+            return (int)index;
+        }
+    }
+    return -1;
+}
+
+/** @brief 启动指定播放列表条目的 WAV/MP3。 */
+static int start_audio_index(struct browser_app *app, size_t index)
+{
+    char path[PATH_MAX];
+    size_t previous = app->selected;
+
+    if (file_list_path(&app->files, index, path, sizeof(path)) < 0) {
+        return -1;
+    }
+    audio_player_stop(&app->audio);
+    if (audio_player_start(&app->audio, path, app->alsa_device) < 0) {
+        app->selected = previous;
+        return -1;
+    }
+    app->selected = index;
+    app->page = BROWSER_PAGE_AUDIO;
+    return 0;
+}
+
+/** @brief 打开相邻音频条目。 */
+static int play_adjacent_audio(struct browser_app *app, int direction)
+{
+    int index = find_adjacent_audio(app, direction);
+
+    if (index < 0) return -1;
+    if (start_audio_index(app, (size_t)index) < 0) return -1;
+    return render_audio_page(app);
+}
+
 /**
  * @brief 将屏幕 X 坐标转换为音频条形控件百分比。
  * @param app 浏览器上下文。
@@ -224,7 +292,7 @@ int render_audio_page(struct browser_app *app)
     browser_ui_draw_progress_bar(&app->display, bar_x, volume_y,
                                  bar_width, 12, status.volume, UI_SELECTED);
     browser_ui_draw_footer_hint(&app->display, &app->font,
-                                "Space play/pause  ←/→ seek  +/- volume");
+                                "Space play/pause  ↑/↓ track  ←/→ seek  +/- volume");
     app->last_audio_refresh_ms = monotonic_ms();
     return bmp_display_flush(&app->display);
 }
@@ -246,6 +314,29 @@ void seek_relative(struct browser_app *app, int delta_percent)
     audio_player_seek_percent(&app->audio, percent + delta_percent);
 }
 
+/** @brief 打开当前播放列表中的下一首 WAV/MP3。 */
+int audio_play_next(struct browser_app *app)
+{
+    return play_adjacent_audio(app, 1);
+}
+
+/** @brief 打开当前播放列表中的上一首 WAV/MP3。 */
+int audio_play_previous(struct browser_app *app)
+{
+    return play_adjacent_audio(app, -1);
+}
+
+/** @brief 根据播放模式处理当前音频自然结束。 */
+int audio_handle_completion(struct browser_app *app)
+{
+    if (app->playback_mode == BROWSER_PLAYBACK_ONCE) return -1;
+    if (app->playback_mode == BROWSER_PLAYBACK_REPEAT_ONE) {
+        if (start_audio_index(app, app->selected) < 0) return -1;
+        return render_audio_page(app);
+    }
+    return audio_play_next(app);
+}
+
 /**
  * @brief 处理音频页面键盘动作。
  * @param app 浏览器上下文。
@@ -263,6 +354,10 @@ int handle_audio_key(struct browser_app *app, enum input_action action)
         seek_relative(app, -5);
     } else if (action == INPUT_ACTION_NEXT) {
         seek_relative(app, 5);
+    } else if (action == INPUT_ACTION_UP) {
+        return audio_play_previous(app);
+    } else if (action == INPUT_ACTION_DOWN) {
+        return audio_play_next(app);
     } else if (action == INPUT_ACTION_VOLUME_UP) {
         browser_app_set_volume(app, status.volume + 5);
     } else if (action == INPUT_ACTION_VOLUME_DOWN) {

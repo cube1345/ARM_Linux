@@ -31,6 +31,13 @@ static struct page_operation settings_page_operation;
  */
 static int audio_page_periodic(struct browser_app *app, uint64_t now_ms)
 {
+    struct audio_player_status status;
+
+    audio_player_get_status(&app->audio, &status);
+    if (status.state == AUDIO_PLAYER_STOPPED && status.duration_ms > 0 &&
+        status.position_ms >= status.duration_ms) {
+        if (audio_handle_completion(app) == 0) return 0;
+    }
     if (now_ms - app->last_audio_refresh_ms >= UI_AUDIO_REFRESH_MS) {
         return render_audio_page(app);
     }
