@@ -25,6 +25,8 @@ static int launch_file_application(
     }
     app->active_app = operation->id;
     app->file_filter = operation->file_filter;
+    app->file_sort = FILE_LIST_SORT_NAME;
+    file_list_sort(&app->files, app->file_sort);
     app->selected = 0;
     app->page = BROWSER_PAGE_FILES;
     return render_file_page(app);

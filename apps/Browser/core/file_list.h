@@ -3,6 +3,8 @@
 
 #include <limits.h>
 #include <stddef.h>
+#include <stdint.h>
+#include <time.h>
 
 #define FILE_LIST_MAX_COUNT 256
 #define FILE_LIST_NAME_SIZE 256
@@ -46,10 +48,20 @@ enum file_list_filter {
                            FILE_LIST_FILTER_VIDEO
 };
 
+/** @brief 文件列表排序方式。 */
+enum file_list_sort {
+    FILE_LIST_SORT_NAME = 0,
+    FILE_LIST_SORT_TYPE,
+    FILE_LIST_SORT_TIME,
+    FILE_LIST_SORT_SIZE
+};
+
 /** @brief 文件列表中的一项。 */
 struct file_entry {
     char name[FILE_LIST_NAME_SIZE];
     enum file_type type;
+    uint64_t size_bytes;
+    time_t modified_time;
 };
 
 /** @brief 当前目录及其可浏览条目。 */
@@ -78,6 +90,13 @@ int file_list_scan(const char *directory, struct file_list *list);
  */
 int file_list_scan_filtered(const char *directory, struct file_list *list,
                             unsigned int filter);
+
+/**
+ * @brief 按指定方式对已扫描的文件列表排序。
+ * @param list 文件列表。
+ * @param sort 排序方式，目录始终排在普通文件之前。
+ */
+void file_list_sort(struct file_list *list, enum file_list_sort sort);
 
 /**
  * @brief 拼接当前目录与指定条目名称。

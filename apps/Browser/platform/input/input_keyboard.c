@@ -65,6 +65,7 @@ static enum input_action key_action(const struct input_event *event)
     case KEY_ESC: return INPUT_ACTION_BACK;
     case KEY_SPACE: return INPUT_ACTION_TOGGLE;
     case KEY_R: return INPUT_ACTION_ROTATE;
+    case KEY_TAB: return INPUT_ACTION_SORT;
     case KEY_EQUAL:
     case KEY_KPPLUS:
     case KEY_VOLUMEUP: return INPUT_ACTION_VOLUME_UP;
@@ -111,6 +112,8 @@ static enum input_action stdin_char_action(unsigned char value)
     case ' ': return INPUT_ACTION_TOGGLE;
     case 'r':
     case 'R': return INPUT_ACTION_ROTATE;
+    case 'o':
+    case 'O': return INPUT_ACTION_SORT;
     case '+':
     case '=': return INPUT_ACTION_VOLUME_UP;
     case '-':
@@ -943,6 +946,7 @@ const char *input_action_name(enum input_action action)
     case INPUT_ACTION_ROTATE: return "rotate";
     case INPUT_ACTION_VOLUME_UP: return "volume-up";
     case INPUT_ACTION_VOLUME_DOWN: return "volume-down";
+    case INPUT_ACTION_SORT: return "sort";
     case INPUT_ACTION_EXIT: return "exit";
     case INPUT_ACTION_NONE:
     default: return "none";

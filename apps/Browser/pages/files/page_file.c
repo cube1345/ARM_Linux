@@ -12,14 +12,94 @@
 #include "ui_draw.h"
 
 #include <errno.h>
+#include <inttypes.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #define FILE_PAGE_LIST_TOP (UI_HEADER_HEIGHT + 12)
 #define FILE_PAGE_TAG_WIDTH 64
 #define FILE_PAGE_UP_WIDTH 72
 #define FILE_PAGE_HOME_WIDTH 104
+#define FILE_PAGE_SORT_WIDTH 104
+
+/** @brief 获取文件列表行高。 */
+static int file_page_row_height(const struct browser_app *app)
+{
+    return (int)app->font.pixel_size * 2 + 28;
+}
+
+/** @brief 获取文件列表页面可显示的行数。 */
+static size_t file_page_visible_rows(const struct browser_app *app)
+{
+    int available = (int)app->display.variable_info.yres -
+                    FILE_PAGE_LIST_TOP - UI_FOOTER_HEIGHT - UI_MARGIN;
+    int row_height = file_page_row_height(app);
+
+    if (available <= 0 || row_height <= 0) return 1;
+    return (size_t)(available / row_height) > 0 ?
+           (size_t)(available / row_height) : 1;
+}
+
+/** @brief 返回排序方式的显示名称。 */
+static const char *file_sort_name(enum file_list_sort sort)
+{
+    switch (sort) {
+    case FILE_LIST_SORT_TYPE: return "Type";
+    case FILE_LIST_SORT_TIME: return "Time";
+    case FILE_LIST_SORT_SIZE: return "Size";
+    case FILE_LIST_SORT_NAME:
+    default: return "Name";
+    }
+}
+
+/** @brief 获取下一个文件列表排序方式。 */
+static enum file_list_sort file_sort_next(enum file_list_sort sort)
+{
+    return sort >= FILE_LIST_SORT_SIZE ? FILE_LIST_SORT_NAME :
+           (enum file_list_sort)((int)sort + 1);
+}
+
+/** @brief 将文件大小格式化为紧凑可读文本。 */
+static void format_file_size(uint64_t bytes, char *output, size_t output_size)
+{
+    if (bytes >= 1024U * 1024U * 1024U) {
+        snprintf(output, output_size, "%.1f GB",
+                 (double)bytes / (1024.0 * 1024.0 * 1024.0));
+    } else if (bytes >= 1024U * 1024U) {
+        snprintf(output, output_size, "%.1f MB",
+                 (double)bytes / (1024.0 * 1024.0));
+    } else if (bytes >= 1024U) {
+        snprintf(output, output_size, "%.1f KB",
+                 (double)bytes / 1024.0);
+    } else {
+        snprintf(output, output_size, "%" PRIu64 " B", bytes);
+    }
+}
+
+/** @brief 将修改时间格式化为月日和时分。 */
+static void format_file_time(time_t modified_time, char *output,
+                             size_t output_size)
+{
+    struct tm local_time;
+
+    if (localtime_r(&modified_time, &local_time) == NULL ||
+        strftime(output, output_size, "%m/%d %H:%M", &local_time) == 0) {
+        snprintf(output, output_size, "--/-- --:--");
+    }
+}
+
+/** @brief 按当前排序方式更新列表。 */
+static void apply_file_sort(struct browser_app *app)
+{
+    file_list_sort(&app->files, app->file_sort);
+    if (app->files.count == 0) {
+        app->selected = 0;
+    } else if (app->selected >= app->files.count) {
+        app->selected = app->files.count - 1U;
+    }
+}
 
 /**
  * @brief 获取文件类型标签颜色。
@@ -60,22 +140,28 @@ int render_file_page(struct browser_app *app)
         return render_gallery_page(app);
     }
     int width = (int)app->display.variable_info.xres;
-    int row_height = (int)app->font.pixel_size + 18;
+    int row_height = file_page_row_height(app);
     int card_x = UI_MARGIN;
     int card_width = width - UI_MARGIN * 2;
-    char subtitle[FILE_LIST_NAME_SIZE + 32];
-    size_t visible = browser_ui_visible_rows(&app->display, &app->font);
+    int sort_x = width - UI_MARGIN - FILE_PAGE_HOME_WIDTH -
+                 FILE_PAGE_UP_WIDTH - FILE_PAGE_SORT_WIDTH - 24;
+    char subtitle[FILE_LIST_NAME_SIZE + 64];
+    size_t visible = file_page_visible_rows(app);
     size_t first = app->selected / visible * visible;
     size_t index;
 
-    snprintf(subtitle, sizeof(subtitle), "%zu items  %.180s",
-             app->files.count, app->files.directory);
+    snprintf(subtitle, sizeof(subtitle), "%zu items  sort:%s  %.150s",
+             app->files.count, file_sort_name(app->file_sort),
+             app->files.directory);
     bmp_display_clear(&app->display, (uint8_t)(UI_BACKGROUND >> 16),
                       (uint8_t)(UI_BACKGROUND >> 8),
                       (uint8_t)UI_BACKGROUND);
     browser_ui_draw_header(&app->display, &app->font,
                            application == NULL ? "Files" : application->name,
                            subtitle);
+    browser_ui_draw_button(&app->display, &app->font,
+                           sort_x, 10, FILE_PAGE_SORT_WIDTH, 42,
+                           file_sort_name(app->file_sort), UI_HEADER);
     browser_ui_draw_button(&app->display, &app->font,
                            width - UI_MARGIN - FILE_PAGE_HOME_WIDTH -
                            FILE_PAGE_UP_WIDTH - 12, 10,
@@ -87,6 +173,9 @@ int render_file_page(struct browser_app *app)
          index++) {
         int y = FILE_PAGE_LIST_TOP + (int)(index - first) * row_height;
         int card_height = row_height - 6;
+        char metadata[64];
+        char size_text[24];
+        char time_text[24];
         uint32_t background = index == app->selected ? UI_SELECTED :
                               (index % 2U == 0U ? UI_SURFACE :
                                UI_SURFACE_ALT);
@@ -94,6 +183,15 @@ int render_file_page(struct browser_app *app)
                           UI_BORDER;
         uint32_t tag = file_type_color(app->files.entries[index].type);
 
+        if (app->files.entries[index].type == FILE_TYPE_DIRECTORY) {
+            snprintf(size_text, sizeof(size_text), "Folder");
+        } else {
+            format_file_size(app->files.entries[index].size_bytes,
+                             size_text, sizeof(size_text));
+        }
+        format_file_time(app->files.entries[index].modified_time,
+                         time_text, sizeof(time_text));
+        snprintf(metadata, sizeof(metadata), "%s  %s", size_text, time_text);
         browser_ui_draw_panel(&app->display, card_x, y, card_width,
                               card_height, background, border);
         ui_draw_rect(&app->display, card_x + 10, y + 9,
@@ -105,10 +203,15 @@ int render_file_page(struct browser_app *app)
         ui_draw_text(&app->display, &app->font,
                      app->files.entries[index].name,
                      card_x + FILE_PAGE_TAG_WIDTH + 28,
-                     y + (int)app->font.pixel_size + 7,
+                     y + (int)app->font.pixel_size + 5,
                      card_width - FILE_PAGE_TAG_WIDTH - 44,
                      index == app->selected ? UI_TEXT : UI_MUTED,
                      background);
+        ui_draw_text(&app->display, &app->font, metadata,
+                     card_x + FILE_PAGE_TAG_WIDTH + 28,
+                     y + (int)app->font.pixel_size * 2 + 7,
+                     card_width - FILE_PAGE_TAG_WIDTH - 44,
+                     UI_MUTED, background);
     }
     if (app->files.count == 0) {
         int y = FILE_PAGE_LIST_TOP + 20;
@@ -120,7 +223,7 @@ int render_file_page(struct browser_app *app)
                      card_width - 36, UI_MUTED, UI_SURFACE);
     }
     browser_ui_draw_footer_hint(&app->display, &app->font,
-                                "↑↓ select  Enter open  Esc back  Q quit");
+                                "↑↓ select  Enter open  O/Tab sort  Esc back");
     return bmp_display_flush(&app->display);
 }
 
@@ -145,6 +248,7 @@ int open_selected(struct browser_app *app)
                                     app->file_filter) < 0) {
             return -1;
         }
+        file_list_sort(&app->files, app->file_sort);
         app->selected = 0;
         return render_file_page(app);
     }
@@ -214,6 +318,7 @@ int enter_parent(struct browser_app *app)
                                 app->file_filter) < 0) {
         return -1;
     }
+    file_list_sort(&app->files, app->file_sort);
     app->selected = 0;
     return 1;
 }
@@ -236,6 +341,10 @@ int handle_file_key(struct browser_app *app, enum input_action action)
         app->selected = (app->selected + 1U) % app->files.count;
     } else if (action == INPUT_ACTION_OPEN) {
         return open_selected(app);
+    } else if (action == INPUT_ACTION_SORT) {
+        app->file_sort = file_sort_next(app->file_sort);
+        apply_file_sort(app);
+        app->selected = 0;
     } else if (action == INPUT_ACTION_BACK) {
         int result = enter_parent(app);
 
@@ -266,7 +375,18 @@ int handle_file_touch(struct browser_app *app,
         return handle_gallery_touch(app, input);
     }
     int width = (int)app->display.variable_info.xres;
-    size_t visible = browser_ui_visible_rows(&app->display, &app->font);
+    size_t visible = file_page_visible_rows(app);
+    int sort_x = width - UI_MARGIN - FILE_PAGE_HOME_WIDTH -
+                 FILE_PAGE_UP_WIDTH - FILE_PAGE_SORT_WIDTH - 24;
+
+    if (input->touch == TOUCH_ACTION_TAP &&
+        input->y < UI_HEADER_HEIGHT &&
+        input->x >= sort_x && input->x < sort_x + FILE_PAGE_SORT_WIDTH) {
+        app->file_sort = file_sort_next(app->file_sort);
+        apply_file_sort(app);
+        app->selected = 0;
+        return render_file_page(app);
+    }
 
     if (input->touch == TOUCH_ACTION_TAP &&
         input->y < UI_HEADER_HEIGHT &&
@@ -290,7 +410,7 @@ int handle_file_touch(struct browser_app *app,
     if (input->touch == TOUCH_ACTION_TAP &&
         input->y >= FILE_PAGE_LIST_TOP &&
         input->y < (int)app->display.variable_info.yres - UI_FOOTER_HEIGHT) {
-        int row_height = (int)app->font.pixel_size + 18;
+        int row_height = file_page_row_height(app);
         size_t first = app->selected / visible * visible;
         size_t row = (size_t)(input->y - FILE_PAGE_LIST_TOP) /
                      (size_t)row_height;

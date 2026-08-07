@@ -235,6 +235,7 @@ int main(int argc, char *argv[])
     memset(&app, 0, sizeof(app));
     app.display.fd = -1;
     app.file_filter = FILE_LIST_FILTER_ALL;
+    app.file_sort = FILE_LIST_SORT_NAME;
     app.alsa_device = argc >= 6 ? argv[5] : "default";
     touch_path = argc >= 7 ? argv[6] : NULL;
     display_manager_init(&app.display_devices);

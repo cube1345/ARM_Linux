@@ -147,6 +147,51 @@ static int check_negative_cases(const char *empty_directory,
     return result;
 }
 
+/** @brief 验证文件列表元数据和排序顺序。 */
+static int check_file_list_metadata_and_sort(const char *directory)
+{
+    struct file_list list;
+    size_t index;
+    int result = 0;
+
+    if (file_list_scan(directory, &list) < 0) return -1;
+    for (index = 0; index < list.count; index++) {
+        if (list.entries[index].type != FILE_TYPE_DIRECTORY &&
+            (list.entries[index].size_bytes == 0 ||
+             list.entries[index].modified_time == 0)) {
+            fprintf(stderr, "FAIL file metadata: %s\n",
+                    list.entries[index].name);
+            result = -1;
+        }
+    }
+    file_list_sort(&list, FILE_LIST_SORT_SIZE);
+    for (index = 1; index < list.count; index++) {
+        const struct file_entry *previous = &list.entries[index - 1U];
+        const struct file_entry *current = &list.entries[index];
+
+        if (previous->type != FILE_TYPE_DIRECTORY &&
+            current->type != FILE_TYPE_DIRECTORY &&
+            previous->size_bytes < current->size_bytes) {
+            fprintf(stderr, "FAIL size sort\n");
+            result = -1;
+        }
+    }
+    file_list_sort(&list, FILE_LIST_SORT_TIME);
+    for (index = 1; index < list.count; index++) {
+        const struct file_entry *previous = &list.entries[index - 1U];
+        const struct file_entry *current = &list.entries[index];
+
+        if (previous->type != FILE_TYPE_DIRECTORY &&
+            current->type != FILE_TYPE_DIRECTORY &&
+            previous->modified_time < current->modified_time) {
+            fprintf(stderr, "FAIL time sort\n");
+            result = -1;
+        }
+    }
+    if (result == 0) printf("PASS file metadata and sorting\n");
+    return result;
+}
+
 /** @brief 媒体解码 smoke test 入口。 */
 int main(int argc, char **argv)
 {
@@ -157,6 +202,7 @@ int main(int argc, char **argv)
     }
     browser_log_init_from_env();
     if (check_directory(argv[1]) < 0 ||
+        check_file_list_metadata_and_sort(argv[1]) < 0 ||
         check_negative_cases(argv[2], argv[3]) < 0) {
         return EXIT_FAILURE;
     }

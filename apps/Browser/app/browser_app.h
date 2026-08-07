@@ -59,6 +59,8 @@ struct browser_app {
     struct audio_player audio;
     struct media_player media;
     struct image_data media_frame;
+    /** @brief 当前文件页排序方式。 */
+    enum file_list_sort file_sort;
     /** @brief Gallery 缩略图缓存槽。 */
     struct {
         char path[PATH_MAX];

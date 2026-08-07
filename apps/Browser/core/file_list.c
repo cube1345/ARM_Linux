@@ -141,18 +141,11 @@ static int join_path(const char *directory, const char *name,
     return 0;
 }
 
-/**
- * @brief 比较文件条目，目录排在文件之前。
- *
- * @param left 左条目。
- * @param right 右条目。
- * @return 小于、等于或大于零。
- */
-static int compare_entry(const void *left, const void *right)
+/** @brief 比较文件条目，目录始终排在普通文件之前。 */
+static int compare_entry(const struct file_entry *left_entry,
+                         const struct file_entry *right_entry,
+                         enum file_list_sort sort)
 {
-    const struct file_entry *left_entry = left;
-    const struct file_entry *right_entry = right;
-
     if (left_entry->type == FILE_TYPE_DIRECTORY &&
         right_entry->type != FILE_TYPE_DIRECTORY) {
         return -1;
@@ -161,7 +154,47 @@ static int compare_entry(const void *left, const void *right)
         right_entry->type == FILE_TYPE_DIRECTORY) {
         return 1;
     }
+    if (sort == FILE_LIST_SORT_TYPE &&
+        left_entry->type != right_entry->type) {
+        return left_entry->type < right_entry->type ? -1 : 1;
+    }
+    if (sort == FILE_LIST_SORT_TIME &&
+        left_entry->modified_time != right_entry->modified_time) {
+        return left_entry->modified_time > right_entry->modified_time ?
+               -1 : 1;
+    }
+    if (sort == FILE_LIST_SORT_SIZE &&
+        left_entry->size_bytes != right_entry->size_bytes) {
+        return left_entry->size_bytes > right_entry->size_bytes ? -1 : 1;
+    }
     return strcasecmp(left_entry->name, right_entry->name);
+}
+
+/**
+ * @brief 按指定方式对已扫描的文件列表排序。
+ * @param list 文件列表。
+ * @param sort 排序方式，目录始终排在普通文件之前。
+ */
+void file_list_sort(struct file_list *list, enum file_list_sort sort)
+{
+    size_t index;
+
+    if (list == NULL || sort < FILE_LIST_SORT_NAME ||
+        sort > FILE_LIST_SORT_SIZE) {
+        return;
+    }
+    for (index = 1; index < list->count; index++) {
+        struct file_entry entry = list->entries[index];
+        size_t position = index;
+
+        while (position > 0 &&
+               compare_entry(&entry, &list->entries[position - 1U], sort) <
+               0) {
+            list->entries[position] = list->entries[position - 1U];
+            position--;
+        }
+        list->entries[position] = entry;
+    }
 }
 
 /**
@@ -230,13 +263,16 @@ int file_list_scan_filtered(const char *directory, struct file_list *list,
                  sizeof(list->entries[list->count].name), "%s",
                  entry->d_name);
         list->entries[list->count].type = type;
+        list->entries[list->count].size_bytes = S_ISREG(status.st_mode) &&
+            status.st_size > 0 ? (uint64_t)status.st_size : 0U;
+        list->entries[list->count].modified_time = status.st_mtime;
         list->count++;
     }
     if (closedir(stream) < 0) {
         browser_log_errno(BROWSER_LOG_ERROR, "closedir");
         return -1;
     }
-    qsort(list->entries, list->count, sizeof(list->entries[0]), compare_entry);
+    file_list_sort(list, FILE_LIST_SORT_NAME);
     return 0;
 }
 
