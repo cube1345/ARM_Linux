@@ -15,7 +15,9 @@
 #define DESKTOP_DOCK_HEIGHT 82
 #define DESKTOP_ICON_MAX 118
 #define DESKTOP_ICON_MIN 66
-#define DESKTOP_ICON_RADIUS 24
+
+// 桌面应用选中后显示的矩形圆角
+#define DESKTOP_ICON_RADIUS 12
 #define DESKTOP_HIT_PADDING 12
 
 /** @brief 桌面应用图标命中区域和图标坐标。 */
