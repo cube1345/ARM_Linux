@@ -5,6 +5,7 @@
 #include "desktop_app.h"
 #include "file_list.h"
 #include "page_audio.h"
+#include "page_gallery.h"
 #include "page_video.h"
 #include "page_image.h"
 #include "page_text.h"
@@ -54,6 +55,10 @@ int render_file_page(struct browser_app *app)
 {
     const struct desktop_app_operation *application =
         desktop_app_find(&app->desktop_apps, app->active_app);
+
+    if (app->active_app == DESKTOP_APP_GALLERY) {
+        return render_gallery_page(app);
+    }
     int width = (int)app->display.variable_info.xres;
     int row_height = (int)app->font.pixel_size + 18;
     int card_x = UI_MARGIN;
@@ -221,6 +226,9 @@ int enter_parent(struct browser_app *app)
  */
 int handle_file_key(struct browser_app *app, enum input_action action)
 {
+    if (app->active_app == DESKTOP_APP_GALLERY) {
+        return handle_gallery_key(app, action);
+    }
     if (action == INPUT_ACTION_UP && app->files.count > 0) {
         app->selected = (app->selected + app->files.count - 1U) %
                         app->files.count;
@@ -254,6 +262,9 @@ int handle_file_key(struct browser_app *app, enum input_action action)
 int handle_file_touch(struct browser_app *app,
                       const struct browser_input *input)
 {
+    if (app->active_app == DESKTOP_APP_GALLERY) {
+        return handle_gallery_touch(app, input);
+    }
     int width = (int)app->display.variable_info.xres;
     size_t visible = browser_ui_visible_rows(&app->display, &app->font);
 

@@ -13,6 +13,7 @@
 #include "image_render.h"
 #include "input_keyboard.h"
 #include "page_manager.h"
+#include "page_gallery.h"
 #include "page_image.h"
 #include "text_reader.h"
 #include "ui_draw.h"
@@ -285,6 +286,7 @@ int main(int argc, char *argv[])
     }
     result = run_browser(&pages, &app);
 cleanup_media_player:
+    gallery_cache_clear(&app);
     close_image(&app);
     text_reader_close(&app.text);
     image_data_destroy(&app.media_frame);

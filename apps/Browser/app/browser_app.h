@@ -28,6 +28,7 @@
 
 /** @brief 用户可调最大字体像素高度。 */
 #define BROWSER_FONT_MAX_SIZE 34U
+#define BROWSER_GALLERY_CACHE_COUNT 12U
 
 /** @brief 设置页每次调整的字体像素步长。 */
 #define BROWSER_FONT_STEP_SIZE 2U
@@ -58,6 +59,13 @@ struct browser_app {
     struct audio_player audio;
     struct media_player media;
     struct image_data media_frame;
+    /** @brief Gallery 缩略图缓存槽。 */
+    struct {
+        char path[PATH_MAX];
+        struct image_data image;
+        uint64_t last_used;
+    } gallery_cache[BROWSER_GALLERY_CACHE_COUNT];
+    uint64_t gallery_cache_serial;
     struct animation_decoder_manager animations;
     struct image_data image;
     struct image_data preloaded_image;

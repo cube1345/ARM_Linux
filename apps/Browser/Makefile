@@ -26,7 +26,8 @@ SOURCES := app/main.c app/browser_app.c \
 	   media/animation/gif_animation.c media/animation/animation_decoder.c \
 	   media/audio/audio_player.c media/video/media_player.c \
 	   pages/desktop/page_desktop.c pages/files/page_file.c \
-	   pages/gallery/page_image.c pages/reader/page_text.c \
+	   pages/gallery/page_gallery.c pages/gallery/page_image.c \
+	   pages/reader/page_text.c \
 	   pages/reader/text_reader.c pages/player/page_audio.c \
 	   pages/player/page_video.c pages/diagnostics/page_diagnostics.c \
 	   pages/tools/page_tools.c pages/settings/page_settings.c \
