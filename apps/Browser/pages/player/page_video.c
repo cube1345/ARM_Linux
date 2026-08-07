@@ -3,6 +3,7 @@
 #include "browser_ui.h"
 #include "image_render.h"
 #include "media_player.h"
+#include "page_queue.h"
 #include "ui_draw.h"
 
 #include <stdint.h>
@@ -18,6 +19,7 @@
 #define VIDEO_FULLSCREEN_BUTTON_WIDTH 72
 #define VIDEO_HEADER_BUTTON_HEIGHT 42
 #define VIDEO_HEADER_BUTTON_GAP 4
+#define VIDEO_QUEUE_WIDTH 286
 
 /** @brief 获取视频缩放模式的短标签。 */
 static const char *video_render_mode_name(enum image_render_mode mode)
@@ -90,6 +92,25 @@ static int status_progress(const struct media_player_status *status)
 static int media_entry_supported(enum file_type type)
 {
     return browser_file_type_is_audio(type) || browser_file_type_is_video(type);
+}
+
+/** @brief 绘制非全屏媒体播放队列浮层。 */
+static void draw_video_queue(struct browser_app *app)
+{
+    int screen_width = (int)app->display.variable_info.xres;
+    int screen_height = (int)app->display.variable_info.yres;
+    int width = screen_width / 3;
+    int x;
+    int y = UI_HEADER_HEIGHT + 10;
+    int height = screen_height - y - UI_FOOTER_HEIGHT - 120;
+
+    if (app->video_fullscreen || width > VIDEO_QUEUE_WIDTH) {
+        width = VIDEO_QUEUE_WIDTH;
+    }
+    x = screen_width - UI_MARGIN - width;
+    if (x < UI_MARGIN || height < 90 || app->video_fullscreen) return;
+    page_queue_draw(app, media_entry_supported, "QUEUE", x, y, width,
+                    height);
 }
 
 /** @brief 查找播放列表中相邻的 FFmpeg 媒体条目。 */
@@ -285,6 +306,7 @@ int render_video_page(struct browser_app *app)
                            VIDEO_HEADER_BUTTON_HEIGHT,
                            status.state == MEDIA_PLAYER_PAUSED ? "PLAY" :
                            "PAUSE", UI_HEADER);
+    draw_video_queue(app);
     draw_video_controls(app, &status);
     browser_ui_draw_footer_hint(&app->display, &app->font,
                                 "Space pause  R scale  Enter full  ←/→ 10s");

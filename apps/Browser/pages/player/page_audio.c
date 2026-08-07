@@ -3,6 +3,7 @@
 #include "audio_player.h"
 #include "browser_app.h"
 #include "browser_ui.h"
+#include "page_queue.h"
 #include "ui_draw.h"
 
 #include <stdint.h>
@@ -15,6 +16,13 @@
 #define AUDIO_PLAY_BUTTON_OFFSET_Y 64
 #define AUDIO_PROGRESS_OFFSET_Y 154
 #define AUDIO_VOLUME_OFFSET_Y 220
+#define AUDIO_QUEUE_GAP 12
+
+/** @brief 判断文件类型是否属于 WAV/MP3 音频队列。 */
+static int audio_entry_supported(enum file_type type)
+{
+    return type == FILE_TYPE_WAV || type == FILE_TYPE_MP3;
+}
 
 /**
  * @brief 获取音频播放器卡片宽度。
@@ -314,6 +322,12 @@ int render_audio_page(struct browser_app *app)
                  volume_y - 12, bar_width, UI_MUTED, UI_SURFACE);
     browser_ui_draw_progress_bar(&app->display, bar_x, volume_y,
                                  bar_width, 12, status.volume, UI_SELECTED);
+    page_queue_draw(app, audio_entry_supported, "QUEUE", UI_MARGIN,
+                    panel_y + AUDIO_PANEL_HEIGHT + AUDIO_QUEUE_GAP,
+                    panel_width,
+                    (int)app->display.variable_info.yres -
+                    (panel_y + AUDIO_PANEL_HEIGHT + AUDIO_QUEUE_GAP) -
+                    UI_FOOTER_HEIGHT - UI_MARGIN);
     browser_ui_draw_footer_hint(&app->display, &app->font,
                                 "Space play/pause  ↑/↓ track  ←/→ seek  +/- volume");
     app->last_audio_refresh_ms = monotonic_ms();

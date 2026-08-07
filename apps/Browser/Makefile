@@ -30,8 +30,9 @@ SOURCES := app/main.c app/browser_app.c \
 	   pages/desktop/page_desktop.c pages/files/page_file.c \
 	   pages/gallery/page_gallery.c pages/gallery/page_image.c \
 	   pages/reader/page_text.c \
-	   pages/reader/text_reader.c pages/player/page_audio.c \
-	   pages/player/page_video.c pages/diagnostics/page_diagnostics.c \
+	   pages/reader/text_reader.c pages/player/page_queue.c \
+	   pages/player/page_audio.c pages/player/page_video.c \
+	   pages/diagnostics/page_diagnostics.c \
 	   pages/tools/page_tools.c pages/settings/page_settings.c \
 	   ui/ui_draw.c ui/browser_ui.c
 OBJECTS := $(SOURCES:.c=.o)

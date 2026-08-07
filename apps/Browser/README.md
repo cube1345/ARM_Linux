@@ -16,6 +16,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - 后台播放 PCM WAV 和 MP3，支持暂停、软件音量、进度显示和 seek；MP3 页面读取
   ID3v2.3、ID3v2.4 和 ID3v1 的标题、艺术家与专辑标签，并在正常退出媒体页时
   保存断点位置。
+- 音频和 Player 页面显示当前目录播放队列，包含当前序号、总数、当前项高亮和前后项。
 - Player 支持 MP4、MOV、MKV、AVI、WebM、M4V 视频，以及 AAC、M4A、FLAC、OGG、
   Opus 音频；FFmpeg 负责解复用、视频转 RGB 和音频重采样。
 - Player 触摸页提供 `PLAY/PAUSE`、进度条和音量条；文件页提供 `UP` 父目录和
@@ -54,6 +55,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 | `pages/gallery/page_image.c/.h` | 图片/GIF 打开关闭、相邻图片选择、自动播放、预解码和旋转 |
 | `pages/reader/page_text.c/.h` | UTF-8 文本分页渲染、键盘和触摸翻页处理 |
 | `pages/player/page_audio.c/.h` | 音频页渲染、播放暂停、seek 和音量控制 |
+| `pages/player/page_queue.c/.h` | 音频/视频播放队列摘要绘制和当前项高亮 |
 | `media/audio/audio_metadata.c/.h` | MP3 ID3v2/ID3v1 标题、艺术家和专辑标签解析 |
 | `media/video/media_player.c/.h` | FFmpeg 容器、视频和音频解码线程、RGB 帧快照和 ALSA 输出 |
 | `media/video/subtitle.c/.h` | SRT sidecar 路径解析、时间轴加载和当前字幕查询 |
@@ -344,6 +346,7 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 - 带 ID3 标签的 MP3 可显示标题、艺术家和专辑；无标签文件回退显示文件名。
 - 音频或视频播放超过 3 秒后退出，在距离结尾 3 秒以上时重新打开同一文件可从
   上次位置继续播放；接近开头或结尾不保存断点。
+- 音频页和 Player 页会显示当前播放队列，`Up` / `Down` 切换后高亮项和序号同步更新。
 - 视频页可通过 `R`/缩放按钮检查 FIT、FILL、1:1，通过 `Enter`/`FULL` 检查
   隐藏控件的全屏显示；全屏时 `Esc` 或点击画面只退出全屏，不关闭媒体。
 - 将 `sample.srt` 与 `sample.mp4` 放在同一目录后，普通和全屏模式均按 SRT
