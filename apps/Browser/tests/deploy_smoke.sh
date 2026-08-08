@@ -9,6 +9,7 @@ trap 'rm -rf "$WORK_DIR"' EXIT HUP INT TERM
 sh -n "$SCRIPT_DIR/../deploy/media-browser-launcher"
 sh -n "$SCRIPT_DIR/../deploy/S95media-browser"
 sh -n "$SCRIPT_DIR/../deploy/S94media-browser-mount"
+sh -n "$SCRIPT_DIR/../deploy/media-browser-ota"
 printf '#!/bin/sh\nprintf "%%s\\n" "$@"\n' > "$FAKE_BROWSER"
 chmod 0755 "$FAKE_BROWSER"
 

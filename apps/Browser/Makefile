@@ -48,7 +48,7 @@ LDLIBS := $(shell $(PKG_CONFIG) --libs $(PACKAGES)) -lgif -ldl -pthread
 .PHONY: all clean install test test-media test-config test-metadata \
 	test-render test-subtitle test-video-decoder test-plugin \
 	test-file-watcher test-crash-log test-screen-power \
-	test-watchdog test-deploy test-input-reconnect test-input
+	test-watchdog test-ota test-deploy test-input-reconnect test-input
 
 all: $(TARGET)
 
@@ -68,6 +68,8 @@ install: $(TARGET)
 		$(DESTDIR)/etc/init.d/S95media-browser
 	install -D -m 0755 deploy/S94media-browser-mount \
 		$(DESTDIR)/etc/init.d/S94media-browser-mount
+	install -D -m 0755 deploy/media-browser-ota \
+		$(DESTDIR)/usr/sbin/media-browser-ota
 	install -D -m 0644 deploy/media-browser.service \
 		$(DESTDIR)/usr/lib/systemd/system/media-browser.service
 	install -d -m 0755 \
@@ -78,10 +80,13 @@ install: $(TARGET)
 
 test: test-media test-config test-metadata test-render test-subtitle \
 	test-video-decoder test-plugin test-file-watcher test-crash-log \
-	test-screen-power test-watchdog test-deploy test-input-reconnect
+	test-screen-power test-watchdog test-ota test-deploy test-input-reconnect
 
 test-watchdog:
 	CC="$(HOST_CC)" ./tests/watchdog_smoke.sh
+
+test-ota:
+	./tests/ota_smoke.sh
 
 test-media:
 	CC="$(HOST_CC)" ./tests/media_smoke.sh "$(TEST_MEDIA_DIR)"

@@ -1,0 +1,64 @@
+#!/bin/sh
+set -eu
+
+# Configurable A/B updater. Device-specific slot paths must be supplied by
+# the product image; no partition is guessed by this generic application.
+
+usage()
+{
+    echo "Usage: $0 IMAGE [SHA256]" >&2
+    exit 2
+}
+
+image=${1:-}
+expected=${2:-}
+[ -n "$image" ] || usage
+[ -r "$image" ] || { echo "ota: image is not readable: $image" >&2; exit 1; }
+
+slot_a=${OTA_SLOT_A:-}
+slot_b=${OTA_SLOT_B:-}
+active_file=${OTA_ACTIVE_FILE:-/etc/media-browser/active-slot}
+[ -n "$slot_a" ] && [ -n "$slot_b" ] || {
+    echo "ota: set OTA_SLOT_A and OTA_SLOT_B for this product" >&2
+    exit 1
+}
+
+if [ -n "$expected" ]; then
+    command -v sha256sum >/dev/null 2>&1 || {
+        echo "ota: sha256sum is required for checksum verification" >&2
+        exit 1
+    }
+    actual=$(sha256sum "$image" | awk '{print $1}')
+    [ "$actual" = "$expected" ] || {
+        echo "ota: SHA-256 mismatch" >&2
+        exit 1
+    }
+fi
+
+active=a
+if [ -r "$active_file" ]; then
+    read -r active < "$active_file" || true
+fi
+case "$active" in
+    a) target=$slot_b; next=b ;;
+    b) target=$slot_a; next=a ;;
+    *) echo "ota: invalid active slot: $active" >&2; exit 1 ;;
+esac
+
+if [ "${OTA_DRY_RUN:-0}" = 1 ]; then
+    echo "ota: dry-run target=$target next=$next image=$image"
+    exit 0
+fi
+
+[ -b "$target" ] || {
+    echo "ota: inactive slot is not a block device: $target" >&2
+    exit 1
+}
+
+dd if="$image" of="$target" bs=4M conv=fsync status=none
+sync
+mkdir -p "${active_file%/*}"
+temporary=${active_file}.tmp.$$
+printf '%s\n' "$next" > "$temporary"
+mv -f "$temporary" "$active_file"
+echo "ota: written $target; next boot slot=$next"
