@@ -66,6 +66,8 @@ install: $(TARGET)
 		$(DESTDIR)/etc/default/media-browser
 	install -D -m 0755 deploy/S95media-browser \
 		$(DESTDIR)/etc/init.d/S95media-browser
+	install -D -m 0755 deploy/S94media-browser-mount \
+		$(DESTDIR)/etc/init.d/S94media-browser-mount
 	install -D -m 0644 deploy/media-browser.service \
 		$(DESTDIR)/usr/lib/systemd/system/media-browser.service
 	install -d -m 0755 \

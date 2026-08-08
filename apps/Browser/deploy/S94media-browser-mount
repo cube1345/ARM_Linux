@@ -1,0 +1,54 @@
+#!/bin/sh
+
+# Mount the first removable USB/SD partition before media-browser starts.
+# This script is intentionally conservative: failure to find or mount a
+# removable device must not prevent the browser from starting.
+
+MOUNT_ROOT=${MEDIA_BROWSER_MOUNT_ROOT:-/media/browser}
+MEDIA_ROOT=${MEDIA_BROWSER_ROOT:-/root/media}
+
+is_mounted()
+{
+    grep -qs " $MOUNT_ROOT " /proc/mounts
+}
+
+mount_device()
+{
+    device=$1
+    [ -b "$device" ] || return 1
+    mkdir -p "$MOUNT_ROOT" || return 1
+    is_mounted && return 0
+    mount -o rw,noatime "$device" "$MOUNT_ROOT" 2>/dev/null || \
+        mount "$device" "$MOUNT_ROOT" 2>/dev/null || return 1
+    return 0
+}
+
+link_media_root()
+{
+    [ -d "$MEDIA_ROOT" ] || mkdir -p "$MEDIA_ROOT" 2>/dev/null || return 0
+    [ -d "$MOUNT_ROOT" ] || return 0
+    [ -L "$MEDIA_ROOT/removable" ] ||
+        ln -s "$MOUNT_ROOT" "$MEDIA_ROOT/removable" 2>/dev/null || true
+}
+
+start_mount()
+{
+    is_mounted || {
+        for device in /dev/mmcblk?p[0-9] /dev/sd[a-z][0-9]; do
+            mount_device "$device" && break
+        done
+    }
+    link_media_root
+}
+
+stop_mount()
+{
+    umount "$MOUNT_ROOT" 2>/dev/null || true
+}
+
+case "${1:-start}" in
+    start) start_mount ;;
+    stop) stop_mount ;;
+    restart) stop_mount; start_mount ;;
+    *) echo "Usage: $0 {start|stop|restart}" >&2; exit 1 ;;
+esac

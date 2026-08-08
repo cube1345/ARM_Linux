@@ -53,6 +53,9 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - 若存在 `/dev/watchdog`，程序默认以 15 秒超时定期 keepalive，正常退出写入 magic
   close；设备不存在时自动降级。可用 `BROWSER_WATCHDOG_DEVICE=-` 或
   `BROWSER_WATCHDOG_SECONDS=0` 禁用，也可调整 `BROWSER_WATCHDOG_SECONDS`。
+- BusyBox 启动脚本会在浏览器前扫描 `/dev/mmcblk?pN` 和 `/dev/sd[a-z]N`，将首个可用
+  分区挂载到 `/media/browser`，并在媒体根目录创建 `removable` 入口；无可移动设备时
+  自动跳过。可用 `MEDIA_BROWSER_MOUNT_ROOT` 和 `MEDIA_BROWSER_ROOT` 调整路径。
 - Settings 会持久化字体大小、音量、文件排序、播放模式、UI 主题、当前媒体根目录、
   输入设备参数、最近一次媒体断点、最近打开和收藏夹；默认路径为
   `/etc/media-browser.conf`，可用 `BROWSER_CONFIG_PATH` 指定可写路径。CLI 格式不变，
@@ -80,7 +83,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 | `core/file_watcher.c/.h` | 当前普通文件目录的 nonblocking inotify 监听与事件消费 |
 | `core/screen_power.c/.h` | framebuffer blank/unblank operation 与空闲休眠状态机 |
 | `core/watchdog.c/.h` | Linux `/dev/watchdog` 探测、keepalive、失败降级和正常 disarm |
-| `deploy/*` | BusyBox init、systemd、默认运行参数和统一启动 wrapper |
+| `deploy/*` | BusyBox init、USB/SD 挂载、systemd、默认运行参数和统一启动 wrapper |
 | `pages/files/page_file.c/.h` | 文件列表渲染、目录进入/返回、搜索、最近打开/收藏夹、键盘和触摸处理 |
 | `pages/gallery/page_image.c/.h` | 图片/GIF 打开关闭、相邻图片选择、自动播放、预解码和旋转 |
 | `pages/reader/page_text.c/.h` | UTF-8 文本分页渲染、键盘和触摸翻页处理 |
