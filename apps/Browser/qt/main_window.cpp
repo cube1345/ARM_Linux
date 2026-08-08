@@ -11,6 +11,7 @@
 #include <QListWidget>
 #include <QPushButton>
 #include <QPixmap>
+#include <QFrame>
 #include <QScrollArea>
 #include <QSettings>
 #include <QSplitter>
@@ -34,7 +35,11 @@ void MainWindow::buildLayout()
 {
     auto *central = new QWidget(this);
     auto *rootLayout = new QHBoxLayout(central);
+    rootLayout->setContentsMargins(0, 0, 0, 0);
+    rootLayout->setSpacing(0);
     auto *sidebar = new QVBoxLayout;
+    sidebar->setContentsMargins(14, 18, 14, 14);
+    sidebar->setSpacing(5);
     auto *title = new QLabel(tr("MEDIA\nBROWSER"));
     title->setObjectName("title");
     sidebar->addWidget(title);
@@ -48,6 +53,8 @@ void MainWindow::buildLayout()
     };
     for (const auto &action : actions) {
         auto *button = new QPushButton(action.first);
+        button->setObjectName("navButton");
+        button->setCursor(Qt::PointingHandCursor);
         connect(button, &QPushButton::clicked, this, action.second);
         sidebar->addWidget(button);
     }
@@ -55,22 +62,25 @@ void MainWindow::buildLayout()
     auto *version = new QLabel(tr("Qt 5.15 • LinuxFB"));
     version->setObjectName("muted");
     sidebar->addWidget(version);
-    auto *panel = new QWidget;
+    auto *panel = new QFrame;
+    panel->setObjectName("sidebar");
     panel->setLayout(sidebar);
-    panel->setFixedWidth(190);
+    panel->setFixedWidth(158);
     rootLayout->addWidget(panel);
 
     pages_ = new QStackedWidget;
     auto *galleryPage = new QWidget;
     auto *galleryLayout = new QVBoxLayout(galleryPage);
+    galleryLayout->setContentsMargins(18, 16, 18, 12);
+    galleryLayout->setSpacing(10);
     auto *galleryTitle = new QLabel(tr("Gallery"));
-    galleryTitle->setObjectName("title");
+    galleryTitle->setObjectName("pageTitle");
     galleryLayout->addWidget(galleryTitle);
     gallery_ = new QListWidget;
     gallery_->setViewMode(QListView::IconMode);
-    gallery_->setIconSize(QSize(180, 130));
+    gallery_->setIconSize(QSize(142, 100));
     gallery_->setResizeMode(QListView::Adjust);
-    gallery_->setSpacing(14);
+    gallery_->setSpacing(8);
     connect(gallery_, &QListWidget::itemDoubleClicked, this,
             &MainWindow::openSelectedFile);
     galleryLayout->addWidget(gallery_);
@@ -78,6 +88,8 @@ void MainWindow::buildLayout()
 
     auto *filesPage = new QWidget;
     auto *filesLayout = new QVBoxLayout(filesPage);
+    filesLayout->setContentsMargins(18, 16, 18, 12);
+    filesLayout->setSpacing(8);
     locationLabel_ = new QLabel;
     locationLabel_->setObjectName("muted");
     filesLayout->addWidget(locationLabel_);
@@ -89,11 +101,12 @@ void MainWindow::buildLayout()
 
     textView_ = new QTextEdit;
     textView_->setReadOnly(true);
+    textView_->setContentsMargins(18, 16, 18, 12);
     pages_->addWidget(textView_);
 
-    auto *settings = new QLabel(tr("Settings\n\nQt UI is enabled. Runtime media and input settings remain shared with the C backend."));
+    auto *settings = new QLabel(tr("Settings\n\nQt UI is enabled.\nRuntime media and input settings remain shared with the C backend."));
     settings->setAlignment(Qt::AlignTop | Qt::AlignLeft);
-    settings->setMargin(24);
+    settings->setMargin(18);
     pages_->addWidget(settings);
     rootLayout->addWidget(pages_, 1);
     setCentralWidget(central);

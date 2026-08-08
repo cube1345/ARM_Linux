@@ -9,12 +9,21 @@ int main(int argc, char *argv[])
     application.setApplicationName("Media Browser Qt");
     application.setApplicationVersion("1.0");
     application.setStyleSheet(
-        "QWidget{background:#101722;color:#e7edf5;font-family:Sans;font-size:15px;}"
-        "QPushButton{background:#1b2838;border:1px solid #2d4159;border-radius:8px;padding:10px;text-align:left;}"
-        "QPushButton:hover{background:#263b53;} QPushButton:checked{background:#2f80ed;}"
-        "QListWidget,QTextEdit{background:#151f2d;border:1px solid #2d4159;border-radius:8px;}"
-        "QLabel#title{font-size:24px;font-weight:bold;} QLabel#muted{color:#91a4b9;}"
-        "QStatusBar{color:#91a4b9;}"
+        "QWidget{background:#111923;color:#d9e2ec;font-family:Sans;font-size:13px;}"
+        "QMainWindow{background:#111923;} QFrame#sidebar{background:#0d151f;}"
+        "QPushButton#navButton{background:transparent;color:#9eafc1;border:0;"
+        "border-radius:6px;padding:8px 10px;text-align:left;min-height:18px;}"
+        "QPushButton#navButton:hover{background:#182536;color:#e7edf5;}"
+        "QPushButton#navButton:pressed{background:#23466b;color:#ffffff;}"
+        "QListWidget,QTextEdit{background:#151f2b;border:1px solid #26384b;"
+        "border-radius:6px;padding:4px;}"
+        "QListWidget::item{border-radius:5px;padding:6px;color:#c6d2df;}"
+        "QListWidget::item:hover{background:#1b2b3d;}"
+        "QListWidget::item:selected{background:#244b74;color:#ffffff;}"
+        "QLabel#title{font-size:19px;font-weight:600;color:#eef4fa;}"
+        "QLabel#pageTitle{font-size:21px;font-weight:500;color:#eef4fa;}"
+        "QLabel#muted{color:#7f93a8;} QStatusBar{color:#7f93a8;"
+        "background:#0d151f;border-top:1px solid #1b2b3b;}"
     );
     QString root = argc > 1 ? QString::fromLocal8Bit(argv[1]) : QDir::homePath();
     MainWindow window(root);
