@@ -16,7 +16,7 @@
  * @param name 文件名。
  * @return 识别出的文件类型。
  */
-static enum file_type detect_file_type(const char *name)
+enum file_type file_list_detect_type(const char *name)
 {
     const char *extension = strrchr(name, '.');
 
@@ -253,7 +253,7 @@ static int scan_recursive_directory(const char *directory,
             continue;
         }
         if (!S_ISREG(status.st_mode)) continue;
-        type = detect_file_type(entry->d_name);
+        type = file_list_detect_type(entry->d_name);
         if (type == FILE_TYPE_UNKNOWN ||
             !file_type_matches_filter(type, filter)) {
             continue;
@@ -355,7 +355,7 @@ int file_list_scan_filtered(const char *directory, struct file_list *list,
         if (S_ISDIR(status.st_mode)) {
             type = FILE_TYPE_DIRECTORY;
         } else if (S_ISREG(status.st_mode)) {
-            type = detect_file_type(entry->d_name);
+            type = file_list_detect_type(entry->d_name);
         } else {
             continue;
         }
@@ -407,6 +407,16 @@ int file_list_path(const struct file_list *list, size_t index,
     if (list == NULL || index >= list->count || output == NULL) {
         errno = EINVAL;
         return -1;
+    }
+    if (list->entries[index].name[0] == '/') {
+        int written = snprintf(output, output_size, "%s",
+                               list->entries[index].name);
+
+        if (written < 0 || (size_t)written >= output_size) {
+            errno = ENAMETOOLONG;
+            return -1;
+        }
+        return 0;
     }
     return join_path(list->directory, list->entries[index].name,
                      output, output_size);

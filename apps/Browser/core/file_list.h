@@ -122,6 +122,13 @@ int file_list_path(const struct file_list *list, size_t index,
                    char *output, size_t output_size);
 
 /**
+ * @brief 根据文件名或路径后缀检测浏览器文件类型。
+ * @param name 文件名或路径。
+ * @return 浏览器文件类型。
+ */
+enum file_type file_list_detect_type(const char *name);
+
+/**
  * @brief 获取文件类型的可读名称。
  *
  * @param type 文件类型。

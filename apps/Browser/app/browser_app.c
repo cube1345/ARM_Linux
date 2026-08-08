@@ -145,6 +145,7 @@ int browser_app_return_to_desktop(struct browser_app *app)
     (void)browser_app_save_config(app);
     app->active_app = DESKTOP_APP_NONE;
     app->file_filter = FILE_LIST_FILTER_ALL;
+    app->file_view = BROWSER_FILE_VIEW_DIRECTORY;
     app->search_active = 0;
     app->search_query[0] = '\0';
     app->page = BROWSER_PAGE_DESKTOP;

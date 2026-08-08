@@ -51,6 +51,13 @@ enum browser_page {
     BROWSER_PAGE_SETTINGS
 };
 
+/** @brief 文件页当前显示的数据来源。 */
+enum browser_file_view {
+    BROWSER_FILE_VIEW_DIRECTORY = 0,
+    BROWSER_FILE_VIEW_RECENT,
+    BROWSER_FILE_VIEW_FAVORITES
+};
+
 /** @brief 多媒体文件浏览器完整运行上下文。 */
 struct browser_app {
     struct display_manager display_devices;
@@ -96,6 +103,7 @@ struct browser_app {
     enum browser_page page;
     enum desktop_app_id active_app;
     unsigned int file_filter;
+    enum browser_file_view file_view;
     size_t desktop_selected;
     size_t tool_selected;
     char tool_output[2048];

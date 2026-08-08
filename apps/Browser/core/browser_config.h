@@ -7,6 +7,14 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#define BROWSER_PATH_LIST_LIMIT 8U
+
+/** @brief 可持久化的媒体路径列表。 */
+struct browser_path_list {
+    char paths[BROWSER_PATH_LIST_LIMIT][PATH_MAX];
+    size_t count;
+};
+
 /** @brief 播放列表到达结尾后的处理方式。 */
 enum browser_playback_mode {
     BROWSER_PLAYBACK_ONCE = 0,
@@ -23,7 +31,43 @@ struct browser_config {
     enum browser_playback_mode playback_mode;
     char resume_path[PATH_MAX];
     uint64_t resume_position_ms;
+    struct browser_path_list recent_files;
+    struct browser_path_list favorite_files;
 };
+
+/**
+ * @brief 判断路径列表是否包含指定路径。
+ * @param list 路径列表。
+ * @param path 绝对路径。
+ * @return 包含返回 1，否则返回 0。
+ */
+int browser_path_list_contains(const struct browser_path_list *list,
+                               const char *path);
+
+/**
+ * @brief 追加路径到列表尾部，超出容量时忽略。
+ * @param list 路径列表。
+ * @param path 绝对路径。
+ */
+void browser_path_list_append(struct browser_path_list *list,
+                              const char *path);
+
+/**
+ * @brief 将路径移动到列表最前方，超出容量时丢弃最旧项。
+ * @param list 路径列表。
+ * @param path 绝对路径。
+ */
+void browser_path_list_add_front(struct browser_path_list *list,
+                                 const char *path);
+
+/**
+ * @brief 从路径列表移除指定路径。
+ * @param list 路径列表。
+ * @param path 绝对路径。
+ * @return 删除了条目返回 1，否则返回 0。
+ */
+int browser_path_list_remove(struct browser_path_list *list,
+                             const char *path);
 
 /**
  * @brief 初始化默认设置。

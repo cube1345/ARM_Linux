@@ -17,6 +17,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <strings.h>
+#include <sys/stat.h>
 #include <time.h>
 
 #define FILE_PAGE_LIST_TOP (UI_HEADER_HEIGHT + 12)
@@ -25,6 +26,154 @@
 #define FILE_PAGE_HOME_WIDTH 104
 #define FILE_PAGE_SORT_WIDTH 104
 #define FILE_PAGE_SEARCH_WIDTH 104
+#define FILE_PAGE_RECENT_WIDTH 104
+#define FILE_PAGE_FAVORITE_WIDTH 92
+#define FILE_PAGE_BUTTON_GAP 12
+#define FILE_PAGE_BUTTON_Y 10
+#define FILE_PAGE_BUTTON_HEIGHT 42
+
+/** @brief 文件页顶部按钮布局。 */
+struct file_page_button_layout {
+    int search_x;
+    int sort_x;
+    int recent_x;
+    int favorite_x;
+    int up_x;
+    int home_x;
+    int show_search_sort;
+    int show_recent_favorite;
+};
+
+/** @brief 根据屏幕宽度计算文件页顶部按钮位置。 */
+static struct file_page_button_layout file_page_button_layout(int width)
+{
+    struct file_page_button_layout layout;
+
+    layout.home_x = width - UI_MARGIN - FILE_PAGE_HOME_WIDTH;
+    layout.up_x = layout.home_x - FILE_PAGE_UP_WIDTH - FILE_PAGE_BUTTON_GAP;
+    layout.favorite_x = -1;
+    layout.recent_x = -1;
+    layout.sort_x = -1;
+    layout.search_x = -1;
+    layout.show_search_sort = width >= 640;
+    layout.show_recent_favorite = width >= 920;
+    if (layout.show_recent_favorite) {
+        layout.favorite_x = layout.up_x - FILE_PAGE_FAVORITE_WIDTH -
+                            FILE_PAGE_BUTTON_GAP;
+        layout.recent_x = layout.favorite_x - FILE_PAGE_RECENT_WIDTH -
+                          FILE_PAGE_BUTTON_GAP;
+        layout.sort_x = layout.recent_x - FILE_PAGE_SORT_WIDTH -
+                        FILE_PAGE_BUTTON_GAP;
+    } else {
+        layout.sort_x = layout.up_x - FILE_PAGE_SORT_WIDTH -
+                        FILE_PAGE_BUTTON_GAP;
+    }
+    layout.search_x = layout.sort_x - FILE_PAGE_SEARCH_WIDTH -
+                      FILE_PAGE_BUTTON_GAP;
+    return layout;
+}
+
+/** @brief 判断文件类型是否匹配当前应用过滤器。 */
+static int file_type_allowed_by_app(const struct browser_app *app,
+                                    enum file_type type)
+{
+    if (browser_file_type_is_image(type)) {
+        return (app->file_filter & FILE_LIST_FILTER_IMAGES) != 0U;
+    }
+    if (browser_file_type_is_audio(type)) {
+        return (app->file_filter & FILE_LIST_FILTER_AUDIO) != 0U;
+    }
+    if (browser_file_type_is_video(type)) {
+        return (app->file_filter & FILE_LIST_FILTER_VIDEO) != 0U;
+    }
+    if (type == FILE_TYPE_TEXT) {
+        return (app->file_filter & FILE_LIST_FILTER_TEXT) != 0U;
+    }
+    return 0;
+}
+
+/** @brief 获取路径 basename。 */
+static const char *file_path_basename(const char *path)
+{
+    const char *slash = strrchr(path, '/');
+
+    return slash == NULL ? path : slash + 1;
+}
+
+/** @brief 判断当前文件页是否为虚拟路径列表。 */
+static int file_view_is_virtual(const struct browser_app *app)
+{
+    return app->file_view == BROWSER_FILE_VIEW_RECENT ||
+           app->file_view == BROWSER_FILE_VIEW_FAVORITES;
+}
+
+/** @brief 获取文件页视图名称。 */
+static const char *file_view_name(enum browser_file_view view)
+{
+    if (view == BROWSER_FILE_VIEW_RECENT) return "Recent";
+    if (view == BROWSER_FILE_VIEW_FAVORITES) return "Favorites";
+    return "Files";
+}
+
+/** @brief 判断两个路径列表是否一致。 */
+static int path_lists_equal(const struct browser_path_list *left,
+                            const struct browser_path_list *right)
+{
+    size_t index;
+
+    if (left->count != right->count) return 0;
+    for (index = 0; index < left->count; index++) {
+        if (strcmp(left->paths[index], right->paths[index]) != 0) return 0;
+    }
+    return 1;
+}
+
+/** @brief 从配置路径列表构建可打开的虚拟文件列表。 */
+static int build_path_list_view(struct browser_app *app,
+                                enum browser_file_view view)
+{
+    struct browser_path_list *source =
+        view == BROWSER_FILE_VIEW_RECENT ? &app->config.recent_files :
+        &app->config.favorite_files;
+    struct browser_path_list valid = {0};
+    struct file_entry entries[FILE_LIST_MAX_COUNT];
+    size_t count = 0;
+    size_t index;
+
+    for (index = 0; index < source->count && count < FILE_LIST_MAX_COUNT;
+         index++) {
+        const char *path = source->paths[index];
+        struct stat status;
+        enum file_type type;
+        int written;
+
+        if (stat(path, &status) < 0 || !S_ISREG(status.st_mode)) continue;
+        type = file_list_detect_type(path);
+        if (type == FILE_TYPE_UNKNOWN || !file_type_allowed_by_app(app, type)) {
+            continue;
+        }
+        written = snprintf(entries[count].name, sizeof(entries[count].name),
+                           "%s", path);
+        if (written < 0 || (size_t)written >= sizeof(entries[count].name)) {
+            continue;
+        }
+        entries[count].type = type;
+        entries[count].size_bytes = (uint64_t)status.st_size;
+        entries[count].modified_time = status.st_mtime;
+        browser_path_list_append(&valid, path);
+        count++;
+    }
+    memcpy(app->files.entries, entries, sizeof(entries[0]) * count);
+    app->files.count = count;
+    if (!path_lists_equal(source, &valid)) {
+        *source = valid;
+        (void)browser_app_save_config(app);
+    }
+    if (app->selected >= app->files.count) {
+        app->selected = app->files.count == 0 ? 0 : app->files.count - 1U;
+    }
+    return 0;
+}
 
 /** @brief 获取文件列表行高。 */
 static int file_page_row_height(const struct browser_app *app)
@@ -175,6 +324,85 @@ static int end_file_search(struct browser_app *app)
     return 0;
 }
 
+/** @brief 刷新当前文件页视图。 */
+static int refresh_current_file_view(struct browser_app *app)
+{
+    if (app->file_view == BROWSER_FILE_VIEW_DIRECTORY) {
+        if (file_list_scan_filtered(app->files.directory, &app->files,
+                                    app->file_filter) < 0) {
+            return -1;
+        }
+        apply_file_sort(app);
+        return 0;
+    }
+    return build_path_list_view(app, app->file_view);
+}
+
+/** @brief 切换文件页视图并刷新列表。 */
+static int switch_file_view(struct browser_app *app,
+                            enum browser_file_view view)
+{
+    app->search_active = 0;
+    app->search_query[0] = '\0';
+    app->file_view = view;
+    app->selected = 0;
+    return refresh_current_file_view(app);
+}
+
+/** @brief 循环切换普通目录、最近和收藏视图。 */
+static int cycle_file_view(struct browser_app *app, int direction)
+{
+    int next = (int)app->file_view + direction;
+
+    if (next < (int)BROWSER_FILE_VIEW_DIRECTORY) {
+        next = (int)BROWSER_FILE_VIEW_FAVORITES;
+    } else if (next > (int)BROWSER_FILE_VIEW_FAVORITES) {
+        next = (int)BROWSER_FILE_VIEW_DIRECTORY;
+    }
+    return switch_file_view(app, (enum browser_file_view)next);
+}
+
+/** @brief 获取当前选中条目的完整路径。 */
+static int selected_file_path(const struct browser_app *app, char *output,
+                              size_t output_size)
+{
+    if (app->files.count == 0 || app->selected >= app->files.count) {
+        errno = EINVAL;
+        return -1;
+    }
+    return file_list_path(&app->files, app->selected, output, output_size);
+}
+
+/** @brief 将成功打开的非目录文件记录到最近列表。 */
+static void remember_opened_file(struct browser_app *app)
+{
+    if (app->current_path[0] == '\0') return;
+    browser_path_list_add_front(&app->config.recent_files,
+                                app->current_path);
+    (void)browser_app_save_config(app);
+}
+
+/** @brief 收藏或取消收藏当前选中的普通文件。 */
+static int toggle_selected_favorite(struct browser_app *app)
+{
+    char path[PATH_MAX];
+
+    if (app->files.count == 0 || app->selected >= app->files.count ||
+        app->files.entries[app->selected].type == FILE_TYPE_DIRECTORY ||
+        selected_file_path(app, path, sizeof(path)) < 0) {
+        return 0;
+    }
+    if (browser_path_list_remove(&app->config.favorite_files, path) == 0) {
+        browser_path_list_add_front(&app->config.favorite_files, path);
+    }
+    (void)browser_app_save_config(app);
+    if (app->file_view == BROWSER_FILE_VIEW_FAVORITES &&
+        refresh_current_file_view(app) < 0) {
+        return -1;
+    }
+    return render_file_page(app);
+}
+
 /**
  * @brief 获取文件类型标签颜色。
  * @param type 文件类型。
@@ -217,9 +445,7 @@ int render_file_page(struct browser_app *app)
     int row_height = file_page_row_height(app);
     int card_x = UI_MARGIN;
     int card_width = width - UI_MARGIN * 2;
-    int sort_x = width - UI_MARGIN - FILE_PAGE_HOME_WIDTH -
-                 FILE_PAGE_UP_WIDTH - FILE_PAGE_SORT_WIDTH - 24;
-    int search_x = sort_x - FILE_PAGE_SEARCH_WIDTH - 12;
+    struct file_page_button_layout buttons = file_page_button_layout(width);
     char subtitle[FILE_LIST_NAME_SIZE + 64];
     size_t visible = file_page_visible_rows(app);
     size_t first = app->selected / visible * visible;
@@ -229,10 +455,13 @@ int render_file_page(struct browser_app *app)
         snprintf(subtitle, sizeof(subtitle), "Search: %s  %zu files  %.110s",
                  app->search_query[0] == '\0' ? "*" : app->search_query,
                  app->files.count, app->files.directory);
+    } else if (file_view_is_virtual(app)) {
+        snprintf(subtitle, sizeof(subtitle), "%s  %zu items",
+                 file_view_name(app->file_view), app->files.count);
     } else {
-        snprintf(subtitle, sizeof(subtitle), "%zu items  sort:%s  %.150s",
-                 app->files.count, file_sort_name(app->file_sort),
-                 app->files.directory);
+        snprintf(subtitle, sizeof(subtitle), "%s  %zu items  sort:%s  %.140s",
+                 file_view_name(app->file_view), app->files.count,
+                 file_sort_name(app->file_sort), app->files.directory);
     }
     bmp_display_clear(&app->display, (uint8_t)(UI_BACKGROUND >> 16),
                       (uint8_t)(UI_BACKGROUND >> 8),
@@ -240,27 +469,53 @@ int render_file_page(struct browser_app *app)
     browser_ui_draw_header(&app->display, &app->font,
                            application == NULL ? "Files" : application->name,
                            subtitle);
-    if (width >= 640) {
+    if (buttons.show_search_sort) {
         browser_ui_draw_button(&app->display, &app->font,
-                               search_x, 10, FILE_PAGE_SEARCH_WIDTH, 42,
+                               buttons.search_x, FILE_PAGE_BUTTON_Y,
+                               FILE_PAGE_SEARCH_WIDTH,
+                               FILE_PAGE_BUTTON_HEIGHT,
+                               file_view_is_virtual(app) ? "FILES" :
                                app->search_active ? "CLOSE" : "SEARCH",
                                UI_HEADER);
         browser_ui_draw_button(&app->display, &app->font,
-                               sort_x, 10, FILE_PAGE_SORT_WIDTH, 42,
+                               buttons.sort_x, FILE_PAGE_BUTTON_Y,
+                               FILE_PAGE_SORT_WIDTH,
+                               FILE_PAGE_BUTTON_HEIGHT,
+                               file_view_is_virtual(app) ? "VIEW" :
                                file_sort_name(app->file_sort), UI_HEADER);
     }
+    if (buttons.show_recent_favorite) {
+        browser_ui_draw_button(&app->display, &app->font,
+                               buttons.recent_x, FILE_PAGE_BUTTON_Y,
+                               FILE_PAGE_RECENT_WIDTH,
+                               FILE_PAGE_BUTTON_HEIGHT, "RECENT",
+                               app->file_view == BROWSER_FILE_VIEW_RECENT ?
+                               UI_SELECTED : UI_HEADER);
+        browser_ui_draw_button(&app->display, &app->font,
+                               buttons.favorite_x, FILE_PAGE_BUTTON_Y,
+                               FILE_PAGE_FAVORITE_WIDTH,
+                               FILE_PAGE_BUTTON_HEIGHT, "FAV",
+                               app->file_view == BROWSER_FILE_VIEW_FAVORITES ?
+                               UI_SELECTED : UI_HEADER);
+    }
     browser_ui_draw_button(&app->display, &app->font,
-                           width - UI_MARGIN - FILE_PAGE_HOME_WIDTH -
-                           FILE_PAGE_UP_WIDTH - 12, 10,
-                           FILE_PAGE_UP_WIDTH, 42, "UP", UI_HEADER);
+                           buttons.up_x, FILE_PAGE_BUTTON_Y,
+                           FILE_PAGE_UP_WIDTH, FILE_PAGE_BUTTON_HEIGHT,
+                           file_view_is_virtual(app) ? "FILES" : "UP",
+                           UI_HEADER);
     browser_ui_draw_button(&app->display, &app->font,
-                           width - UI_MARGIN - FILE_PAGE_HOME_WIDTH, 10,
-                           FILE_PAGE_HOME_WIDTH, 42, "HOME", UI_HEADER);
+                           buttons.home_x, FILE_PAGE_BUTTON_Y,
+                           FILE_PAGE_HOME_WIDTH, FILE_PAGE_BUTTON_HEIGHT,
+                           "HOME", UI_HEADER);
     for (index = first; index < app->files.count && index < first + visible;
          index++) {
         int y = FILE_PAGE_LIST_TOP + (int)(index - first) * row_height;
         int card_height = row_height - 6;
-        char metadata[64];
+        const char *display_name =
+            file_view_is_virtual(app) ?
+            file_path_basename(app->files.entries[index].name) :
+            app->files.entries[index].name;
+        char metadata[192];
         char size_text[24];
         char time_text[24];
         uint32_t background = index == app->selected ? UI_SELECTED :
@@ -278,7 +533,13 @@ int render_file_page(struct browser_app *app)
         }
         format_file_time(app->files.entries[index].modified_time,
                          time_text, sizeof(time_text));
-        snprintf(metadata, sizeof(metadata), "%s  %s", size_text, time_text);
+        if (file_view_is_virtual(app)) {
+            snprintf(metadata, sizeof(metadata), "%s  %s  %.120s",
+                     size_text, time_text, app->files.entries[index].name);
+        } else {
+            snprintf(metadata, sizeof(metadata), "%s  %s", size_text,
+                     time_text);
+        }
         browser_ui_draw_panel(&app->display, card_x, y, card_width,
                               card_height, background, border);
         ui_draw_rect(&app->display, card_x + 10, y + 9,
@@ -288,7 +549,7 @@ int render_file_page(struct browser_app *app)
                      card_x + 20, y + (int)app->font.pixel_size + 6,
                      FILE_PAGE_TAG_WIDTH - 18, UI_BACKGROUND, tag);
         ui_draw_text(&app->display, &app->font,
-                     app->files.entries[index].name,
+                     display_name,
                      card_x + FILE_PAGE_TAG_WIDTH + 28,
                      y + (int)app->font.pixel_size + 5,
                      card_width - FILE_PAGE_TAG_WIDTH - 44,
@@ -302,17 +563,26 @@ int render_file_page(struct browser_app *app)
     }
     if (app->files.count == 0) {
         int y = FILE_PAGE_LIST_TOP + 20;
+        const char *empty_text = app->search_active ? "No matching files" :
+                                 app->file_view ==
+                                 BROWSER_FILE_VIEW_RECENT ?
+                                 "No recent files" :
+                                 app->file_view ==
+                                 BROWSER_FILE_VIEW_FAVORITES ?
+                                 "No favorites yet" : "Empty directory";
 
         browser_ui_draw_panel(&app->display, UI_MARGIN, y, card_width,
                               row_height + 24, UI_SURFACE, UI_BORDER);
-        ui_draw_text(&app->display, &app->font, "Empty directory",
+        ui_draw_text(&app->display, &app->font, empty_text,
                      UI_MARGIN + 18, y + (int)app->font.pixel_size + 18,
                      card_width - 36, UI_MUTED, UI_SURFACE);
     }
     browser_ui_draw_footer_hint(&app->display, &app->font,
                                 app->search_active ?
                                 "Type to search  Backspace edit  Esc close" :
-                                "↑↓ select  Enter open  O/Tab sort  / search");
+                                file_view_is_virtual(app) ?
+                                "↑↓ select  Enter open  R favorite  Tab view  Back files" :
+                                "↑↓ select  Enter open  O sort  R favorite  Tab view  / search");
     return bmp_display_flush(&app->display);
 }
 
@@ -337,6 +607,7 @@ int open_selected(struct browser_app *app)
                                     app->file_filter) < 0) {
             return -1;
         }
+        app->file_view = BROWSER_FILE_VIEW_DIRECTORY;
         file_list_sort(&app->files, app->file_sort);
         app->selected = 0;
         return render_file_page(app);
@@ -345,6 +616,7 @@ int open_selected(struct browser_app *app)
         if (load_selected_image(app) < 0) {
             return -1;
         }
+        remember_opened_file(app);
         app->page = BROWSER_PAGE_IMAGE;
         return render_image_page(app);
     }
@@ -352,6 +624,7 @@ int open_selected(struct browser_app *app)
         if (text_reader_open(&app->text, app->current_path) < 0) {
             return -1;
         }
+        remember_opened_file(app);
         app->page = BROWSER_PAGE_TEXT;
         return render_text_page(app);
     }
@@ -365,6 +638,7 @@ int open_selected(struct browser_app *app)
                                          BROWSER_PAGE_VIDEO);
             (void)subtitle_track_load_for_media(&app->subtitles,
                                                 app->current_path);
+            remember_opened_file(app);
             app->page = BROWSER_PAGE_VIDEO;
             return render_video_page(app);
         }
@@ -375,6 +649,7 @@ int open_selected(struct browser_app *app)
         browser_app_restore_playback(app, app->current_path,
                                      BROWSER_PAGE_AUDIO);
         (void)audio_metadata_read(app->current_path, &app->audio_metadata);
+        remember_opened_file(app);
         app->page = BROWSER_PAGE_AUDIO;
         return render_audio_page(app);
     }
@@ -387,6 +662,7 @@ int open_selected(struct browser_app *app)
                                      BROWSER_PAGE_VIDEO);
         (void)subtitle_track_load_for_media(&app->subtitles,
                                             app->current_path);
+        remember_opened_file(app);
         app->page = BROWSER_PAGE_VIDEO;
         return render_video_page(app);
     }
@@ -435,6 +711,10 @@ int handle_file_key(struct browser_app *app, enum input_action action)
         return handle_gallery_key(app, action);
     }
     if (action == INPUT_ACTION_SEARCH) {
+        if (file_view_is_virtual(app) &&
+            switch_file_view(app, BROWSER_FILE_VIEW_DIRECTORY) < 0) {
+            return -1;
+        }
         if (app->search_active) {
             if (end_file_search(app) < 0) return -1;
         } else if (begin_file_search(app) < 0) {
@@ -460,12 +740,26 @@ int handle_file_key(struct browser_app *app, enum input_action action)
         app->selected = (app->selected + 1U) % app->files.count;
     } else if (action == INPUT_ACTION_OPEN) {
         return open_selected(app);
+    } else if (action == INPUT_ACTION_ROTATE) {
+        return toggle_selected_favorite(app);
+    } else if (action == INPUT_ACTION_VIEW) {
+        if (cycle_file_view(app, 1) < 0) return -1;
     } else if (action == INPUT_ACTION_SORT) {
-        app->file_sort = file_sort_next(app->file_sort);
-        apply_file_sort(app);
-        app->selected = 0;
-        (void)browser_app_save_config(app);
+        if (file_view_is_virtual(app)) {
+            if (cycle_file_view(app, 1) < 0) return -1;
+        } else {
+            app->file_sort = file_sort_next(app->file_sort);
+            apply_file_sort(app);
+            app->selected = 0;
+            (void)browser_app_save_config(app);
+        }
     } else if (action == INPUT_ACTION_BACK) {
+        if (file_view_is_virtual(app)) {
+            if (switch_file_view(app, BROWSER_FILE_VIEW_DIRECTORY) < 0) {
+                return -1;
+            }
+            return render_file_page(app);
+        }
         int result = enter_parent(app);
 
         if (result < 0) {
@@ -525,31 +819,53 @@ int handle_file_touch(struct browser_app *app,
     }
     int width = (int)app->display.variable_info.xres;
     size_t visible = file_page_visible_rows(app);
-    int sort_x = width - UI_MARGIN - FILE_PAGE_HOME_WIDTH -
-                 FILE_PAGE_UP_WIDTH - FILE_PAGE_SORT_WIDTH - 24;
-    int search_x = sort_x - FILE_PAGE_SEARCH_WIDTH - 12;
+    struct file_page_button_layout buttons = file_page_button_layout(width);
 
     if (input->touch == TOUCH_ACTION_TAP &&
         input->y < UI_HEADER_HEIGHT &&
-        width >= 640 && input->x >= search_x &&
-        input->x < search_x + FILE_PAGE_SEARCH_WIDTH) {
+        buttons.show_search_sort && input->x >= buttons.search_x &&
+        input->x < buttons.search_x + FILE_PAGE_SEARCH_WIDTH) {
+        if (file_view_is_virtual(app)) {
+            if (switch_file_view(app, BROWSER_FILE_VIEW_DIRECTORY) < 0) {
+                return -1;
+            }
+            return render_file_page(app);
+        }
         return handle_file_key(app, INPUT_ACTION_SEARCH);
     }
     if (input->touch == TOUCH_ACTION_TAP &&
         input->y < UI_HEADER_HEIGHT &&
-        input->x >= sort_x && input->x < sort_x + FILE_PAGE_SORT_WIDTH) {
-        app->file_sort = file_sort_next(app->file_sort);
-        apply_file_sort(app);
-        app->selected = 0;
-        (void)browser_app_save_config(app);
+        buttons.show_search_sort && input->x >= buttons.sort_x &&
+        input->x < buttons.sort_x + FILE_PAGE_SORT_WIDTH) {
+        return handle_file_key(app, INPUT_ACTION_SORT);
+    }
+    if (input->touch == TOUCH_ACTION_TAP &&
+        input->y < UI_HEADER_HEIGHT && buttons.show_recent_favorite &&
+        input->x >= buttons.recent_x &&
+        input->x < buttons.recent_x + FILE_PAGE_RECENT_WIDTH) {
+        if (switch_file_view(app, BROWSER_FILE_VIEW_RECENT) < 0) return -1;
+        return render_file_page(app);
+    }
+    if (input->touch == TOUCH_ACTION_TAP &&
+        input->y < UI_HEADER_HEIGHT && buttons.show_recent_favorite &&
+        input->x >= buttons.favorite_x &&
+        input->x < buttons.favorite_x + FILE_PAGE_FAVORITE_WIDTH) {
+        if (switch_file_view(app, BROWSER_FILE_VIEW_FAVORITES) < 0) {
+            return -1;
+        }
         return render_file_page(app);
     }
 
     if (input->touch == TOUCH_ACTION_TAP &&
         input->y < UI_HEADER_HEIGHT &&
-        input->x >= width - UI_MARGIN - FILE_PAGE_HOME_WIDTH -
-                    FILE_PAGE_UP_WIDTH - 12 &&
-        input->x < width - UI_MARGIN - FILE_PAGE_HOME_WIDTH - 12) {
+        input->x >= buttons.up_x &&
+        input->x < buttons.up_x + FILE_PAGE_UP_WIDTH) {
+        if (file_view_is_virtual(app)) {
+            if (switch_file_view(app, BROWSER_FILE_VIEW_DIRECTORY) < 0) {
+                return -1;
+            }
+            return render_file_page(app);
+        }
         int result = enter_parent(app);
 
         if (result < 0) {
@@ -560,8 +876,8 @@ int handle_file_touch(struct browser_app *app,
     }
     if (input->touch == TOUCH_ACTION_TAP &&
         input->y < UI_HEADER_HEIGHT &&
-        input->x >= width - UI_MARGIN - FILE_PAGE_HOME_WIDTH &&
-        input->x < width - UI_MARGIN) {
+        input->x >= buttons.home_x &&
+        input->x < buttons.home_x + FILE_PAGE_HOME_WIDTH) {
         return browser_app_return_to_desktop(app);
     }
     if (input->touch == TOUCH_ACTION_TAP &&
