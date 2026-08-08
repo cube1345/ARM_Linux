@@ -1,6 +1,7 @@
 #ifndef BROWSER_CONFIG_H
 #define BROWSER_CONFIG_H
 
+#include "browser_theme.h"
 #include "file_list.h"
 
 #include <limits.h>
@@ -29,6 +30,10 @@ struct browser_config {
     int volume;
     enum file_list_sort file_sort;
     enum browser_playback_mode playback_mode;
+    enum browser_theme ui_theme;
+    char media_root[PATH_MAX];
+    char keyboard_path[PATH_MAX];
+    char touch_path[PATH_MAX];
     char resume_path[PATH_MAX];
     uint64_t resume_position_ms;
     struct browser_path_list recent_files;

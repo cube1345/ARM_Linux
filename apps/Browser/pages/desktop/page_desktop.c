@@ -108,7 +108,7 @@ static void desktop_draw_round_panel(struct bmp_display *display, int x, int y,
                                      uint32_t fill, uint32_t border)
 {
     desktop_draw_round_rect(display, x + 4, y + 6, width, height, radius,
-                            0x081018U);
+                            UI_PANEL_SHADOW);
     desktop_draw_round_rect(display, x, y, width, height, radius, border);
     desktop_draw_round_rect(display, x + 2, y + 2, width - 4, height - 4,
                             radius - 2, fill);
@@ -391,21 +391,21 @@ static void desktop_draw_wallpaper(struct browser_app *app)
     int row;
 
     for (row = 0; row < height; row++) {
-        uint32_t color = desktop_mix_color(0x111827U, 0x132f3bU,
+        uint32_t color = desktop_mix_color(UI_BACKGROUND, UI_SURFACE_ALT,
                                            row * 100 / height);
 
         ui_draw_rect(&app->display, 0, row, width, 1, color);
     }
-    desktop_draw_circle(&app->display, width - 110, 118, 148, 0x183f4dU);
-    desktop_draw_circle(&app->display, 76, height - 150, 120, 0x1c2f45U);
+    desktop_draw_circle(&app->display, width - 110, 118, 148, UI_SELECTED);
+    desktop_draw_circle(&app->display, 76, height - 150, 120, UI_SURFACE);
     ui_draw_rect(&app->display, 0, 0, width, DESKTOP_STATUS_HEIGHT,
-                 0x111b25U);
+                 UI_HEADER);
     ui_draw_rect(&app->display, 0, DESKTOP_STATUS_HEIGHT - 1, width, 1,
-                 0x263745U);
+                 UI_BORDER);
     ui_draw_text(&app->display, &app->font, "Media OS", UI_MARGIN,
-                 (int)app->font.pixel_size + 12, 180, UI_TEXT, 0x111b25U);
+                 (int)app->font.pixel_size + 12, 180, UI_TEXT, UI_HEADER);
     ui_draw_text(&app->display, &app->font, "FB", width - 148,
-                 (int)app->font.pixel_size + 12, 36, UI_MUTED, 0x111b25U);
+                 (int)app->font.pixel_size + 12, 36, UI_MUTED, UI_HEADER);
     ui_draw_rect(&app->display, width - 98, 19, 42, 18, UI_BORDER);
     ui_draw_rect(&app->display, width - 56, 24, 4, 8, UI_BORDER);
     ui_draw_rect(&app->display, width - 94, 23, 28, 10, UI_ACCENT);
@@ -418,11 +418,11 @@ static void desktop_draw_title(struct browser_app *app)
 
     ui_draw_text(&app->display, &app->font, "Embedded Desktop", UI_MARGIN,
                  DESKTOP_TITLE_TOP + (int)app->font.pixel_size,
-                 width - UI_MARGIN * 2, UI_TEXT, 0x13202cU);
+                 width - UI_MARGIN * 2, UI_TEXT, UI_BACKGROUND);
     ui_draw_text(&app->display, &app->font,
                  "Touch an icon to launch an app", UI_MARGIN,
                  DESKTOP_TITLE_TOP + (int)app->font.pixel_size * 2 + 10,
-                 width - UI_MARGIN * 2, UI_MUTED, 0x13202cU);
+                 width - UI_MARGIN * 2, UI_MUTED, UI_BACKGROUND);
 }
 
 /** @brief 绘制一个桌面应用图标。 */
@@ -431,7 +431,7 @@ static void draw_desktop_application(
     const struct desktop_app_operation *operation, size_t index)
 {
     struct desktop_card_bounds bounds;
-    uint32_t label_bg = 0x13202cU;
+    uint32_t label_bg = UI_BACKGROUND;
     int label_y;
 
     desktop_card_bounds_at(app, index, &bounds);
@@ -442,8 +442,8 @@ static void draw_desktop_application(
                                  bounds.icon_size + DESKTOP_HIT_PADDING * 2,
                                  bounds.icon_size + 50,
                                  DESKTOP_ICON_RADIUS + 8,
-                                 0x213848U, UI_SELECTED_BORDER);
-        label_bg = 0x213848U;
+                                 UI_SELECTED, UI_SELECTED_BORDER);
+        label_bg = UI_SELECTED;
     }
     desktop_draw_app_icon(app, operation, &bounds);
     label_y = bounds.icon_y + bounds.icon_size + (int)app->font.pixel_size + 8;
@@ -463,7 +463,7 @@ static void desktop_draw_dock(struct browser_app *app)
 
     desktop_draw_round_panel(&app->display, UI_MARGIN, dock_y,
                              width - UI_MARGIN * 2, DESKTOP_DOCK_HEIGHT,
-                             24, 0x182633U, 0x324557U);
+                             24, UI_HEADER, UI_BORDER);
     if (selected != NULL) {
         int text_y = dock_y + (int)app->font.pixel_size + 18;
 
@@ -471,13 +471,13 @@ static void desktop_draw_dock(struct browser_app *app)
                                 42, 42, 16, selected->color);
         ui_draw_text(&app->display, &app->font, selected->name,
                      UI_MARGIN + 76, text_y,
-                     width - UI_MARGIN * 2 - 96, UI_TEXT, 0x182633U);
+                     width - UI_MARGIN * 2 - 96, UI_TEXT, UI_HEADER);
         ui_draw_text(&app->display, &app->font, selected->summary,
                      UI_MARGIN + 76, text_y + (int)app->font.pixel_size + 10,
-                     width - UI_MARGIN * 2 - 96, UI_MUTED, 0x182633U);
+                     width - UI_MARGIN * 2 - 96, UI_MUTED, UI_HEADER);
     }
     desktop_draw_round_rect(&app->display, width / 2 - 44, height - 10,
-                            88, 4, 2, 0xc9d5ddU);
+                            88, 4, 2, UI_MUTED);
     (void)snprintf(hint, sizeof(hint), "Arrows select  Enter open  Q shutdown");
 }
 

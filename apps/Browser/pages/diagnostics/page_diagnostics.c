@@ -11,6 +11,20 @@
 #define DIAGNOSTICS_ROW_HEIGHT 58
 #define DIAGNOSTICS_ROW_GAP 4
 
+/** @brief 按诊断行选择当前主题的标签颜色。 */
+static uint32_t diagnostics_row_color(size_t row)
+{
+    static const unsigned int roles[] = { 0U, 1U, 2U, 1U, 3U };
+
+    if (row >= sizeof(roles) / sizeof(roles[0])) return UI_MUTED;
+    switch (roles[row]) {
+    case 0U: return UI_ACCENT;
+    case 1U: return UI_ACCENT_2;
+    case 2U: return UI_WARNING;
+    default: return UI_SELECTED_BORDER;
+    }
+}
+
 /**
  * @brief 绘制一条诊断状态。
  * @param app 浏览器上下文。
@@ -67,7 +81,7 @@ int render_diagnostics_page(struct browser_app *app)
             snprintf(value, sizeof(value), "unavailable");
         }
         draw_diagnostics_row(app, (int)index, operation->name, value,
-                             operation->color);
+                             diagnostics_row_color(index));
     }
     browser_ui_draw_footer_hint(&app->display, &app->font,
                                 "Esc or top-left button returns to desktop");

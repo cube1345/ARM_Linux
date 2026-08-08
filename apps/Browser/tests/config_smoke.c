@@ -16,6 +16,13 @@ int main(int argc, char **argv)
     expected.volume = 37;
     expected.file_sort = FILE_LIST_SORT_SIZE;
     expected.playback_mode = BROWSER_PLAYBACK_SHUFFLE;
+    expected.ui_theme = BROWSER_THEME_CONTRAST;
+    snprintf(expected.media_root, sizeof(expected.media_root),
+             "/root/media library");
+    snprintf(expected.keyboard_path, sizeof(expected.keyboard_path),
+             "/dev/input/event0");
+    snprintf(expected.touch_path, sizeof(expected.touch_path),
+             "auto");
     snprintf(expected.resume_path, sizeof(expected.resume_path),
              "/root/media/album/track 01.mp3");
     expected.resume_position_ms = 123456U;
@@ -31,6 +38,10 @@ int main(int argc, char **argv)
         loaded.volume != expected.volume ||
         loaded.file_sort != expected.file_sort ||
         loaded.playback_mode != expected.playback_mode ||
+        loaded.ui_theme != expected.ui_theme ||
+        strcmp(loaded.media_root, expected.media_root) != 0 ||
+        strcmp(loaded.keyboard_path, expected.keyboard_path) != 0 ||
+        strcmp(loaded.touch_path, expected.touch_path) != 0 ||
         strcmp(loaded.resume_path, expected.resume_path) != 0 ||
         loaded.resume_position_ms != expected.resume_position_ms ||
         loaded.recent_files.count != expected.recent_files.count ||

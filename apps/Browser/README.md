@@ -12,7 +12,8 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - GIF 支持动画循环、透明、局部帧、帧延时以及 disposal 0/1/2/3。
 - 图片等比例缩放、居中显示，支持顺时针 90 度旋转、自动播放和
   BMP/JPEG/PNG 下一张图片后台预解码。
-- 使用 FreeType 分页显示 UTF-8 文本，支持中文；Settings 可调整全局字体大小和播放模式。
+- 使用 FreeType 分页显示 UTF-8 文本，支持中文；Settings 可调整全局字体大小、
+  播放模式和 Dark/Light/Contrast UI 主题。
 - 后台播放 PCM WAV 和 MP3，支持暂停、软件音量、进度显示和 seek；MP3 页面读取
   ID3v2.3、ID3v2.4 和 ID3v1 的标题、艺术家与专辑标签，并在正常退出媒体页时
   保存断点位置。
@@ -37,10 +38,12 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
   之间切换，宽屏触摸界面会显示 `RECENT` 和 `FAV` 快捷按钮。
 - 使用 framebuffer 离屏缓冲区完成整帧刷新。
 - 提供统一日志模块，支持通过 `BROWSER_LOG_LEVEL` 控制 ERROR/WARN/INFO/DEBUG。
-- Settings 会持久化字体大小、音量、文件排序、播放模式、最近一次媒体断点、最近打开
-  和收藏夹；默认路径为 `/etc/media-browser.conf`，可用 `BROWSER_CONFIG_PATH`
-  指定可写路径。
-- 采用深色简约 UI：顶栏、文件卡片、彩色类型标签、底部操作提示、按钮和进度条。
+- Settings 会持久化字体大小、音量、文件排序、播放模式、UI 主题、当前媒体根目录、
+  输入设备参数、最近一次媒体断点、最近打开和收藏夹；默认路径为
+  `/etc/media-browser.conf`，可用 `BROWSER_CONFIG_PATH` 指定可写路径。CLI 格式不变，
+  每次启动传入的媒体目录和输入参数优先，并更新配置中的记录。
+- 采用简约 UI：提供 Dark、Light、Contrast 三套 palette，统一应用于桌面、顶栏、
+  文件卡片、彩色类型标签、底部操作提示、按钮和进度条。
 
 ## 架构
 
@@ -301,6 +304,7 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 | Settings | `Left` / `Right` 或 `-` / `+` | 音量降低 / 增加 5% |
 | Settings | `Up` / `Down` | 字体增大 / 缩小 |
 | Settings | `R` | 循环切换单次、单曲循环、列表循环和随机播放 |
+| Settings | `Tab` | 循环切换 Dark、Light、Contrast UI 主题 |
 | Tools | `Up` / `Down` | 选择外部命令 |
 | Tools | `Enter` | 运行选中命令并显示输出 |
 | Tools | `Esc` / `Backspace` | 返回桌面 |
@@ -327,6 +331,7 @@ strace -f -o /tmp/browser.strace /usr/bin/media-browser \
 | Settings | 点击音量条或 `- 5` / `+ 5` | 设置软件音量 |
 | Settings | 点击 `A -` / `A +` | 缩小 / 增大全局字体 |
 | Settings | 点击 `CHANGE` | 循环切换播放模式 |
+| Settings | 点击 `CHANGE THEME` | 循环切换 UI 主题 |
 | Tools | 点击命令条目 | 运行选中命令并显示输出 |
 | 媒体页面 | 左上角 `<` | 返回文件列表 |
 | Player 媒体 | 顶部 `PLAY/PAUSE` | 暂停 / 继续 |

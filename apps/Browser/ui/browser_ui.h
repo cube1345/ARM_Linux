@@ -1,6 +1,7 @@
 #ifndef BROWSER_UI_H
 #define BROWSER_UI_H
 
+#include "browser_theme.h"
 #include "bmp_display.h"
 #include "font_renderer.h"
 #include "input_keyboard.h"
@@ -8,20 +9,54 @@
 #include <stddef.h>
 #include <stdint.h>
 
-#define UI_BACKGROUND 0x0f141aU
-#define UI_HEADER 0x18212bU
-#define UI_SURFACE 0x17202aU
-#define UI_SURFACE_ALT 0x202b36U
-#define UI_PANEL_SHADOW 0x0a0d11U
-#define UI_BORDER 0x2b3a46U
-#define UI_SELECTED 0x254f5aU
-#define UI_SELECTED_BORDER 0x6ee7c8U
-#define UI_TEXT 0xf2f5f7U
-#define UI_MUTED 0xaab5bdU
-#define UI_ACCENT 0x4fc3a1U
-#define UI_ACCENT_2 0x7aa2ffU
-#define UI_WARNING 0xffc857U
-#define UI_TRACK 0x3c464eU
+/** @brief 一套完整的 Browser UI RGB888 颜色。 */
+struct browser_ui_palette {
+    uint32_t background;
+    uint32_t header;
+    uint32_t surface;
+    uint32_t surface_alt;
+    uint32_t panel_shadow;
+    uint32_t border;
+    uint32_t selected;
+    uint32_t selected_border;
+    uint32_t text;
+    uint32_t muted;
+    uint32_t accent;
+    uint32_t accent_2;
+    uint32_t warning;
+    uint32_t track;
+};
+
+/** @brief 获取当前 UI palette。 */
+const struct browser_ui_palette *browser_ui_current_palette(void);
+
+/**
+ * @brief 切换内置 UI 主题。
+ * @param theme 主题枚举，非法值回退到 Dark。
+ */
+void browser_ui_set_theme(enum browser_theme theme);
+
+/**
+ * @brief 获取主题显示名称。
+ * @param theme 主题枚举。
+ * @return 静态主题名称。
+ */
+const char *browser_ui_theme_name(enum browser_theme theme);
+
+#define UI_BACKGROUND (browser_ui_current_palette()->background)
+#define UI_HEADER (browser_ui_current_palette()->header)
+#define UI_SURFACE (browser_ui_current_palette()->surface)
+#define UI_SURFACE_ALT (browser_ui_current_palette()->surface_alt)
+#define UI_PANEL_SHADOW (browser_ui_current_palette()->panel_shadow)
+#define UI_BORDER (browser_ui_current_palette()->border)
+#define UI_SELECTED (browser_ui_current_palette()->selected)
+#define UI_SELECTED_BORDER (browser_ui_current_palette()->selected_border)
+#define UI_TEXT (browser_ui_current_palette()->text)
+#define UI_MUTED (browser_ui_current_palette()->muted)
+#define UI_ACCENT (browser_ui_current_palette()->accent)
+#define UI_ACCENT_2 (browser_ui_current_palette()->accent_2)
+#define UI_WARNING (browser_ui_current_palette()->warning)
+#define UI_TRACK (browser_ui_current_palette()->track)
 #define UI_MARGIN 20
 #define UI_HEADER_HEIGHT 64
 #define UI_FOOTER_HEIGHT 36

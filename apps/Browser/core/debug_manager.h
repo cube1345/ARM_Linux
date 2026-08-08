@@ -9,7 +9,6 @@ struct browser_app;
 /** @brief 诊断状态 operation 回调集合。 */
 struct debug_operation {
     const char *name;
-    uint32_t color;
     int (*status)(const struct browser_app *app, char *output,
                   size_t output_size);
     struct debug_operation *next;

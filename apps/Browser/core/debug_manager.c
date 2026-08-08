@@ -1,7 +1,6 @@
 #include "debug_manager.h"
 
 #include "browser_app.h"
-#include "browser_ui.h"
 #include "display_manager.h"
 #include "font_manager.h"
 #include "input_keyboard.h"
@@ -129,23 +128,18 @@ int debug_manager_register(struct debug_manager *manager,
 int debug_manager_register_builtin(struct debug_manager *manager)
 {
     display_operation.name = "DISPLAY";
-    display_operation.color = UI_ACCENT;
     display_operation.status = debug_display_status;
     display_operation.next = NULL;
     input_operation.name = "INPUT";
-    input_operation.color = UI_ACCENT_2;
     input_operation.status = debug_input_status;
     input_operation.next = NULL;
     audio_operation.name = "AUDIO";
-    audio_operation.color = UI_WARNING;
     audio_operation.status = debug_audio_status;
     audio_operation.next = NULL;
     ffmpeg_operation.name = "FFMPEG";
-    ffmpeg_operation.color = UI_ACCENT_2;
     ffmpeg_operation.status = debug_ffmpeg_status;
     ffmpeg_operation.next = NULL;
     tools_operation.name = "TOOLS";
-    tools_operation.color = UI_SELECTED_BORDER;
     tools_operation.status = debug_tools_status;
     tools_operation.next = NULL;
     return debug_manager_register(manager, &display_operation) < 0 ||

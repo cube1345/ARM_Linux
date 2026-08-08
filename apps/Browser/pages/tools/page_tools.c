@@ -23,45 +23,38 @@ struct tool_command {
     const char *name;
     const char *summary;
     const char *command;
-    uint32_t color;
 };
 
 static const struct tool_command tool_commands[] = {
     {
         "Audio devices",
         "List ALSA playback devices",
-        "/usr/bin/aplay -l 2>&1",
-        UI_ACCENT_2
+        "/usr/bin/aplay -l 2>&1"
     },
     {
         "Mixer state",
         "Read current ALSA mixer",
-        "/usr/bin/amixer 2>&1",
-        UI_ACCENT
+        "/usr/bin/amixer 2>&1"
     },
     {
         "MP3 decoder",
         "Show mpg123 version",
-        "/usr/bin/mpg123 --version 2>&1",
-        UI_WARNING
+        "/usr/bin/mpg123 --version 2>&1"
     },
     {
         "Trace tool",
         "Show strace version",
-        "/usr/bin/strace -V 2>&1",
-        UI_SELECTED_BORDER
+        "/usr/bin/strace -V 2>&1"
     },
     {
         "Framebuffer shot",
         "Capture /dev/fb0 to /tmp",
-        "/usr/bin/fbgrab /tmp/browser-tools-shot.png 2>&1",
-        0xe58ca8U
+        "/usr/bin/fbgrab /tmp/browser-tools-shot.png 2>&1"
     },
     {
         "Input query",
         "Query keyboard ENTER key",
-        "/usr/bin/evtest --query /dev/input/event0 EV_KEY KEY_ENTER 2>&1",
-        0x72d572U
+        "/usr/bin/evtest --query /dev/input/event0 EV_KEY KEY_ENTER 2>&1"
     }
 };
 
@@ -69,6 +62,19 @@ static const struct tool_command tool_commands[] = {
 static size_t tools_count(void)
 {
     return sizeof(tool_commands) / sizeof(tool_commands[0]);
+}
+
+/** @brief 按工具索引选择当前主题的标签颜色。 */
+static uint32_t tools_tag_color(size_t index)
+{
+    switch (index) {
+    case 0U: return UI_ACCENT_2;
+    case 1U: return UI_ACCENT;
+    case 2U: return UI_WARNING;
+    case 3U: return UI_SELECTED_BORDER;
+    case 4U: return 0xe58ca8U;
+    default: return 0x72d572U;
+    }
 }
 
 /** @brief 返回页面内容宽度。 */
@@ -96,14 +102,15 @@ static void draw_tool_row(struct browser_app *app, size_t index)
     uint32_t border = index == app->tool_selected ? UI_SELECTED_BORDER :
                       UI_BORDER;
     const struct tool_command *tool = &tool_commands[index];
+    uint32_t tag_color = tools_tag_color(index);
 
     browser_ui_draw_panel(&app->display, UI_MARGIN, y, width,
                           TOOLS_ROW_HEIGHT, background, border);
     ui_draw_rect(&app->display, UI_MARGIN + 14, y + 15, 96,
-                 TOOLS_ROW_HEIGHT - 30, tool->color);
+                 TOOLS_ROW_HEIGHT - 30, tag_color);
     ui_draw_text(&app->display, &app->font, "RUN", UI_MARGIN + 28,
                  y + 15 + (int)app->font.pixel_size + 4, 68,
-                 UI_BACKGROUND, tool->color);
+                 UI_BACKGROUND, tag_color);
     ui_draw_text(&app->display, &app->font, tool->name, UI_MARGIN + 128,
                  y + (int)app->font.pixel_size + 8, width - 256,
                  UI_TEXT, background);

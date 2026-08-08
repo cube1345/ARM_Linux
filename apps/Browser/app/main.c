@@ -73,6 +73,26 @@ static void print_usage(const char *program_name)
 }
 
 /**
+ * @brief 将运行参数复制到可持久化配置字段。
+ * @param output 输出缓冲区。
+ * @param output_size 输出缓冲区大小。
+ * @param value 参数值，NULL 记录为空字符串。
+ * @return 成功返回 0，参数过长返回 -1。
+ */
+static int copy_runtime_setting(char *output, size_t output_size,
+                                const char *value)
+{
+    int written = snprintf(output, output_size, "%s",
+                           value == NULL ? "" : value);
+
+    if (written < 0 || (size_t)written >= output_size) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    return 0;
+}
+
+/**
  * @brief 获取单调时钟毫秒值。
  * @return 单调时钟毫秒值。
  */
@@ -255,8 +275,16 @@ int main(int argc, char *argv[])
     }
     app.file_sort = app.config.file_sort;
     app.playback_mode = app.config.playback_mode;
+    browser_ui_set_theme(app.config.ui_theme);
     app.alsa_device = argc >= 6 ? argv[5] : "default";
     touch_path = argc >= 7 ? argv[6] : NULL;
+    if (copy_runtime_setting(app.config.keyboard_path,
+                             sizeof(app.config.keyboard_path), argv[2]) < 0 ||
+        copy_runtime_setting(app.config.touch_path,
+                             sizeof(app.config.touch_path), touch_path) < 0) {
+        browser_log_errno(BROWSER_LOG_ERROR, "input device path");
+        return EXIT_FAILURE;
+    }
     display_manager_init(&app.display_devices);
     font_manager_init(&app.fonts);
     debug_manager_init(&app.debug);
@@ -268,6 +296,11 @@ int main(int argc, char *argv[])
     if (realpath(argv[3], app.root) == NULL ||
         file_list_scan(app.root, &app.files) < 0) {
         browser_log_errno(BROWSER_LOG_ERROR, argv[3]);
+        return EXIT_FAILURE;
+    }
+    if (copy_runtime_setting(app.config.media_root,
+                             sizeof(app.config.media_root), app.root) < 0) {
+        browser_log_errno(BROWSER_LOG_ERROR, "media root");
         return EXIT_FAILURE;
     }
     if (display_manager_open(&app.display_devices, &app.display,

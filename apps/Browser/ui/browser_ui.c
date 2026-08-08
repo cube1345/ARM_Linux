@@ -5,6 +5,52 @@
 #include <stdio.h>
 #include <stdlib.h>
 
+static const struct browser_ui_palette browser_ui_palettes[
+    BROWSER_THEME_COUNT] = {
+    {
+        0x0f141aU, 0x18212bU, 0x17202aU, 0x202b36U, 0x0a0d11U,
+        0x2b3a46U, 0x254f5aU, 0x6ee7c8U, 0xf2f5f7U, 0xaab5bdU,
+        0x4fc3a1U, 0x7aa2ffU, 0xffc857U, 0x3c464eU
+    },
+    {
+        0xf0f3f5U, 0xdce4eaU, 0xffffffU, 0xe7ecefU, 0xc9d1d7U,
+        0xaebbc4U, 0xcfe8e1U, 0x168b72U, 0x182026U, 0x5c6b75U,
+        0x168b72U, 0x356bc4U, 0xb46e00U, 0xb9c3cbU
+    },
+    {
+        0x000000U, 0x151515U, 0x202020U, 0x2b2b2bU, 0x000000U,
+        0xffffffU, 0x073b4cU, 0x00e5ffU, 0xffffffU, 0xd9d9d9U,
+        0xffd400U, 0x00e5ffU, 0xff8c00U, 0x666666U
+    }
+};
+
+static enum browser_theme browser_ui_active_theme = BROWSER_THEME_DARK;
+
+/** @brief 获取当前 UI palette。 */
+const struct browser_ui_palette *browser_ui_current_palette(void)
+{
+    return &browser_ui_palettes[browser_ui_active_theme];
+}
+
+/** @brief 切换内置 UI 主题。 */
+void browser_ui_set_theme(enum browser_theme theme)
+{
+    browser_ui_active_theme =
+        theme >= BROWSER_THEME_DARK && theme < BROWSER_THEME_COUNT ?
+        theme : BROWSER_THEME_DARK;
+}
+
+/** @brief 获取主题显示名称。 */
+const char *browser_ui_theme_name(enum browser_theme theme)
+{
+    switch (theme) {
+    case BROWSER_THEME_LIGHT: return "Light";
+    case BROWSER_THEME_CONTRAST: return "Contrast";
+    case BROWSER_THEME_DARK:
+    default: return "Dark";
+    }
+}
+
 /**
  * @brief 将数值限制到闭区间。
  * @param value 输入值。

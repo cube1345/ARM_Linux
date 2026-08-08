@@ -9,7 +9,7 @@
 #include <stdio.h>
 
 #define SETTINGS_PANEL_TOP (UI_HEADER_HEIGHT + 30)
-#define SETTINGS_PANEL_HEIGHT 390
+#define SETTINGS_PANEL_HEIGHT 470
 #define SETTINGS_BUTTON_WIDTH 118
 #define SETTINGS_BUTTON_HEIGHT 48
 #define SETTINGS_VOLUME_LABEL_Y (SETTINGS_PANEL_TOP + 52)
@@ -19,7 +19,11 @@
 #define SETTINGS_FONT_BUTTON_Y (SETTINGS_PANEL_TOP + 220)
 #define SETTINGS_MODE_LABEL_Y (SETTINGS_PANEL_TOP + 280)
 #define SETTINGS_MODE_BUTTON_Y (SETTINGS_PANEL_TOP + 308)
-#define SETTINGS_SAMPLE_Y (SETTINGS_PANEL_TOP + 360)
+#define SETTINGS_THEME_LABEL_Y (SETTINGS_PANEL_TOP + 372)
+#define SETTINGS_THEME_BUTTON_Y (SETTINGS_PANEL_TOP + 400)
+#define SETTINGS_DEVICE_PANEL_Y \
+    (SETTINGS_PANEL_TOP + SETTINGS_PANEL_HEIGHT + 12)
+#define SETTINGS_DEVICE_PANEL_HEIGHT 100
 
 /** @brief 获取播放模式显示名称。 */
 static const char *settings_playback_mode_name(
@@ -41,6 +45,16 @@ static void settings_cycle_playback_mode(struct browser_app *app)
                          BROWSER_PLAYBACK_ONCE :
                          (enum browser_playback_mode)((int)app->playback_mode +
                                                       1);
+}
+
+/** @brief 循环切换内置 UI 主题并立即应用。 */
+static void settings_cycle_theme(struct browser_app *app)
+{
+    app->config.ui_theme =
+        app->config.ui_theme + 1 >= BROWSER_THEME_COUNT ?
+        BROWSER_THEME_DARK :
+        (enum browser_theme)((int)app->config.ui_theme + 1);
+    browser_ui_set_theme(app->config.ui_theme);
 }
 
 /**
@@ -69,7 +83,9 @@ int render_settings_page(struct browser_app *app)
     char volume[48];
     char font_size[64];
     char playback_mode[64];
-    char device[180];
+    char theme[64];
+    char media_root[192];
+    char input_devices[256];
 
     audio_player_get_status(&app->audio, &status);
     snprintf(volume, sizeof(volume), "Desktop volume  %d%%", status.volume);
@@ -77,7 +93,16 @@ int render_settings_page(struct browser_app *app)
              app->font.pixel_size);
     snprintf(playback_mode, sizeof(playback_mode), "Playback  %s",
              settings_playback_mode_name(app->playback_mode));
-    snprintf(device, sizeof(device), "ALSA output: %s", app->alsa_device);
+    snprintf(theme, sizeof(theme), "Theme  %s",
+             browser_ui_theme_name(app->config.ui_theme));
+    snprintf(media_root, sizeof(media_root), "Media root: %.160s",
+             app->config.media_root);
+    snprintf(input_devices, sizeof(input_devices),
+             "Input: %.70s | %.70s | ALSA %.70s",
+             app->config.keyboard_path,
+             app->config.touch_path[0] == '\0' ? "(none)" :
+             app->config.touch_path,
+             app->alsa_device);
     bmp_display_clear(&app->display, (uint8_t)(UI_BACKGROUND >> 16),
                       (uint8_t)(UI_BACKGROUND >> 8),
                       (uint8_t)UI_BACKGROUND);
@@ -121,20 +146,31 @@ int render_settings_page(struct browser_app *app)
     browser_ui_draw_button(&app->display, &app->font, button_x,
                            SETTINGS_MODE_BUTTON_Y, SETTINGS_BUTTON_WIDTH * 2 + 20,
                            SETTINGS_BUTTON_HEIGHT, "CHANGE", UI_HEADER);
-    ui_draw_text(&app->display, &app->font,
-                 "Sample: embedded Linux media desktop",
-                 UI_MARGIN + 24, SETTINGS_SAMPLE_Y,
-                 panel_width - 48, UI_MUTED, UI_SURFACE);
-    browser_ui_draw_panel(&app->display, UI_MARGIN,
-                          SETTINGS_PANEL_TOP + SETTINGS_PANEL_HEIGHT + 12,
-                          panel_width, 72, UI_SURFACE_ALT, UI_BORDER);
-    ui_draw_text(&app->display, &app->font, device, UI_MARGIN + 24,
-                 SETTINGS_PANEL_TOP + SETTINGS_PANEL_HEIGHT +
-                 (int)app->font.pixel_size + 30,
-                 panel_width - 48, UI_MUTED, UI_SURFACE_ALT);
+    ui_draw_text(&app->display, &app->font, theme, UI_MARGIN + 24,
+                 SETTINGS_THEME_LABEL_Y, panel_width - 48,
+                 UI_TEXT, UI_SURFACE);
+    browser_ui_draw_button(&app->display, &app->font, button_x,
+                           SETTINGS_THEME_BUTTON_Y,
+                           SETTINGS_BUTTON_WIDTH * 2 + 20,
+                           SETTINGS_BUTTON_HEIGHT, "CHANGE THEME", UI_HEADER);
+    if (SETTINGS_DEVICE_PANEL_Y + SETTINGS_DEVICE_PANEL_HEIGHT <
+        (int)app->display.variable_info.yres - UI_FOOTER_HEIGHT) {
+        browser_ui_draw_panel(&app->display, UI_MARGIN,
+                              SETTINGS_DEVICE_PANEL_Y, panel_width,
+                              SETTINGS_DEVICE_PANEL_HEIGHT,
+                              UI_SURFACE_ALT, UI_BORDER);
+        ui_draw_text(&app->display, &app->font, media_root, UI_MARGIN + 24,
+                     SETTINGS_DEVICE_PANEL_Y +
+                     (int)app->font.pixel_size + 14,
+                     panel_width - 48, UI_MUTED, UI_SURFACE_ALT);
+        ui_draw_text(&app->display, &app->font, input_devices,
+                     UI_MARGIN + 24, SETTINGS_DEVICE_PANEL_Y +
+                     (int)app->font.pixel_size * 2 + 18,
+                     panel_width - 48, UI_MUTED, UI_SURFACE_ALT);
+    }
     browser_ui_draw_footer_hint(
         &app->display, &app->font,
-        "Left/Right volume  Up/Down font  R changes playback  Esc returns");
+        "Left/Right volume  Up/Down font  R playback  Tab theme  Esc returns");
     return bmp_display_flush(&app->display);
 }
 
@@ -167,6 +203,8 @@ int handle_settings_key(struct browser_app *app, enum input_action action)
         }
     } else if (action == INPUT_ACTION_ROTATE) {
         settings_cycle_playback_mode(app);
+    } else if (action == INPUT_ACTION_VIEW) {
+        settings_cycle_theme(app);
     } else {
         return 0;
     }
@@ -219,6 +257,12 @@ int handle_settings_touch(struct browser_app *app,
                input->x >= button_x &&
                input->x <= button_x + SETTINGS_BUTTON_WIDTH * 2 + 20) {
         settings_cycle_playback_mode(app);
+    } else if (input->y >= SETTINGS_THEME_BUTTON_Y &&
+               input->y <= SETTINGS_THEME_BUTTON_Y +
+               SETTINGS_BUTTON_HEIGHT &&
+               input->x >= button_x &&
+               input->x <= button_x + SETTINGS_BUTTON_WIDTH * 2 + 20) {
+        settings_cycle_theme(app);
     } else if (input->y >= SETTINGS_FONT_BUTTON_Y &&
                input->y <= SETTINGS_FONT_BUTTON_Y +
                SETTINGS_BUTTON_HEIGHT) {

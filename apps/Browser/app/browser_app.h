@@ -217,7 +217,7 @@ int browser_app_set_font_size(struct browser_app *app, uint32_t pixel_size);
 int browser_app_adjust_font_size(struct browser_app *app, int delta);
 
 /**
- * @brief 保存当前音量、字体和文件排序设置。
+ * @brief 保存当前运行状态与全部可持久化用户设置。
  * @param app 浏览器上下文。
  * @return 成功返回 0，失败返回 -1。
  */
