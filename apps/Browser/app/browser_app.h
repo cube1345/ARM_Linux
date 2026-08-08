@@ -48,7 +48,8 @@ enum browser_page {
     BROWSER_PAGE_VIDEO,
     BROWSER_PAGE_DIAGNOSTICS,
     BROWSER_PAGE_TOOLS,
-    BROWSER_PAGE_SETTINGS
+    BROWSER_PAGE_SETTINGS,
+    BROWSER_PAGE_PLUGIN_BASE = 1000
 };
 
 /** @brief 文件页当前显示的数据来源。 */
@@ -130,7 +131,8 @@ struct browser_app {
 static inline int browser_file_type_is_image(enum file_type type)
 {
     return type == FILE_TYPE_BMP || type == FILE_TYPE_JPEG ||
-           type == FILE_TYPE_PNG || type == FILE_TYPE_GIF;
+           type == FILE_TYPE_PNG || type == FILE_TYPE_GIF ||
+           type == FILE_TYPE_PLUGIN_IMAGE;
 }
 
 /**
@@ -143,7 +145,7 @@ static inline int browser_file_type_is_audio(enum file_type type)
     return type == FILE_TYPE_WAV || type == FILE_TYPE_MP3 ||
            type == FILE_TYPE_AAC || type == FILE_TYPE_M4A ||
            type == FILE_TYPE_FLAC || type == FILE_TYPE_OGG ||
-           type == FILE_TYPE_OPUS;
+           type == FILE_TYPE_OPUS || type == FILE_TYPE_PLUGIN_AUDIO;
 }
 
 /**

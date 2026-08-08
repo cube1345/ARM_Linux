@@ -629,7 +629,8 @@ int open_selected(struct browser_app *app)
         return render_text_page(app);
     }
     if (browser_file_type_is_audio(type)) {
-        if (type != FILE_TYPE_WAV && type != FILE_TYPE_MP3) {
+        if (type != FILE_TYPE_WAV && type != FILE_TYPE_MP3 &&
+            type != FILE_TYPE_PLUGIN_AUDIO) {
             if (media_player_start(&app->media, app->current_path,
                                    app->alsa_device) < 0) {
                 return -1;

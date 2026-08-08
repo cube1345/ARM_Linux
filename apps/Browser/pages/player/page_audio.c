@@ -21,7 +21,8 @@
 /** @brief 判断文件类型是否属于 WAV/MP3 音频队列。 */
 static int audio_entry_supported(enum file_type type)
 {
-    return type == FILE_TYPE_WAV || type == FILE_TYPE_MP3;
+    return type == FILE_TYPE_WAV || type == FILE_TYPE_MP3 ||
+           type == FILE_TYPE_PLUGIN_AUDIO;
 }
 
 /**
@@ -147,8 +148,7 @@ static int find_adjacent_audio(const struct browser_app *app, int direction)
         for (offset = 0; offset < count; offset++) {
             index = (candidate + offset) % count;
             if (index != app->selected &&
-                (app->files.entries[index].type == FILE_TYPE_WAV ||
-                 app->files.entries[index].type == FILE_TYPE_MP3)) {
+                audio_entry_supported(app->files.entries[index].type)) {
                 return (int)index;
             }
         }
@@ -164,8 +164,7 @@ static int find_adjacent_audio(const struct browser_app *app, int direction)
                 offset > app->selected) return -1;
             index = (app->selected + count - offset) % count;
         }
-        if (app->files.entries[index].type == FILE_TYPE_WAV ||
-            app->files.entries[index].type == FILE_TYPE_MP3) {
+        if (audio_entry_supported(app->files.entries[index].type)) {
             return (int)index;
         }
     }

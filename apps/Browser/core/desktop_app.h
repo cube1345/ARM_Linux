@@ -15,7 +15,8 @@ enum desktop_app_id {
     DESKTOP_APP_READER,
     DESKTOP_APP_DIAGNOSTICS,
     DESKTOP_APP_TOOLS,
-    DESKTOP_APP_SETTINGS
+    DESKTOP_APP_SETTINGS,
+    DESKTOP_APP_PLUGIN_BASE = 1000
 };
 
 /** @brief 桌面应用 operation。 */

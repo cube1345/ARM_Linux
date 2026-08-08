@@ -18,6 +18,7 @@
 #include "page_file.h"
 #include "page_image.h"
 #include "page_video.h"
+#include "plugin_manager.h"
 #include "text_reader.h"
 #include "ui_draw.h"
 
@@ -253,7 +254,15 @@ int main(int argc, char *argv[])
 {
     struct browser_app app;
     struct page_manager pages;
+    struct browser_plugin_manager plugins;
+    struct browser_plugin_host plugin_host;
     const char *touch_path;
+    const char *plugin_directory;
+    int plugins_ready = 0;
+    int display_opened = 0;
+    int font_opened = 0;
+    int input_opened = 0;
+    int runtime_started = 0;
     int result = -1;
 
     browser_log_init_from_env();
@@ -293,38 +302,13 @@ int main(int argc, char *argv[])
         debug_manager_register_builtin(&app.debug) < 0) {
         return EXIT_FAILURE;
     }
-    if (realpath(argv[3], app.root) == NULL ||
-        file_list_scan(app.root, &app.files) < 0) {
-        browser_log_errno(BROWSER_LOG_ERROR, argv[3]);
-        return EXIT_FAILURE;
-    }
-    if (copy_runtime_setting(app.config.media_root,
-                             sizeof(app.config.media_root), app.root) < 0) {
-        browser_log_errno(BROWSER_LOG_ERROR, "media root");
-        return EXIT_FAILURE;
-    }
-    if (display_manager_open(&app.display_devices, &app.display,
-                             argv[1]) < 0) {
-        return EXIT_FAILURE;
-    }
-    if (font_manager_open(&app.fonts, &app.font, argv[4],
-                          app.config.font_size) < 0) {
-        goto cleanup_display;
-    }
-    if (input_manager_open(&app.input, argv[2], touch_path,
-                           (int)app.display.variable_info.xres,
-                           (int)app.display.variable_info.yres) < 0) {
-        goto cleanup_font;
-    }
     animation_decoder_manager_init(&app.animations);
-    if (animation_decoder_register_builtin(&app.animations) < 0) {
-        goto cleanup_input;
-    }
-    if (image_decoder_prepare() < 0) {
-        goto cleanup_input;
+    if (animation_decoder_register_builtin(&app.animations) < 0 ||
+        image_decoder_prepare() < 0) {
+        return EXIT_FAILURE;
     }
     if (audio_player_init(&app.audio) < 0) {
-        goto cleanup_input;
+        return EXIT_FAILURE;
     }
     if (media_player_init(&app.media) < 0) {
         goto cleanup_audio_player;
@@ -335,13 +319,58 @@ int main(int argc, char *argv[])
         goto cleanup_media_player;
     }
     page_manager_init(&pages);
-    if (page_manager_register_builtin(&pages) < 0) {
+    if (page_manager_register_builtin(&pages) < 0 ||
+        image_decoder_default_manager() == NULL) {
         goto cleanup_media_player;
     }
+    browser_plugin_manager_init(&plugins);
+    plugins_ready = 1;
+    browser_plugin_host_init(&plugin_host,
+                             image_decoder_default_manager(),
+                             &app.audio.backends, &pages, &app.desktop_apps,
+                             &app.display_devices);
+    plugin_directory = getenv("BROWSER_PLUGIN_DIR");
+    if (plugin_directory == NULL || plugin_directory[0] == '\0') {
+        plugin_directory = "/usr/lib/media-browser/plugins";
+    }
+    if (strcmp(plugin_directory, "-") != 0 &&
+        browser_plugin_manager_load(&plugins, plugin_directory,
+                                    &plugin_host) < 0) {
+        goto cleanup_media_player;
+    }
+    if (realpath(argv[3], app.root) == NULL ||
+        file_list_scan(app.root, &app.files) < 0) {
+        browser_log_errno(BROWSER_LOG_ERROR, argv[3]);
+        goto cleanup_media_player;
+    }
+    if (copy_runtime_setting(app.config.media_root,
+                             sizeof(app.config.media_root), app.root) < 0) {
+        browser_log_errno(BROWSER_LOG_ERROR, "media root");
+        goto cleanup_media_player;
+    }
+    if (display_manager_open(&app.display_devices, &app.display,
+                             argv[1]) < 0) {
+        goto cleanup_media_player;
+    }
+    display_opened = 1;
+    if (font_manager_open(&app.fonts, &app.font, argv[4],
+                          app.config.font_size) < 0) {
+        goto cleanup_media_player;
+    }
+    font_opened = 1;
+    if (input_manager_open(&app.input, argv[2], touch_path,
+                           (int)app.display.variable_info.xres,
+                           (int)app.display.variable_info.yres) < 0) {
+        goto cleanup_media_player;
+    }
+    input_opened = 1;
+    runtime_started = 1;
     result = run_browser(&pages, &app);
 cleanup_media_player:
-    browser_app_remember_playback(&app);
-    (void)browser_app_save_config(&app);
+    if (runtime_started) {
+        browser_app_remember_playback(&app);
+        (void)browser_app_save_config(&app);
+    }
     gallery_cache_clear(&app);
     close_image(&app);
     text_reader_close(&app.text);
@@ -350,11 +379,17 @@ cleanup_media_player:
     media_player_destroy(&app.media);
 cleanup_audio_player:
     audio_player_destroy(&app.audio);
-cleanup_input:
-    input_manager_close(&app.input);
-cleanup_font:
-    font_manager_close(&app.fonts, &app.font);
-cleanup_display:
-    display_manager_close(&app.display_devices, &app.display);
+    if (input_opened) {
+        input_manager_close(&app.input);
+    }
+    if (font_opened) {
+        font_manager_close(&app.fonts, &app.font);
+    }
+    if (display_opened) {
+        display_manager_close(&app.display_devices, &app.display);
+    }
+    if (plugins_ready) {
+        browser_plugin_manager_destroy(&plugins);
+    }
     return result == 0 ? EXIT_SUCCESS : EXIT_FAILURE;
 }

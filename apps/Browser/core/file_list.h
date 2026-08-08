@@ -30,6 +30,8 @@ enum file_type {
     FILE_TYPE_FLAC,
     FILE_TYPE_OGG,
     FILE_TYPE_OPUS,
+    FILE_TYPE_PLUGIN_IMAGE,
+    FILE_TYPE_PLUGIN_AUDIO,
     FILE_TYPE_UNKNOWN
 };
 
@@ -127,6 +129,17 @@ int file_list_path(const struct file_list *list, size_t index,
  * @return 浏览器文件类型。
  */
 enum file_type file_list_detect_type(const char *name);
+
+/**
+ * @brief 注册插件媒体扩展名。
+ * @param extension 包含前导点的扩展名，例如 ".webp"。
+ * @param type FILE_TYPE_PLUGIN_IMAGE 或 FILE_TYPE_PLUGIN_AUDIO。
+ * @return 成功返回 0，参数非法或扩展名冲突返回 -1。
+ */
+int file_list_register_extension(const char *extension, enum file_type type);
+
+/** @brief 清空所有运行时插件扩展名。 */
+void file_list_clear_registered_extensions(void);
 
 /**
  * @brief 获取文件类型的可读名称。

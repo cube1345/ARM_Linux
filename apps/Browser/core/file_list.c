@@ -2,6 +2,7 @@
 
 #include "browser_log.h"
 
+#include <ctype.h>
 #include <dirent.h>
 #include <errno.h>
 #include <stdio.h>
@@ -10,13 +11,25 @@
 #include <strings.h>
 #include <sys/stat.h>
 
+#define FILE_EXTENSION_MAX_COUNT 32U
+#define FILE_EXTENSION_MAX_LENGTH 15U
+
+struct file_extension_registration {
+    char extension[FILE_EXTENSION_MAX_LENGTH + 1U];
+    enum file_type type;
+};
+
+static struct file_extension_registration registered_extensions[
+    FILE_EXTENSION_MAX_COUNT];
+static size_t registered_extension_count;
+
 /**
  * @brief 根据扩展名识别普通文件类型。
  *
  * @param name 文件名。
  * @return 识别出的文件类型。
  */
-enum file_type file_list_detect_type(const char *name)
+static enum file_type file_list_detect_builtin_type(const char *name)
 {
     const char *extension = strrchr(name, '.');
 
@@ -81,6 +94,86 @@ enum file_type file_list_detect_type(const char *name)
     return FILE_TYPE_UNKNOWN;
 }
 
+/** @brief 根据内置表和插件注册表识别文件类型。 */
+enum file_type file_list_detect_type(const char *name)
+{
+    enum file_type type = file_list_detect_builtin_type(name);
+    const char *extension;
+    size_t index;
+
+    if (type != FILE_TYPE_UNKNOWN || name == NULL) {
+        return type;
+    }
+    extension = strrchr(name, '.');
+    if (extension == NULL) {
+        return FILE_TYPE_UNKNOWN;
+    }
+    for (index = 0; index < registered_extension_count; index++) {
+        if (strcasecmp(extension,
+                       registered_extensions[index].extension) == 0) {
+            return registered_extensions[index].type;
+        }
+    }
+    return FILE_TYPE_UNKNOWN;
+}
+
+/** @brief 注册插件媒体扩展名。 */
+int file_list_register_extension(const char *extension, enum file_type type)
+{
+    size_t length;
+    size_t index;
+
+    if (extension == NULL || extension[0] != '.' ||
+        (type != FILE_TYPE_PLUGIN_IMAGE &&
+         type != FILE_TYPE_PLUGIN_AUDIO)) {
+        errno = EINVAL;
+        return -1;
+    }
+    length = strlen(extension);
+    if (length < 2U || length > FILE_EXTENSION_MAX_LENGTH) {
+        errno = EINVAL;
+        return -1;
+    }
+    for (index = 1; index < length; index++) {
+        unsigned char character = (unsigned char)extension[index];
+
+        if (!isalnum(character) && character != '_' && character != '-' &&
+            character != '+') {
+            errno = EINVAL;
+            return -1;
+        }
+    }
+    if (file_list_detect_builtin_type(extension) != FILE_TYPE_UNKNOWN) {
+        errno = EEXIST;
+        return -1;
+    }
+    for (index = 0; index < registered_extension_count; index++) {
+        if (strcasecmp(extension,
+                       registered_extensions[index].extension) == 0) {
+            errno = EEXIST;
+            return -1;
+        }
+    }
+    if (registered_extension_count >= FILE_EXTENSION_MAX_COUNT) {
+        errno = ENOSPC;
+        return -1;
+    }
+    for (index = 0; index <= length; index++) {
+        registered_extensions[registered_extension_count].extension[index] =
+            (char)tolower((unsigned char)extension[index]);
+    }
+    registered_extensions[registered_extension_count].type = type;
+    registered_extension_count++;
+    return 0;
+}
+
+/** @brief 清空所有运行时插件扩展名。 */
+void file_list_clear_registered_extensions(void)
+{
+    memset(registered_extensions, 0, sizeof(registered_extensions));
+    registered_extension_count = 0;
+}
+
 /**
  * @brief 判断文件类型是否匹配过滤位。
  * @param type 文件类型。
@@ -94,7 +187,8 @@ static int file_type_matches_filter(enum file_type type,
         return 1;
     }
     if (type == FILE_TYPE_BMP || type == FILE_TYPE_JPEG ||
-        type == FILE_TYPE_PNG || type == FILE_TYPE_GIF) {
+        type == FILE_TYPE_PNG || type == FILE_TYPE_GIF ||
+        type == FILE_TYPE_PLUGIN_IMAGE) {
         return (filter & FILE_LIST_FILTER_IMAGES) != 0U;
     }
     if (type == FILE_TYPE_WAV || type == FILE_TYPE_MP3) {
@@ -107,7 +201,7 @@ static int file_type_matches_filter(enum file_type type,
     }
     if (type == FILE_TYPE_AAC || type == FILE_TYPE_M4A ||
         type == FILE_TYPE_FLAC || type == FILE_TYPE_OGG ||
-        type == FILE_TYPE_OPUS) {
+        type == FILE_TYPE_OPUS || type == FILE_TYPE_PLUGIN_AUDIO) {
         return (filter & FILE_LIST_FILTER_AUDIO) != 0U;
     }
     if (type == FILE_TYPE_TEXT) {
@@ -450,6 +544,8 @@ const char *file_type_name(enum file_type type)
     case FILE_TYPE_FLAC: return "FLAC";
     case FILE_TYPE_OGG: return "OGG";
     case FILE_TYPE_OPUS: return "OPUS";
+    case FILE_TYPE_PLUGIN_IMAGE: return "IMAGE";
+    case FILE_TYPE_PLUGIN_AUDIO: return "AUDIO";
     case FILE_TYPE_UNKNOWN:
     default: return "?";
     }

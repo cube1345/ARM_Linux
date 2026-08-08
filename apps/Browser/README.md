@@ -49,6 +49,9 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
   每次启动传入的媒体目录和输入参数优先，并更新配置中的记录。
 - 采用简约 UI：提供 Dark、Light、Contrast 三套 palette，统一应用于桌面、顶栏、
   文件卡片、彩色类型标签、底部操作提示、按钮和进度条。
+- 启动时从 `/usr/lib/media-browser/plugins/` 加载 ABI 版本匹配的 `.so`，可动态注册
+  图片 decoder、音频 backend、页面、桌面应用、显示 backend 和新媒体扩展名；
+  `BROWSER_PLUGIN_DIR` 可覆盖目录，设为 `-` 可完全禁用。
 
 ## 架构
 
@@ -63,6 +66,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 | `core/desktop_app.c/.h` | Gallery、Player、Files、Reader、Diagnostics、Tools、Settings 应用注册 |
 | `pages/desktop/page_desktop.c/.h` | 软件桌面卡片、应用选择、键盘和触摸入口 |
 | `core/page_manager.c/.h` | 页面 operation 注册、查找、渲染、输入分发、周期任务和事件等待时间调整 |
+| `core/plugin_manager.c/.h` | versioned plugin ABI、`.so` 扫描加载、operation 注册和逆序 shutdown |
 | `pages/files/page_file.c/.h` | 文件列表渲染、目录进入/返回、搜索、最近打开/收藏夹、键盘和触摸处理 |
 | `pages/gallery/page_image.c/.h` | 图片/GIF 打开关闭、相邻图片选择、自动播放、预解码和旋转 |
 | `pages/reader/page_text.c/.h` | UTF-8 文本分页渲染、键盘和触摸翻页处理 |
@@ -88,6 +92,31 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 
 新增格式时优先新增 decoder/backend 并注册到 manager；新增交互时优先放在对应
 `page_*.c` 页面模块，避免重新膨胀主循环。
+
+## 动态插件 ABI
+
+插件必须使用与 Browser 相同的 CPU 架构、C ABI 和公共 headers 构建，并导出：
+
+```c
+uint32_t browser_plugin_abi_version(void);
+int browser_plugin_init(const struct browser_plugin_host *host,
+                        struct browser_plugin *plugin);
+```
+
+`browser_plugin_abi_version()` 必须返回 `BROWSER_PLUGIN_ABI_VERSION`。初始化函数通过
+`host` 的 registration callbacks 注册 `image_decoder`、`audio_backend_operation`、
+`page_operation`、`desktop_app_operation` 或 `display_operation`。插件页面和桌面应用
+ID 从 `BROWSER_PAGE_PLUGIN_BASE`、`DESKTOP_APP_PLUGIN_BASE` 开始分配。图片或音频新格式
+还需调用 `register_file_extension()`，扩展名随后会参与正常目录扫描和页面路由。
+
+默认目录不存在不会阻止启动；损坏或 ABI 不兼容的 `.so` 会被跳过。若 ABI 已匹配但
+插件初始化失败，Browser 会终止启动并按安全顺序卸载已加载插件，避免 operation
+链表留下悬空回调。插件句柄在媒体线程和显示设备全部关闭后才卸载。
+
+```sh
+BROWSER_PLUGIN_DIR=/opt/media-browser/plugins /usr/bin/media-browser <原 CLI 参数>
+BROWSER_PLUGIN_DIR=- /usr/bin/media-browser <原 CLI 参数>
+```
 
 ## Buildroot 配置
 
@@ -138,8 +167,9 @@ make
 
 Host smoke test 会生成 4/8/24/32-bit、RLE4/RLE8 BMP、PNG、JPEG、GIF、WAV
 和 ID3 标签，并使用 Buildroot target 中已有的 MP3/MP4，检查正常解码、配置
-读写、文件排序/搜索、音频元数据、三种画面缩放模式、SRT 时间轴、空目录和损坏
-文件拒绝逻辑，同时用 pipe/FIFO 验证输入 operation 断开隔离和路径重连：
+读写、文件排序/搜索、音频元数据、三种画面缩放模式、SRT 时间轴、动态 `.so`
+插件 ABI/operation/shutdown、空目录和损坏文件拒绝逻辑，同时用 pipe/FIFO 验证
+输入 operation 断开隔离和路径重连：
 
 ```sh
 cd /home/cube/WorkSpace/Linux/ARM_Linux_WS/apps/Browser
