@@ -19,6 +19,7 @@
 #include "input_keyboard.h"
 #include "media_player.h"
 #include "screen_power.h"
+#include "watchdog.h"
 #include "subtitle.h"
 #include "text_reader.h"
 
@@ -68,6 +69,7 @@ struct browser_app {
     struct debug_manager debug;
     struct bmp_display display;
     struct screen_power_manager screen_power;
+    struct watchdog_manager watchdog;
     struct input_manager input;
     struct font_renderer font;
     struct file_list files;

@@ -50,6 +50,9 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - 默认连续 300 秒无输入后通过 framebuffer `FBIOBLANK` 关闭屏幕，任意输入先唤醒
   屏幕且不会误触发原操作；视频和图片自动播放期间保持亮屏。可用
   `BROWSER_SCREEN_IDLE_SECONDS` 调整秒数，设为 `0` 禁用。
+- 若存在 `/dev/watchdog`，程序默认以 15 秒超时定期 keepalive，正常退出写入 magic
+  close；设备不存在时自动降级。可用 `BROWSER_WATCHDOG_DEVICE=-` 或
+  `BROWSER_WATCHDOG_SECONDS=0` 禁用，也可调整 `BROWSER_WATCHDOG_SECONDS`。
 - Settings 会持久化字体大小、音量、文件排序、播放模式、UI 主题、当前媒体根目录、
   输入设备参数、最近一次媒体断点、最近打开和收藏夹；默认路径为
   `/etc/media-browser.conf`，可用 `BROWSER_CONFIG_PATH` 指定可写路径。CLI 格式不变，
@@ -76,6 +79,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 | `core/plugin_manager.c/.h` | versioned plugin ABI、`.so` 扫描加载、operation 注册和逆序 shutdown |
 | `core/file_watcher.c/.h` | 当前普通文件目录的 nonblocking inotify 监听与事件消费 |
 | `core/screen_power.c/.h` | framebuffer blank/unblank operation 与空闲休眠状态机 |
+| `core/watchdog.c/.h` | Linux `/dev/watchdog` 探测、keepalive、失败降级和正常 disarm |
 | `deploy/*` | BusyBox init、systemd、默认运行参数和统一启动 wrapper |
 | `pages/files/page_file.c/.h` | 文件列表渲染、目录进入/返回、搜索、最近打开/收藏夹、键盘和触摸处理 |
 | `pages/gallery/page_image.c/.h` | 图片/GIF 打开关闭、相邻图片选择、自动播放、预解码和旋转 |
@@ -184,6 +188,7 @@ Host smoke test 会生成 4/8/24/32-bit、RLE4/RLE8 BMP、PNG、JPEG、GIF、WAV
 和 ID3 标签，并使用 Buildroot target 中已有的 MP3/MP4，检查正常解码、配置
 读写、文件排序/搜索、音频元数据、三种画面缩放模式、SRT 时间轴、动态 `.so`
 插件 ABI/operation/shutdown、inotify 目录变化、致命信号日志、屏幕休眠状态机、
+watchdog keepalive、
 启动参数 wrapper、空目录和损坏文件拒绝逻辑，同时用 pipe/FIFO 验证输入 operation
 断开隔离和路径重连：
 

@@ -34,6 +34,7 @@
 static volatile sig_atomic_t browser_shutdown_requested;
 
 #define BROWSER_SCREEN_IDLE_DEFAULT_SECONDS 300U
+#define BROWSER_WATCHDOG_DEFAULT_SECONDS 15U
 
 /**
  * @brief 记录终止信号并交给主循环执行资源清理。
@@ -120,6 +121,29 @@ static uint64_t screen_idle_timeout_ms(void)
 }
 
 /**
+ * @brief 从环境变量读取 watchdog 超时秒数。
+ * @return 超时秒数，0 表示禁用。
+ */
+static unsigned int watchdog_timeout_seconds(void)
+{
+    const char *text = getenv("BROWSER_WATCHDOG_SECONDS");
+    char *end = NULL;
+    unsigned long value;
+
+    if (text == NULL || text[0] == '\0') {
+        return BROWSER_WATCHDOG_DEFAULT_SECONDS;
+    }
+    errno = 0;
+    value = strtoul(text, &end, 10);
+    if (errno != 0 || end == text || *end != '\0' || value > UINT_MAX) {
+        browser_log(BROWSER_LOG_WARN, "invalid BROWSER_WATCHDOG_SECONDS: %s",
+                    text);
+        return BROWSER_WATCHDOG_DEFAULT_SECONDS;
+    }
+    return (unsigned int)value;
+}
+
+/**
  * @brief 获取单调时钟毫秒值。
  * @return 单调时钟毫秒值。
  */
@@ -186,6 +210,11 @@ static int update_periodic(const struct page_manager *pages,
                            struct browser_app *app, uint64_t now_ms)
 {
     int power_result;
+    int watchdog_result = watchdog_manager_update(&app->watchdog, now_ms);
+
+    if (watchdog_result < 0) {
+        browser_log_errno(BROWSER_LOG_WARN, "watchdog keepalive");
+    }
 
     if (app->page == BROWSER_PAGE_VIDEO ||
         (app->page == BROWSER_PAGE_IMAGE && app->slideshow_enabled)) {
@@ -453,6 +482,11 @@ int main(int argc, char *argv[])
         goto cleanup_media_player;
     }
     input_opened = 1;
+    if (watchdog_manager_open(&app.watchdog,
+                              getenv("BROWSER_WATCHDOG_DEVICE"),
+                              watchdog_timeout_seconds(), monotonic_ms()) < 0) {
+        browser_log_errno(BROWSER_LOG_WARN, "open watchdog");
+    }
     runtime_started = 1;
     result = run_browser(&pages, &app);
 cleanup_media_player:
@@ -479,6 +513,7 @@ cleanup_audio_player:
         screen_power_manager_destroy(&app.screen_power);
         display_manager_close(&app.display_devices, &app.display);
     }
+    watchdog_manager_destroy(&app.watchdog);
     if (plugins_ready) {
         browser_plugin_manager_destroy(&plugins);
     }
