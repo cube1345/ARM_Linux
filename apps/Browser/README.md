@@ -45,6 +45,8 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
   写入完成事件，重新扫描后保留原选中项；不支持 inotify 时自动降级为手动刷新。
 - 使用 framebuffer 离屏缓冲区完成整帧刷新。
 - 提供统一日志模块，支持通过 `BROWSER_LOG_LEVEL` 控制 ERROR/WARN/INFO/DEBUG。
+- SIGABRT、SIGBUS、SIGFPE、SIGILL 和 SIGSEGV 会在执行默认终止动作前追加最小崩溃
+  记录到 `/var/log/media-browser-crash.log`，可用 `BROWSER_CRASH_LOG_PATH` 覆盖路径。
 - Settings 会持久化字体大小、音量、文件排序、播放模式、UI 主题、当前媒体根目录、
   输入设备参数、最近一次媒体断点、最近打开和收藏夹；默认路径为
   `/etc/media-browser.conf`，可用 `BROWSER_CONFIG_PATH` 指定可写路径。CLI 格式不变，
@@ -82,7 +84,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 | `pages/player/page_video.c/.h` | 通用媒体页面、视频帧显示、进度和音量控制 |
 | `pages/tools/page_tools.c/.h` | 外部 Linux 命令白名单、命令执行、输出采集和工具页输入处理 |
 | `ui/browser_ui.c/.h` / `ui/ui_draw.c/.h` | 公共 UI 常量、按钮/进度条 helper、矩形与文字绘制 |
-| `core/browser_log.c/.h` | 统一日志等级、环境变量初始化和 errno 日志输出 |
+| `core/browser_log.c/.h` | 统一日志等级、errno 输出和 async-signal-safe 致命信号日志 |
 | `media/image/image_decoder.c/.h` | 静态图片 decoder manager，当前注册 BMP、JPEG、PNG |
 | `media/animation/*` | 动画 decoder manager 与 GIF 帧合成、延时和 disposal 状态 |
 | `media/audio/audio_player.c/.h` | WAV/MP3 后台播放线程、backend 表、暂停、音量、seek 与状态快照 |
@@ -171,8 +173,8 @@ make
 Host smoke test 会生成 4/8/24/32-bit、RLE4/RLE8 BMP、PNG、JPEG、GIF、WAV
 和 ID3 标签，并使用 Buildroot target 中已有的 MP3/MP4，检查正常解码、配置
 读写、文件排序/搜索、音频元数据、三种画面缩放模式、SRT 时间轴、动态 `.so`
-插件 ABI/operation/shutdown、inotify 目录变化、空目录和损坏文件拒绝逻辑，同时用
-pipe/FIFO 验证输入 operation 断开隔离和路径重连：
+插件 ABI/operation/shutdown、inotify 目录变化、致命信号日志、空目录和损坏文件
+拒绝逻辑，同时用 pipe/FIFO 验证输入 operation 断开隔离和路径重连：
 
 ```sh
 cd /home/cube/WorkSpace/Linux/ARM_Linux_WS/apps/Browser

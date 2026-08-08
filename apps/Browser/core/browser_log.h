@@ -35,4 +35,11 @@ void browser_log(enum browser_log_level level, const char *format, ...);
  */
 void browser_log_errno(enum browser_log_level level, const char *context);
 
+/**
+ * @brief 安装致命信号持久化 handler。
+ * @param path 日志路径，NULL 或空字符串使用默认路径。
+ * @return 成功返回 0，路径过长或安装失败返回 -1。
+ */
+int browser_log_install_crash_handler(const char *path);
+
 #endif

@@ -45,7 +45,7 @@ LDLIBS := $(shell $(PKG_CONFIG) --libs $(PACKAGES)) -lgif -ldl -pthread
 
 .PHONY: all clean install test test-media test-config test-metadata \
 	test-render test-subtitle test-video-decoder test-plugin \
-	test-file-watcher test-input-reconnect test-input
+	test-file-watcher test-crash-log test-input-reconnect test-input
 
 all: $(TARGET)
 
@@ -60,7 +60,8 @@ install: $(TARGET)
 	install -d -m 0755 $(DESTDIR)/usr/lib/media-browser/plugins
 
 test: test-media test-config test-metadata test-render test-subtitle \
-	test-video-decoder test-plugin test-file-watcher test-input-reconnect
+	test-video-decoder test-plugin test-file-watcher test-crash-log \
+	test-input-reconnect
 
 test-media:
 	CC="$(HOST_CC)" ./tests/media_smoke.sh "$(TEST_MEDIA_DIR)"
@@ -85,6 +86,9 @@ test-plugin:
 
 test-file-watcher:
 	CC="$(HOST_CC)" ./tests/file_watcher_smoke.sh
+
+test-crash-log:
+	CC="$(HOST_CC)" ./tests/crash_log_smoke.sh
 
 test-input-reconnect:
 	CC="$(HOST_CC)" ./tests/input_reconnect_smoke.sh

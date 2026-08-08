@@ -295,6 +295,10 @@ int main(int argc, char *argv[])
     int result = -1;
 
     browser_log_init_from_env();
+    if (browser_log_install_crash_handler(
+            getenv("BROWSER_CRASH_LOG_PATH")) < 0) {
+        browser_log_errno(BROWSER_LOG_WARN, "install crash logger");
+    }
     if (install_shutdown_handlers() < 0) {
         browser_log_errno(BROWSER_LOG_WARN, "install signal handlers");
     }
