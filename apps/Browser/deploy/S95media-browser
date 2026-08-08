@@ -1,0 +1,43 @@
+#!/bin/sh
+
+DAEMON=/usr/bin/media-browser-launcher
+PIDFILE=/var/run/media-browser.pid
+
+start_browser()
+{
+    printf 'Starting media-browser: '
+    if start-stop-daemon -S -q -b -m -p "$PIDFILE" -x "$DAEMON"; then
+        echo OK
+    else
+        echo FAIL
+        return 1
+    fi
+}
+
+stop_browser()
+{
+    printf 'Stopping media-browser: '
+    if start-stop-daemon -K -q -p "$PIDFILE" -R TERM/5/KILL/1; then
+        echo OK
+    else
+        echo FAIL
+        return 1
+    fi
+}
+
+case "${1:-}" in
+    start)
+        start_browser
+        ;;
+    stop)
+        stop_browser
+        ;;
+    restart|reload)
+        stop_browser || true
+        start_browser
+        ;;
+    *)
+        echo "Usage: $0 {start|stop|restart}" >&2
+        exit 1
+        ;;
+esac

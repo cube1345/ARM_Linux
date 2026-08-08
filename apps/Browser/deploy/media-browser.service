@@ -1,0 +1,16 @@
+[Unit]
+Description=Embedded Media Browser
+After=local-fs.target systemd-udev-settle.service sound.target
+Wants=systemd-udev-settle.service
+ConditionPathExists=/dev/fb0
+
+[Service]
+Type=simple
+Environment=MEDIA_BROWSER_ENV=/etc/default/media-browser
+ExecStart=/usr/bin/media-browser-launcher
+Restart=on-failure
+RestartSec=2
+TimeoutStopSec=10
+
+[Install]
+WantedBy=multi-user.target

@@ -47,7 +47,7 @@ LDLIBS := $(shell $(PKG_CONFIG) --libs $(PACKAGES)) -lgif -ldl -pthread
 .PHONY: all clean install test test-media test-config test-metadata \
 	test-render test-subtitle test-video-decoder test-plugin \
 	test-file-watcher test-crash-log test-screen-power \
-	test-input-reconnect test-input
+	test-deploy test-input-reconnect test-input
 
 all: $(TARGET)
 
@@ -59,11 +59,23 @@ $(TARGET): $(OBJECTS)
 
 install: $(TARGET)
 	install -D -m 0755 $(TARGET) $(DESTDIR)/usr/bin/media-browser
+	install -D -m 0755 deploy/media-browser-launcher \
+		$(DESTDIR)/usr/bin/media-browser-launcher
+	install -D -m 0644 deploy/media-browser.default \
+		$(DESTDIR)/etc/default/media-browser
+	install -D -m 0755 deploy/S95media-browser \
+		$(DESTDIR)/etc/init.d/S95media-browser
+	install -D -m 0644 deploy/media-browser.service \
+		$(DESTDIR)/usr/lib/systemd/system/media-browser.service
+	install -d -m 0755 \
+		$(DESTDIR)/etc/systemd/system/multi-user.target.wants
+	ln -sf /usr/lib/systemd/system/media-browser.service \
+		$(DESTDIR)/etc/systemd/system/multi-user.target.wants/media-browser.service
 	install -d -m 0755 $(DESTDIR)/usr/lib/media-browser/plugins
 
 test: test-media test-config test-metadata test-render test-subtitle \
 	test-video-decoder test-plugin test-file-watcher test-crash-log \
-	test-screen-power test-input-reconnect
+	test-screen-power test-deploy test-input-reconnect
 
 test-media:
 	CC="$(HOST_CC)" ./tests/media_smoke.sh "$(TEST_MEDIA_DIR)"
@@ -94,6 +106,9 @@ test-crash-log:
 
 test-screen-power:
 	CC="$(HOST_CC)" ./tests/screen_power_smoke.sh
+
+test-deploy:
+	./tests/deploy_smoke.sh
 
 test-input-reconnect:
 	CC="$(HOST_CC)" ./tests/input_reconnect_smoke.sh

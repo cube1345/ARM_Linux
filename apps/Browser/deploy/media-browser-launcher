@@ -1,0 +1,23 @@
+#!/bin/sh
+set -eu
+
+MEDIA_BROWSER_ENV=${MEDIA_BROWSER_ENV:-/etc/default/media-browser}
+if [ "$MEDIA_BROWSER_ENV" != "-" ] && [ -r "$MEDIA_BROWSER_ENV" ]; then
+    . "$MEDIA_BROWSER_ENV"
+fi
+
+: "${MEDIA_BROWSER_BIN:=/usr/bin/media-browser}"
+: "${MEDIA_BROWSER_FB:=/dev/fb0}"
+: "${MEDIA_BROWSER_KEYBOARD:=auto}"
+: "${MEDIA_BROWSER_ROOT:=/root/media}"
+: "${MEDIA_BROWSER_FONT:=/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc}"
+: "${MEDIA_BROWSER_ALSA:=default}"
+: "${MEDIA_BROWSER_POINTER:=auto}"
+
+exec "$MEDIA_BROWSER_BIN" \
+    "$MEDIA_BROWSER_FB" \
+    "$MEDIA_BROWSER_KEYBOARD" \
+    "$MEDIA_BROWSER_ROOT" \
+    "$MEDIA_BROWSER_FONT" \
+    "$MEDIA_BROWSER_ALSA" \
+    "$MEDIA_BROWSER_POINTER"

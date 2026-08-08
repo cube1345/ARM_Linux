@@ -1,0 +1,12 @@
+# Runtime arguments used by media-browser-launcher.
+MEDIA_BROWSER_FB=/dev/fb0
+MEDIA_BROWSER_KEYBOARD=auto
+MEDIA_BROWSER_ROOT=/root/media
+MEDIA_BROWSER_FONT=/usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc
+MEDIA_BROWSER_ALSA=default
+MEDIA_BROWSER_POINTER=auto
+
+# Optional runtime controls.
+BROWSER_SCREEN_IDLE_SECONDS=300
+BROWSER_LOG_LEVEL=info
+BROWSER_CRASH_LOG_PATH=/var/log/media-browser-crash.log

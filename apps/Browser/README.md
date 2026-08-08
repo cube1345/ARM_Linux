@@ -76,6 +76,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 | `core/plugin_manager.c/.h` | versioned plugin ABI、`.so` 扫描加载、operation 注册和逆序 shutdown |
 | `core/file_watcher.c/.h` | 当前普通文件目录的 nonblocking inotify 监听与事件消费 |
 | `core/screen_power.c/.h` | framebuffer blank/unblank operation 与空闲休眠状态机 |
+| `deploy/*` | BusyBox init、systemd、默认运行参数和统一启动 wrapper |
 | `pages/files/page_file.c/.h` | 文件列表渲染、目录进入/返回、搜索、最近打开/收藏夹、键盘和触摸处理 |
 | `pages/gallery/page_image.c/.h` | 图片/GIF 打开关闭、相邻图片选择、自动播放、预解码和旋转 |
 | `pages/reader/page_text.c/.h` | UTF-8 文本分页渲染、键盘和触摸翻页处理 |
@@ -172,13 +173,19 @@ cd /home/cube/WorkSpace/Linux/ARM_Linux
 make
 ```
 
+`make install` 会安装当前 QEMU/Buildroot 使用的
+`/etc/init.d/S95media-browser`，同时安装可用于 RK3506 systemd rootfs 的
+`media-browser.service`。两种 init 都通过 `/etc/default/media-browser` 配置
+framebuffer、输入、媒体目录、字体和 ALSA 参数；修改配置后重启服务即可，无需改 CLI。
+
 ## 自动化验证
 
 Host smoke test 会生成 4/8/24/32-bit、RLE4/RLE8 BMP、PNG、JPEG、GIF、WAV
 和 ID3 标签，并使用 Buildroot target 中已有的 MP3/MP4，检查正常解码、配置
 读写、文件排序/搜索、音频元数据、三种画面缩放模式、SRT 时间轴、动态 `.so`
 插件 ABI/operation/shutdown、inotify 目录变化、致命信号日志、屏幕休眠状态机、
-空目录和损坏文件拒绝逻辑，同时用 pipe/FIFO 验证输入 operation 断开隔离和路径重连：
+启动参数 wrapper、空目录和损坏文件拒绝逻辑，同时用 pipe/FIFO 验证输入 operation
+断开隔离和路径重连：
 
 ```sh
 cd /home/cube/WorkSpace/Linux/ARM_Linux_WS/apps/Browser
