@@ -278,8 +278,10 @@ int render_video_page(struct browser_app *app)
     }
     if (status.width > 0 && status.height > 0) {
         title_width = scale_x - title_x - VIDEO_HEADER_BUTTON_GAP;
-        snprintf(title, sizeof(title), "PLAYER  %s  %ux%u  %.1ffps",
+        snprintf(title, sizeof(title), "PLAYER  %s  [%s]  %ux%u  %.1ffps",
                  app->files.entries[app->selected].name,
+                 status.video_decoder[0] == '\0' ? "decoder" :
+                 status.video_decoder,
                  status.width, status.height, status.frame_rate);
     } else {
         title_width = play_x - title_x - VIDEO_HEADER_BUTTON_GAP;

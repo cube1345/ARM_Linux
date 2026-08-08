@@ -26,6 +26,8 @@ struct media_player_status {
     uint32_t height;
     double frame_rate;
     int has_video;
+    char video_decoder[16];
+    int hardware_video;
 };
 
 /** @brief FFmpeg 多媒体后台播放器上下文。 */
@@ -43,6 +45,8 @@ struct media_player {
     uint32_t media_width;
     uint32_t media_height;
     double frame_rate;
+    char video_decoder[16];
+    int hardware_video;
     int volume;
     int64_t seek_ms;
     int stop_requested;

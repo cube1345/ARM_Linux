@@ -26,7 +26,8 @@ SOURCES := app/main.c app/browser_app.c \
 	   media/image/image_decoder.c media/image/image_render.c \
 	   media/animation/gif_animation.c media/animation/animation_decoder.c \
 	   media/audio/audio_metadata.c media/audio/audio_player.c \
-	   media/video/media_player.c media/video/subtitle.c \
+	   media/video/media_player.c media/video/video_decoder.c \
+	   media/video/subtitle.c \
 	   pages/desktop/page_desktop.c pages/files/page_file.c \
 	   pages/gallery/page_gallery.c pages/gallery/page_image.c \
 	   pages/reader/page_text.c \
@@ -42,7 +43,7 @@ CPPFLAGS := $(shell $(PKG_CONFIG) --cflags-only-I $(PACKAGES)) \
 LDLIBS := $(shell $(PKG_CONFIG) --libs $(PACKAGES)) -lgif -pthread
 
 .PHONY: all clean install test test-media test-config test-metadata \
-	test-render test-subtitle test-input-reconnect test-input
+	test-render test-subtitle test-video-decoder test-input-reconnect test-input
 
 all: $(TARGET)
 
@@ -56,7 +57,7 @@ install: $(TARGET)
 	install -D -m 0755 $(TARGET) $(DESTDIR)/usr/bin/media-browser
 
 test: test-media test-config test-metadata test-render test-subtitle \
-	test-input-reconnect
+	test-video-decoder test-input-reconnect
 
 test-media:
 	CC="$(HOST_CC)" ./tests/media_smoke.sh "$(TEST_MEDIA_DIR)"
@@ -72,6 +73,9 @@ test-render:
 
 test-subtitle:
 	CC="$(HOST_CC)" ./tests/subtitle_smoke.sh
+
+test-video-decoder:
+	CC="$(HOST_CC)" ./tests/video_decoder_smoke.sh
 
 test-input-reconnect:
 	CC="$(HOST_CC)" ./tests/input_reconnect_smoke.sh

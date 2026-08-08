@@ -23,6 +23,9 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - Player 触摸页提供 `PLAY/PAUSE`、进度条和音量条；文件页提供 `UP` 父目录和
   `HOME` 桌面入口，适合不接键盘的设备。
 - 视频帧按容器 PTS 和单调时钟控制显示节奏，带音轨和纯视频文件均按正常速度播放。
+- 视频 decoder 通过 backend manager 选择：`auto` 优先探测 FFmpeg 的
+  `h264_rkmpp`/`hevc_rkmpp`，不可用或打开失败时回落 software；硬件帧会下载为
+  software frame 后进入现有 RGB/framebuffer 路径。
 - 视频画面支持 FIT 留边、FILL 裁切铺满和 1:1 原始大小，并可隐藏控件全屏播放。
 - 视频自动加载同目录、同 basename 的 UTF-8 `.srt` 字幕并按播放时间显示。
 - 启动后进入简约软件桌面，Gallery、Player、Files、Reader、Diagnostics、Tools、
@@ -67,6 +70,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 | `pages/player/page_queue.c/.h` | 音频/视频播放队列摘要绘制和当前项高亮 |
 | `media/audio/audio_metadata.c/.h` | MP3 ID3v2/ID3v1 标题、艺术家和专辑标签解析 |
 | `media/video/media_player.c/.h` | FFmpeg 容器、视频和音频解码线程、RGB 帧快照和 ALSA 输出 |
+| `media/video/video_decoder.c/.h` | RKMPP/software decoder operation 注册、探测、打开和 fallback |
 | `media/video/subtitle.c/.h` | SRT sidecar 路径解析、时间轴加载和当前字幕查询 |
 | `pages/player/page_video.c/.h` | 通用媒体页面、视频帧显示、进度和音量控制 |
 | `pages/tools/page_tools.c/.h` | 外部 Linux 命令白名单、命令执行、输出采集和工具页输入处理 |
@@ -181,6 +185,19 @@ ldd /usr/bin/media-browser
 当前视频使用 FFmpeg 软件解码和 `libswscale` 转 RGB，不依赖 QEMU virtio-gpu。
 RK3506 首次上板先以 320x240、480p 视频验收 CPU 占用和帧率，再决定是否接入
 Rockchip 硬件解码接口；硬件加速不影响桌面和页面层接口。
+
+在包含 FFmpeg RKMPP wrapper 的 RK3506 BSP 上，默认 `auto` 会优先选择硬件
+decoder；可通过环境变量强制选择，页面标题会显示实际 backend：
+
+```sh
+BROWSER_VIDEO_DECODER=auto /usr/bin/media-browser <原 CLI 参数>
+BROWSER_VIDEO_DECODER=software /usr/bin/media-browser <原 CLI 参数>
+BROWSER_VIDEO_DECODER=rkmpp /usr/bin/media-browser <原 CLI 参数>
+```
+
+当前 QEMU Buildroot 的 FFmpeg 未包含 RKMPP，因而 `auto` 会显示 `software`。
+Framebuffer 仍需要 CPU RGB copy；DMA-BUF 零拷贝需要 RK3506 DRM/KMS display
+backend，不能由现有 `/dev/fb0` 路径伪装实现。
 
 已在独立 Buildroot ARMv7 output 中完成 Cortex-A7 hard-float 门禁：
 

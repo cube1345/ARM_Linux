@@ -1,13 +1,16 @@
 #include "media_player.h"
 
 #include "browser_log.h"
+#include "video_decoder.h"
 
 #include <alsa/asoundlib.h>
 #include <errno.h>
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libavutil/imgutils.h>
+#include <libavutil/hwcontext.h>
 #include <libavutil/opt.h>
+#include <libavutil/pixdesc.h>
 #include <libswresample/swresample.h>
 #include <libswscale/swscale.h>
 #include <stdlib.h>
@@ -25,14 +28,19 @@ struct ffmpeg_context {
     struct SwsContext *sws;
     struct SwrContext *swr;
     AVFrame *frame;
+    AVFrame *software_frame;
     AVFrame *rgb;
     uint8_t *rgb_data;
     int rgb_linesize;
+    int rgb_width;
+    int rgb_height;
     snd_pcm_t *pcm;
     int output_rate;
     int64_t first_video_pts_ms;
     uint64_t video_wall_start_ms;
     int video_clock_started;
+    enum video_decoder_preference video_preference;
+    int video_hardware;
 };
 
 /**
@@ -113,6 +121,17 @@ static void set_position(struct media_player *player, uint64_t position_ms)
     pthread_mutex_unlock(&player->mutex);
 }
 
+/** @brief 读取当前播放位置快照。 */
+static uint64_t player_position(struct media_player *player)
+{
+    uint64_t position;
+
+    pthread_mutex_lock(&player->mutex);
+    position = player->position_ms;
+    pthread_mutex_unlock(&player->mutex);
+    return position;
+}
+
 /**
  * @brief 根据视频 PTS 控制纯视频和音视频文件的显示节奏。
  * @param player 播放器上下文。
@@ -155,21 +174,51 @@ static void pace_video_frame(struct media_player *player,
     }
 }
 
-static int open_codec(AVFormatContext *format, enum AVMediaType media_type,
-                      int *stream_index, AVCodecContext **output)
+/** @brief 打开默认 FFmpeg audio decoder。 */
+static int open_audio_codec(AVFormatContext *format, int *stream_index,
+                            AVCodecContext **output)
 {
-    AVCodec *codec;
+    const AVCodec *codec;
     AVCodecParameters *parameters;
 
-    *stream_index = av_find_best_stream(format, media_type, -1, -1, &codec, 0);
+    *stream_index = av_find_best_stream(format, AVMEDIA_TYPE_AUDIO,
+                                        -1, -1, NULL, 0);
     if (*stream_index < 0) {
         return 0;
     }
     parameters = format->streams[*stream_index]->codecpar;
+    codec = avcodec_find_decoder(parameters->codec_id);
+    if (codec == NULL) {
+        *stream_index = -1;
+        return -1;
+    }
     *output = avcodec_alloc_context3(codec);
     if (*output == NULL || avcodec_parameters_to_context(*output, parameters) < 0 ||
         avcodec_open2(*output, codec, NULL) < 0) {
         avcodec_free_context(output);
+        *stream_index = -1;
+        return -1;
+    }
+    return 1;
+}
+
+/** @brief 通过 backend manager 打开视频 decoder。 */
+static int open_video_codec(AVFormatContext *format, int *stream_index,
+                            enum video_decoder_preference preference,
+                            AVCodecContext **output,
+                            struct video_decoder_selection *selection)
+{
+    struct video_decoder_manager manager;
+    AVCodecParameters *parameters;
+
+    *stream_index = av_find_best_stream(format, AVMEDIA_TYPE_VIDEO,
+                                        -1, -1, NULL, 0);
+    if (*stream_index < 0) return 0;
+    parameters = format->streams[*stream_index]->codecpar;
+    video_decoder_manager_init(&manager);
+    if (video_decoder_manager_register_builtin(&manager) < 0 ||
+        video_decoder_manager_open(&manager, parameters, preference,
+                                   output, selection) < 0) {
         *stream_index = -1;
         return -1;
     }
@@ -185,6 +234,7 @@ static void close_context(struct ffmpeg_context *context)
     swr_free(&context->swr);
     sws_freeContext(context->sws);
     av_frame_free(&context->rgb);
+    av_frame_free(&context->software_frame);
     av_frame_free(&context->frame);
     av_free(context->rgb_data);
     avcodec_free_context(&context->video);
@@ -193,27 +243,40 @@ static void close_context(struct ffmpeg_context *context)
 }
 
 static int open_context(struct media_player *player,
-                        struct ffmpeg_context *context)
+                        struct ffmpeg_context *context,
+                        enum video_decoder_preference preference)
 {
     int result;
     AVStream *stream;
+    struct video_decoder_selection selection;
 
     memset(context, 0, sizeof(*context));
     context->video_stream = -1;
     context->audio_stream = -1;
+    context->video_preference = preference;
     if (avformat_open_input(&context->format, player->path, NULL, NULL) < 0 ||
         avformat_find_stream_info(context->format, NULL) < 0) {
         close_context(context);
         return -1;
     }
-    result = open_codec(context->format, AVMEDIA_TYPE_VIDEO,
-                        &context->video_stream, &context->video);
+    result = open_video_codec(context->format, &context->video_stream,
+                              preference, &context->video, &selection);
     if (result < 0) {
         close_context(context);
         return -1;
     }
-    result = open_codec(context->format, AVMEDIA_TYPE_AUDIO,
-                        &context->audio_stream, &context->audio);
+    if (result > 0) {
+        context->video_hardware = selection.hardware;
+        browser_log(BROWSER_LOG_INFO, "video decoder: %s (%s)",
+                    selection.backend_name, selection.codec_name);
+        pthread_mutex_lock(&player->mutex);
+        snprintf(player->video_decoder, sizeof(player->video_decoder), "%s",
+                 selection.backend_name);
+        player->hardware_video = selection.hardware;
+        pthread_mutex_unlock(&player->mutex);
+    }
+    result = open_audio_codec(context->format, &context->audio_stream,
+                              &context->audio);
     if (result < 0) {
         close_context(context);
         return -1;
@@ -224,7 +287,8 @@ static int open_context(struct media_player *player,
         return -1;
     }
     context->frame = av_frame_alloc();
-    if (context->frame == NULL) {
+    context->software_frame = av_frame_alloc();
+    if (context->frame == NULL || context->software_frame == NULL) {
         close_context(context);
         return -1;
     }
@@ -235,23 +299,8 @@ static int open_context(struct media_player *player,
         player->media_height = (uint32_t)context->video->height;
         player->frame_rate = av_q2d(stream->avg_frame_rate);
         pthread_mutex_unlock(&player->mutex);
-        context->sws = sws_getContext(context->video->width, context->video->height,
-                                      context->video->pix_fmt, context->video->width,
-                                      context->video->height, AV_PIX_FMT_RGB24,
-                                      SWS_BILINEAR, NULL, NULL, NULL);
         context->rgb = av_frame_alloc();
-        if (context->sws == NULL || context->rgb == NULL) {
-            close_context(context);
-            return -1;
-        }
-        context->rgb_linesize = context->video->width * 3;
-        context->rgb_data = av_malloc((size_t)context->rgb_linesize *
-                                      (size_t)context->video->height);
-        if (context->rgb_data == NULL ||
-            av_image_fill_arrays(context->rgb->data, context->rgb->linesize,
-                                 context->rgb_data, AV_PIX_FMT_RGB24,
-                                 context->video->width, context->video->height,
-                                 1) < 0) {
+        if (context->rgb == NULL) {
             close_context(context);
             return -1;
         }
@@ -299,11 +348,11 @@ static void publish_video_frame(struct media_player *player,
     int y;
 
     memset(&output, 0, sizeof(output));
-    if (image_data_create(&output, (uint32_t)context->video->width,
-                          (uint32_t)context->video->height) < 0) {
+    if (image_data_create(&output, (uint32_t)context->rgb_width,
+                          (uint32_t)context->rgb_height) < 0) {
         return;
     }
-    for (y = 0; y < context->video->height; y++) {
+    for (y = 0; y < context->rgb_height; y++) {
         memcpy(output.pixels + (size_t)y * output.line_length,
                context->rgb_data + (size_t)y * (size_t)context->rgb_linesize,
                output.line_length);
@@ -311,15 +360,73 @@ static void publish_video_frame(struct media_player *player,
     publish_frame(player, &output);
 }
 
-static void decode_video(struct media_player *player,
-                         struct ffmpeg_context *context, AVPacket *packet)
+/** @brief 为实际解码帧准备可复用 SWS 和 RGB24 缓冲区。 */
+static int prepare_rgb_frame(struct ffmpeg_context *context,
+                             const AVFrame *source)
+{
+    if (source->width <= 0 || source->height <= 0 || source->format < 0) {
+        return -1;
+    }
+    context->sws = sws_getCachedContext(
+        context->sws, source->width, source->height,
+        (enum AVPixelFormat)source->format,
+        source->width, source->height, AV_PIX_FMT_RGB24,
+        SWS_BILINEAR, NULL, NULL, NULL);
+    if (context->sws == NULL) return -1;
+    if (context->rgb_data != NULL && context->rgb_width == source->width &&
+        context->rgb_height == source->height) {
+        return 0;
+    }
+    av_free(context->rgb_data);
+    context->rgb_data = NULL;
+    context->rgb_width = source->width;
+    context->rgb_height = source->height;
+    context->rgb_linesize = source->width * 3;
+    context->rgb_data = av_malloc((size_t)context->rgb_linesize *
+                                  (size_t)source->height);
+    if (context->rgb_data == NULL ||
+        av_image_fill_arrays(context->rgb->data, context->rgb->linesize,
+                             context->rgb_data, AV_PIX_FMT_RGB24,
+                             source->width, source->height, 1) < 0) {
+        av_free(context->rgb_data);
+        context->rgb_data = NULL;
+        return -1;
+    }
+    return 0;
+}
+
+/** @brief 将硬件帧下载为 software frame，普通帧直接返回。 */
+static AVFrame *video_frame_for_conversion(struct ffmpeg_context *context)
+{
+    const AVPixFmtDescriptor *descriptor = av_pix_fmt_desc_get(
+        (enum AVPixelFormat)context->frame->format);
+
+    if (descriptor == NULL ||
+        (descriptor->flags & AV_PIX_FMT_FLAG_HWACCEL) == 0) {
+        return context->frame;
+    }
+    av_frame_unref(context->software_frame);
+    if (av_hwframe_transfer_data(context->software_frame,
+                                 context->frame, 0) < 0 ||
+        av_frame_copy_props(context->software_frame,
+                            context->frame) < 0) {
+        return NULL;
+    }
+    return context->software_frame;
+}
+
+/** @brief 解码并发布一批视频帧。 */
+static int decode_video(struct media_player *player,
+                        struct ffmpeg_context *context, AVPacket *packet)
 {
     int result;
 
-    if (avcodec_send_packet(context->video, packet) < 0) {
-        return;
+    result = avcodec_send_packet(context->video, packet);
+    if (result < 0 && result != AVERROR(EAGAIN) && result != AVERROR_EOF) {
+        return -1;
     }
     while ((result = avcodec_receive_frame(context->video, context->frame)) >= 0) {
+        AVFrame *source = video_frame_for_conversion(context);
         struct AVRational time_base = context->format->streams[
             context->video_stream]->time_base;
         int64_t timestamp = context->frame->best_effort_timestamp;
@@ -329,14 +436,22 @@ static void decode_video(struct media_player *player,
         if (timestamp_ms >= 0) {
             pace_video_frame(player, context, timestamp_ms);
         }
-        sws_scale(context->sws, (const uint8_t * const *)context->frame->data,
-                  context->frame->linesize, 0, context->video->height,
+        if (source == NULL || prepare_rgb_frame(context, source) < 0) {
+            return -1;
+        }
+        sws_scale(context->sws, (const uint8_t * const *)source->data,
+                  source->linesize, 0, source->height,
                   context->rgb->data, context->rgb->linesize);
+        pthread_mutex_lock(&player->mutex);
+        player->media_width = (uint32_t)source->width;
+        player->media_height = (uint32_t)source->height;
+        pthread_mutex_unlock(&player->mutex);
         publish_video_frame(player, context);
         if (timestamp_ms >= 0) {
             set_position(player, (uint64_t)timestamp_ms);
         }
     }
+    return result == AVERROR(EAGAIN) || result == AVERROR_EOF ? 0 : -1;
 }
 
 static void decode_audio(struct media_player *player,
@@ -385,10 +500,17 @@ static void *media_player_thread(void *argument)
 {
     struct media_player *player = argument;
     struct ffmpeg_context context;
+    enum video_decoder_preference preference;
     AVPacket packet;
     int result;
 
-    if (open_context(player, &context) < 0) {
+    if (video_decoder_preference_from_env(&preference) < 0) {
+        browser_log(BROWSER_LOG_ERROR,
+                    "invalid BROWSER_VIDEO_DECODER; use auto/software/rkmpp");
+        set_state(player, MEDIA_PLAYER_ERROR);
+        return NULL;
+    }
+    if (open_context(player, &context, preference) < 0) {
         set_state(player, MEDIA_PLAYER_ERROR);
         return NULL;
     }
@@ -426,12 +548,45 @@ static void *media_player_thread(void *argument)
             break;
         }
         if (packet.stream_index == context.video_stream && context.video != NULL) {
-            decode_video(player, &context, &packet);
+            result = decode_video(player, &context, &packet);
         } else if (packet.stream_index == context.audio_stream &&
                    context.audio != NULL && context.swr != NULL) {
             decode_audio(player, &context, &packet);
+            result = 0;
+        } else {
+            result = 0;
         }
         av_packet_unref(&packet);
+        if (result < 0) {
+            uint64_t resume_ms = player_position(player);
+
+            if (!context.video_hardware ||
+                context.video_preference != VIDEO_DECODER_AUTO) {
+                set_state(player, MEDIA_PLAYER_ERROR);
+                break;
+            }
+            browser_log(BROWSER_LOG_WARN,
+                        "hardware video decode failed; falling back to software");
+            close_context(&context);
+            if (open_context(player, &context, VIDEO_DECODER_SOFTWARE) < 0) {
+                set_state(player, MEDIA_PLAYER_ERROR);
+                return NULL;
+            }
+            if (resume_ms > 0) {
+                int64_t target = (int64_t)resume_ms * 1000;
+
+                if (av_seek_frame(context.format, -1, target,
+                                  AVSEEK_FLAG_BACKWARD) >= 0) {
+                    if (context.video != NULL) {
+                        avcodec_flush_buffers(context.video);
+                    }
+                    if (context.audio != NULL) {
+                        avcodec_flush_buffers(context.audio);
+                    }
+                }
+            }
+            context.video_clock_started = 0;
+        }
     }
     av_packet_unref(&packet);
     close_context(&context);
@@ -481,6 +636,8 @@ int media_player_start(struct media_player *player, const char *path,
     player->media_width = 0;
     player->media_height = 0;
     player->frame_rate = 0.0;
+    player->video_decoder[0] = '\0';
+    player->hardware_video = 0;
     player->seek_ms = -1;
     player->stop_requested = 0;
     pthread_mutex_unlock(&player->mutex);
@@ -568,6 +725,9 @@ void media_player_get_status(struct media_player *player,
     status->height = player->media_height;
     status->frame_rate = player->frame_rate;
     status->has_video = player->frame.pixels != NULL;
+    snprintf(status->video_decoder, sizeof(status->video_decoder), "%s",
+             player->video_decoder);
+    status->hardware_video = player->hardware_video;
     pthread_mutex_unlock(&player->mutex);
 }
 
