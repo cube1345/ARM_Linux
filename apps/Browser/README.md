@@ -47,6 +47,9 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - 提供统一日志模块，支持通过 `BROWSER_LOG_LEVEL` 控制 ERROR/WARN/INFO/DEBUG。
 - SIGABRT、SIGBUS、SIGFPE、SIGILL 和 SIGSEGV 会在执行默认终止动作前追加最小崩溃
   记录到 `/var/log/media-browser-crash.log`，可用 `BROWSER_CRASH_LOG_PATH` 覆盖路径。
+- 默认连续 300 秒无输入后通过 framebuffer `FBIOBLANK` 关闭屏幕，任意输入先唤醒
+  屏幕且不会误触发原操作；视频和图片自动播放期间保持亮屏。可用
+  `BROWSER_SCREEN_IDLE_SECONDS` 调整秒数，设为 `0` 禁用。
 - Settings 会持久化字体大小、音量、文件排序、播放模式、UI 主题、当前媒体根目录、
   输入设备参数、最近一次媒体断点、最近打开和收藏夹；默认路径为
   `/etc/media-browser.conf`，可用 `BROWSER_CONFIG_PATH` 指定可写路径。CLI 格式不变，
@@ -72,6 +75,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 | `core/page_manager.c/.h` | 页面 operation 注册、查找、渲染、输入分发、周期任务和事件等待时间调整 |
 | `core/plugin_manager.c/.h` | versioned plugin ABI、`.so` 扫描加载、operation 注册和逆序 shutdown |
 | `core/file_watcher.c/.h` | 当前普通文件目录的 nonblocking inotify 监听与事件消费 |
+| `core/screen_power.c/.h` | framebuffer blank/unblank operation 与空闲休眠状态机 |
 | `pages/files/page_file.c/.h` | 文件列表渲染、目录进入/返回、搜索、最近打开/收藏夹、键盘和触摸处理 |
 | `pages/gallery/page_image.c/.h` | 图片/GIF 打开关闭、相邻图片选择、自动播放、预解码和旋转 |
 | `pages/reader/page_text.c/.h` | UTF-8 文本分页渲染、键盘和触摸翻页处理 |
@@ -173,8 +177,8 @@ make
 Host smoke test 会生成 4/8/24/32-bit、RLE4/RLE8 BMP、PNG、JPEG、GIF、WAV
 和 ID3 标签，并使用 Buildroot target 中已有的 MP3/MP4，检查正常解码、配置
 读写、文件排序/搜索、音频元数据、三种画面缩放模式、SRT 时间轴、动态 `.so`
-插件 ABI/operation/shutdown、inotify 目录变化、致命信号日志、空目录和损坏文件
-拒绝逻辑，同时用 pipe/FIFO 验证输入 operation 断开隔离和路径重连：
+插件 ABI/operation/shutdown、inotify 目录变化、致命信号日志、屏幕休眠状态机、
+空目录和损坏文件拒绝逻辑，同时用 pipe/FIFO 验证输入 operation 断开隔离和路径重连：
 
 ```sh
 cd /home/cube/WorkSpace/Linux/ARM_Linux_WS/apps/Browser

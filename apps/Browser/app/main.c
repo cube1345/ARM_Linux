@@ -33,6 +33,8 @@
 
 static volatile sig_atomic_t browser_shutdown_requested;
 
+#define BROWSER_SCREEN_IDLE_DEFAULT_SECONDS 300U
+
 /**
  * @brief 记录终止信号并交给主循环执行资源清理。
  * @param signal_number 收到的信号编号。
@@ -91,6 +93,30 @@ static int copy_runtime_setting(char *output, size_t output_size,
         return -1;
     }
     return 0;
+}
+
+/**
+ * @brief 从环境变量读取屏幕空闲休眠时长。
+ * @return 空闲毫秒数，0 表示禁用。
+ */
+static uint64_t screen_idle_timeout_ms(void)
+{
+    const char *text = getenv("BROWSER_SCREEN_IDLE_SECONDS");
+    char *end = NULL;
+    unsigned long long seconds;
+
+    if (text == NULL || text[0] == '\0') {
+        return BROWSER_SCREEN_IDLE_DEFAULT_SECONDS * 1000U;
+    }
+    errno = 0;
+    seconds = strtoull(text, &end, 10);
+    if (errno != 0 || end == text || *end != '\0' ||
+        seconds > UINT64_MAX / 1000U) {
+        browser_log(BROWSER_LOG_WARN,
+                    "invalid BROWSER_SCREEN_IDLE_SECONDS: %s", text);
+        return BROWSER_SCREEN_IDLE_DEFAULT_SECONDS * 1000U;
+    }
+    return (uint64_t)seconds * 1000U;
 }
 
 /**
@@ -159,6 +185,19 @@ static int update_file_watcher(struct browser_app *app)
 static int update_periodic(const struct page_manager *pages,
                            struct browser_app *app, uint64_t now_ms)
 {
+    int power_result;
+
+    if (app->page == BROWSER_PAGE_VIDEO ||
+        (app->page == BROWSER_PAGE_IMAGE && app->slideshow_enabled)) {
+        power_result = screen_power_manager_activity(&app->screen_power,
+                                                     now_ms);
+    } else {
+        power_result = screen_power_manager_update(&app->screen_power,
+                                                   now_ms);
+    }
+    if (power_result < 0) {
+        browser_log_errno(BROWSER_LOG_WARN, "screen power control");
+    }
     if (update_file_watcher(app) < 0) return -1;
     return page_manager_periodic(pages, app, now_ms);
 }
@@ -189,6 +228,13 @@ static int dispatch_input(const struct page_manager *pages,
                           struct browser_app *app,
                           const struct browser_input *input)
 {
+    int power_result = screen_power_manager_activity(&app->screen_power,
+                                                     monotonic_ms());
+
+    if (power_result > 0) return 0;
+    if (power_result < 0) {
+        browser_log_errno(BROWSER_LOG_WARN, "wake screen");
+    }
     if (input->text_length > 0 && app->page == BROWSER_PAGE_FILES &&
         app->search_active) {
         return handle_file_text(app, input->text, input->text_length);
@@ -393,6 +439,9 @@ int main(int argc, char *argv[])
         goto cleanup_media_player;
     }
     display_opened = 1;
+    screen_power_manager_init_framebuffer(&app.screen_power, app.display.fd,
+                                          screen_idle_timeout_ms(),
+                                          monotonic_ms());
     if (font_manager_open(&app.fonts, &app.font, argv[4],
                           app.config.font_size) < 0) {
         goto cleanup_media_player;
@@ -427,6 +476,7 @@ cleanup_audio_player:
         font_manager_close(&app.fonts, &app.font);
     }
     if (display_opened) {
+        screen_power_manager_destroy(&app.screen_power);
         display_manager_close(&app.display_devices, &app.display);
     }
     if (plugins_ready) {
