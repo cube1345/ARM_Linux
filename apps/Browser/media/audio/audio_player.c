@@ -22,12 +22,8 @@ struct wav_info {
     uint32_t data_size;
 };
 
-/** @brief 音频播放后端接口。 */
-struct audio_backend {
-    const char *name;
-    int (*supports)(const char *path);
-    int (*play)(struct audio_player *player);
-};
+static struct audio_backend_operation wav_backend;
+static struct audio_backend_operation mp3_backend;
 
 /**
  * @brief 判断文件路径是否具有指定扩展名。
@@ -88,7 +84,7 @@ static uint32_t le32(const unsigned char *data)
  * @param player 播放器上下文。
  * @return 应停止返回 1，否则返回 0。
  */
-static int wait_ready(struct audio_player *player)
+int audio_player_backend_wait(struct audio_player *player)
 {
     int stop;
 
@@ -107,7 +103,7 @@ static int wait_ready(struct audio_player *player)
  * @param player 播放器上下文。
  * @return 目标毫秒值，无请求返回 -1。
  */
-static int64_t take_seek(struct audio_player *player)
+int64_t audio_player_backend_take_seek(struct audio_player *player)
 {
     int64_t seek;
 
@@ -124,8 +120,9 @@ static int64_t take_seek(struct audio_player *player)
  * @param duration_ms 总时长毫秒。
  * @param position_ms 当前位置毫秒。
  */
-static void set_timing(struct audio_player *player, uint64_t duration_ms,
-                       uint64_t position_ms)
+void audio_player_backend_set_timing(struct audio_player *player,
+                                     uint64_t duration_ms,
+                                     uint64_t position_ms)
 {
     pthread_mutex_lock(&player->mutex);
     player->duration_ms = duration_ms;
@@ -201,7 +198,7 @@ static snd_pcm_sframes_t write_frames(struct audio_player *player,
         snd_pcm_sframes_t written;
         int interrupted;
 
-        if (wait_ready(player)) {
+        if (audio_player_backend_wait(player)) {
             break;
         }
         pthread_mutex_lock(&player->mutex);
@@ -334,7 +331,8 @@ static int play_wav(struct audio_player *player)
     source_sample_bytes = info.bits / 8U;
     frame_bytes = source_sample_bytes * info.channels;
     total_frames = info.data_size / frame_bytes;
-    set_timing(player, total_frames * 1000U / info.rate, 0);
+    audio_player_backend_set_timing(
+        player, total_frames * 1000U / info.rate, 0);
     if (open_pcm(player, info.channels, info.rate, &pcm) < 0) {
         goto cleanup;
     }
@@ -344,8 +342,9 @@ static int play_wav(struct audio_player *player)
         fseek(file, info.data_offset, SEEK_SET) != 0) {
         goto cleanup;
     }
-    while (frame_position < total_frames && !wait_ready(player)) {
-        int64_t seek_ms = take_seek(player);
+    while (frame_position < total_frames &&
+           !audio_player_backend_wait(player)) {
+        int64_t seek_ms = audio_player_backend_take_seek(player);
         size_t wanted_frames;
         size_t bytes;
         size_t frames;
@@ -363,8 +362,9 @@ static int play_wav(struct audio_player *player)
             }
             snd_pcm_drop(pcm);
             snd_pcm_prepare(pcm);
-            set_timing(player, total_frames * 1000U / info.rate,
-                       frame_position * 1000U / info.rate);
+            audio_player_backend_set_timing(
+                player, total_frames * 1000U / info.rate,
+                frame_position * 1000U / info.rate);
         }
         wanted_frames = AUDIO_BUFFER_BYTES / frame_bytes;
         if ((uint64_t)wanted_frames > total_frames - frame_position) {
@@ -442,8 +442,9 @@ static int play_mp3(struct audio_player *player)
         goto cleanup;
     }
     length = mpg123_length(decoder);
-    set_timing(player, length > 0 ? (uint64_t)length * 1000U /
-               (unsigned long)rate : 0, 0);
+    audio_player_backend_set_timing(
+        player, length > 0 ? (uint64_t)length * 1000U /
+        (unsigned long)rate : 0, 0);
     buffer_size = mpg123_outblock(decoder);
     if (buffer_size < 4096U) {
         buffer_size = AUDIO_BUFFER_BYTES;
@@ -452,8 +453,8 @@ static int play_mp3(struct audio_player *player)
     if (buffer == NULL) {
         goto cleanup;
     }
-    while (!wait_ready(player)) {
-        int64_t seek_ms = take_seek(player);
+    while (!audio_player_backend_wait(player)) {
+        int64_t seek_ms = audio_player_backend_take_seek(player);
         size_t bytes = 0;
         int status;
 
@@ -467,9 +468,10 @@ static int play_mp3(struct audio_player *player)
             }
             snd_pcm_drop(pcm);
             snd_pcm_prepare(pcm);
-            set_timing(player, length > 0 ? (uint64_t)length * 1000U /
-                       (unsigned long)rate : 0,
-                       (uint64_t)actual * 1000U / (unsigned long)rate);
+            audio_player_backend_set_timing(
+                player, length > 0 ? (uint64_t)length * 1000U /
+                (unsigned long)rate : 0,
+                (uint64_t)actual * 1000U / (unsigned long)rate);
         }
         status = mpg123_read(decoder, buffer, buffer_size, &bytes);
         if (status == MPG123_DONE) {
@@ -507,7 +509,7 @@ static int play_mp3(struct audio_player *player)
             goto cleanup;
         }
     }
-    if (wait_ready(player)) {
+    if (audio_player_backend_wait(player)) {
         result = 0;
     }
 
@@ -532,20 +534,17 @@ cleanup:
 static void *audio_thread(void *argument)
 {
     struct audio_player *player = argument;
-    const struct audio_backend backends[] = {
-        {"wav", supports_wav, play_wav},
-        {"mp3", supports_mp3, play_mp3}
-    };
+    struct audio_backend_operation *backend;
     int result = -1;
-    size_t index;
 
-    for (index = 0; index < sizeof(backends) / sizeof(backends[0]); index++) {
-        if (backends[index].supports(player->path)) {
-            result = backends[index].play(player);
+    for (backend = player->backends.head; backend != NULL;
+         backend = backend->next) {
+        if (backend->supports(player->path)) {
+            result = backend->play(player);
             break;
         }
     }
-    if (result < 0 && index == sizeof(backends) / sizeof(backends[0])) {
+    if (backend == NULL) {
         errno = ENOTSUP;
     }
 
@@ -555,6 +554,45 @@ static void *audio_thread(void *argument)
     }
     pthread_mutex_unlock(&player->mutex);
     return NULL;
+}
+
+/** @brief 初始化音频 backend manager。 */
+void audio_backend_manager_init(struct audio_backend_manager *manager)
+{
+    if (manager != NULL) {
+        manager->head = NULL;
+        manager->count = 0;
+    }
+}
+
+/** @brief 注册音频 backend，新注册 backend 优先匹配。 */
+int audio_backend_register(struct audio_backend_manager *manager,
+                           struct audio_backend_operation *operation)
+{
+    if (manager == NULL || operation == NULL || operation->name == NULL ||
+        operation->supports == NULL || operation->play == NULL) {
+        errno = EINVAL;
+        return -1;
+    }
+    operation->next = manager->head;
+    manager->head = operation;
+    manager->count++;
+    return 0;
+}
+
+/** @brief 注册内置 WAV 和 MP3 backend。 */
+int audio_backend_register_builtin(struct audio_backend_manager *manager)
+{
+    wav_backend.name = "wav";
+    wav_backend.supports = supports_wav;
+    wav_backend.play = play_wav;
+    wav_backend.next = NULL;
+    mp3_backend.name = "mp3";
+    mp3_backend.supports = supports_mp3;
+    mp3_backend.play = play_mp3;
+    mp3_backend.next = NULL;
+    return audio_backend_register(manager, &wav_backend) < 0 ||
+           audio_backend_register(manager, &mp3_backend) < 0 ? -1 : 0;
 }
 
 /**
@@ -569,6 +607,7 @@ int audio_player_init(struct audio_player *player)
         return -1;
     }
     memset(player, 0, sizeof(*player));
+    audio_backend_manager_init(&player->backends);
     player->seek_ms = -1;
     player->volume = 70;
     if (pthread_mutex_init(&player->mutex, NULL) != 0) {
@@ -579,6 +618,12 @@ int audio_player_init(struct audio_player *player)
         return -1;
     }
     if (mpg123_init() != MPG123_OK) {
+        pthread_cond_destroy(&player->condition);
+        pthread_mutex_destroy(&player->mutex);
+        return -1;
+    }
+    if (audio_backend_register_builtin(&player->backends) < 0) {
+        mpg123_exit();
         pthread_cond_destroy(&player->condition);
         pthread_mutex_destroy(&player->mutex);
         return -1;

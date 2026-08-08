@@ -28,8 +28,9 @@ static struct image_decoder png_decoder;
  * @param type 文件类型。
  * @return 支持返回 1，否则返回 0。
  */
-static int supports_bmp(enum file_type type)
+static int supports_bmp(const char *path, enum file_type type)
 {
+    (void)path;
     return type == FILE_TYPE_BMP;
 }
 
@@ -39,8 +40,9 @@ static int supports_bmp(enum file_type type)
  * @param type 文件类型。
  * @return 支持返回 1，否则返回 0。
  */
-static int supports_jpeg(enum file_type type)
+static int supports_jpeg(const char *path, enum file_type type)
 {
+    (void)path;
     return type == FILE_TYPE_JPEG;
 }
 
@@ -50,8 +52,9 @@ static int supports_jpeg(enum file_type type)
  * @param type 文件类型。
  * @return 支持返回 1，否则返回 0。
  */
-static int supports_png(enum file_type type)
+static int supports_png(const char *path, enum file_type type)
 {
+    (void)path;
     return type == FILE_TYPE_PNG;
 }
 
@@ -132,7 +135,7 @@ int image_decoder_manager_decode(struct image_decoder_manager *manager,
         return -1;
     }
     for (decoder = manager->head; decoder != NULL; decoder = decoder->next) {
-        if (decoder->supports(type)) {
+        if (decoder->supports(path, type)) {
             return decoder->decode(path, image);
         }
     }
@@ -165,6 +168,12 @@ static int ensure_default_manager(void)
 int image_decoder_prepare(void)
 {
     return ensure_default_manager();
+}
+
+/** @brief 获取默认图片 decoder manager，供插件注册 operation。 */
+struct image_decoder_manager *image_decoder_default_manager(void)
+{
+    return ensure_default_manager() < 0 ? NULL : &default_manager;
 }
 
 /**

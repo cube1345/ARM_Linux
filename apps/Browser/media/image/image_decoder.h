@@ -7,7 +7,7 @@
 /** @brief 单个静态图片解码器操作接口。 */
 struct image_decoder {
     const char *name;
-    int (*supports)(enum file_type type);
+    int (*supports)(const char *path, enum file_type type);
     int (*decode)(const char *path, struct image_data *image);
     struct image_decoder *next;
 };
@@ -48,6 +48,12 @@ int image_decoder_register_builtin(struct image_decoder_manager *manager);
  * @return 成功返回 0，失败返回 -1。
  */
 int image_decoder_prepare(void);
+
+/**
+ * @brief 获取默认图片 decoder manager，供插件注册 operation。
+ * @return 成功返回 manager，初始化失败返回 NULL。
+ */
+struct image_decoder_manager *image_decoder_default_manager(void);
 
 /**
  * @brief 通过指定管理器解码静态图片。

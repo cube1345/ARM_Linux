@@ -2,7 +2,24 @@
 #define AUDIO_PLAYER_H
 
 #include <pthread.h>
+#include <stddef.h>
 #include <stdint.h>
+
+struct audio_player;
+
+/** @brief 可注册的音频播放 backend operation。 */
+struct audio_backend_operation {
+    const char *name;
+    int (*supports)(const char *path);
+    int (*play)(struct audio_player *player);
+    struct audio_backend_operation *next;
+};
+
+/** @brief 音频 backend operation 链表管理器。 */
+struct audio_backend_manager {
+    struct audio_backend_operation *head;
+    size_t count;
+};
 
 /** @brief 音频播放器运行状态。 */
 enum audio_player_state {
@@ -22,6 +39,7 @@ struct audio_player_status {
 
 /** @brief WAV/MP3 后台播放器上下文。 */
 struct audio_player {
+    struct audio_backend_manager backends;
     pthread_t thread;
     pthread_mutex_t mutex;
     pthread_cond_t condition;
@@ -35,6 +53,38 @@ struct audio_player {
     int stop_requested;
     int thread_created;
 };
+
+/** @brief 初始化音频 backend manager。 */
+void audio_backend_manager_init(struct audio_backend_manager *manager);
+
+/**
+ * @brief 注册音频 backend，新注册 backend 优先匹配。
+ * @param manager backend manager。
+ * @param operation backend operation，生命周期必须长于 manager。
+ * @return 成功返回 0，失败返回 -1。
+ */
+int audio_backend_register(struct audio_backend_manager *manager,
+                           struct audio_backend_operation *operation);
+
+/** @brief 注册内置 WAV 和 MP3 backend。 */
+int audio_backend_register_builtin(struct audio_backend_manager *manager);
+
+/**
+ * @brief 等待暂停结束并检查停止请求，供外部 backend 使用。
+ * @return 应停止返回 1，否则返回 0。
+ */
+int audio_player_backend_wait(struct audio_player *player);
+
+/**
+ * @brief 取出一次 seek 请求，供外部 backend 使用。
+ * @return 目标毫秒值，无请求返回 -1。
+ */
+int64_t audio_player_backend_take_seek(struct audio_player *player);
+
+/** @brief 更新 backend 对外发布的总时长和当前位置。 */
+void audio_player_backend_set_timing(struct audio_player *player,
+                                     uint64_t duration_ms,
+                                     uint64_t position_ms);
 
 /**
  * @brief 初始化播放器同步资源和 mpg123。
