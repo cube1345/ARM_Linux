@@ -26,10 +26,12 @@ static void debug_input_summary(const struct browser_app *app, char *output,
     output[0] = '\0';
     for (operation = app->input.operations; operation != NULL;
          operation = operation->next) {
-        int written = snprintf(output + used, output_size - used,
-                               used == 0 ? "%s" : " + %s",
-                               operation->name);
+        int written;
 
+        if (operation->fd < 0) continue;
+        written = snprintf(output + used, output_size - used,
+                           used == 0 ? "%s" : " + %s",
+                           operation->name);
         if (written < 0 || (size_t)written >= output_size - used) {
             break;
         }

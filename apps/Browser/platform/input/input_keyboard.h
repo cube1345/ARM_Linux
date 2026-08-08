@@ -2,7 +2,9 @@
 #define INPUT_KEYBOARD_H
 
 #include <linux/input.h>
+#include <limits.h>
 #include <stddef.h>
+#include <stdint.h>
 #include <termios.h>
 
 /** @brief 浏览器内部命令动作。 */
@@ -93,6 +95,11 @@ struct input_manager {
     int stdin_raw_enabled;
     int stdin_escape_state;
     struct termios stdin_original;
+    char keyboard_path[PATH_MAX];
+    char touch_path[PATH_MAX];
+    int keyboard_auto;
+    int touch_auto;
+    uint64_t reconnect_after_ms;
 };
 
 /**
@@ -114,7 +121,8 @@ int input_manager_open(struct input_manager *manager,
  * @param manager 输入管理器。
  * @param event 输出浏览器输入。
  * @param timeout_ms 最长等待毫秒，-1 表示无限。
- * @return 收到事件返回 1，超时返回 0，失败返回 -1。
+ * evdev 临时全部离线时按超时返回 0，并周期重连已配置路径。
+ * @return 收到事件返回 1，超时或等待重连返回 0，失败返回 -1。
  */
 int input_manager_wait(struct input_manager *manager,
                        struct browser_input *event, int timeout_ms);

@@ -12,6 +12,7 @@
 #include <string.h>
 #include <sys/ioctl.h>
 #include <termios.h>
+#include <time.h>
 #include <unistd.h>
 
 #define INPUT_BATCH 32
@@ -21,6 +22,7 @@
 #define INPUT_STDIN_PATH "stdin"
 #define INPUT_AUTO_PATH "auto"
 #define INPUT_EVENT_SCAN_LIMIT 32
+#define INPUT_RECONNECT_INTERVAL_MS 1000U
 
 static int read_keyboard(struct input_manager *manager,
                          struct input_operation *operation,
@@ -161,15 +163,16 @@ static int input_bit_is_set(const unsigned long *bits, int bit)
 /**
  * @brief 打开一个非阻塞 Input 节点并打印设备名。
  * @param path 设备路径。
+ * @param report_error 是否记录打开失败。
  * @return 成功返回文件描述符，失败返回 -1。
  */
-static int open_input(const char *path)
+static int open_input(const char *path, int report_error)
 {
     char name[INPUT_NAME_SIZE] = "unknown";
     int fd = open(path, O_RDONLY | O_NONBLOCK);
 
     if (fd < 0) {
-        browser_log_errno(BROWSER_LOG_ERROR, path);
+        if (report_error) browser_log_errno(BROWSER_LOG_ERROR, path);
         return -1;
     }
     (void)ioctl(fd, EVIOCGNAME(sizeof(name)), name);
@@ -273,10 +276,12 @@ static int input_device_is_pointer(int fd)
  * @param kind 日志中显示的设备类别。
  * @param output 输出路径缓冲区。
  * @param output_size 输出路径缓冲区大小。
+ * @param report_missing 是否记录未找到设备。
  * @return 找到返回 0，失败返回 -1。
  */
 static int find_input_device(int (*match)(int fd), const char *kind,
-                             char *output, size_t output_size)
+                             char *output, size_t output_size,
+                             int report_missing)
 {
     int index;
 
@@ -303,7 +308,9 @@ static int find_input_device(int (*match)(int fd), const char *kind,
         }
         close(fd);
     }
-    browser_log(BROWSER_LOG_WARN, "auto %s input not found", kind);
+    if (report_missing) {
+        browser_log(BROWSER_LOG_WARN, "auto %s input not found", kind);
+    }
     errno = ENODEV;
     return -1;
 }
@@ -387,6 +394,179 @@ static void restore_stdin(struct input_manager *manager)
     }
 }
 
+/** @brief 获取输入模块单调时钟毫秒值。 */
+static uint64_t input_monotonic_ms(void)
+{
+    struct timespec value;
+
+    if (clock_gettime(CLOCK_MONOTONIC, &value) < 0) return 0;
+    return (uint64_t)value.tv_sec * 1000U +
+           (uint64_t)value.tv_nsec / 1000000U;
+}
+
+/** @brief 保存用于断线重连的输入参数。 */
+static int save_input_path(char *output, size_t output_size,
+                           const char *path)
+{
+    int written = snprintf(output, output_size, "%s",
+                           path == NULL ? "" : path);
+
+    if (written < 0 || (size_t)written >= output_size) {
+        errno = ENAMETOOLONG;
+        return -1;
+    }
+    return 0;
+}
+
+/** @brief 判断 operation 是否已经在 manager 链表中。 */
+static int operation_is_registered(const struct input_manager *manager,
+                                   const struct input_operation *target)
+{
+    const struct input_operation *operation;
+
+    for (operation = manager->operations; operation != NULL;
+         operation = operation->next) {
+        if (operation == target) return 1;
+    }
+    return 0;
+}
+
+/** @brief 重新打开已配置的 evdev 键盘。 */
+static int reconnect_keyboard(struct input_manager *manager)
+{
+    char automatic_path[PATH_MAX];
+    const char *path = manager->keyboard_path;
+
+    if (manager->keyboard.fd >= 0 || path[0] == '\0' ||
+        strcmp(path, "-") == 0 || strcmp(path, INPUT_STDIN_PATH) == 0) {
+        return 0;
+    }
+    if (manager->keyboard_auto) {
+        if (find_input_device(input_device_is_keyboard, "keyboard",
+                              automatic_path, sizeof(automatic_path), 0) < 0) {
+            return 0;
+        }
+        path = automatic_path;
+    }
+    manager->keyboard.fd = open_input(path, 0);
+    if (manager->keyboard.fd < 0) return 0;
+    manager->keyboard.name = "keyboard";
+    manager->keyboard.read = read_keyboard;
+    manager->keyboard.close = close_input_operation;
+    manager->keyboard.owns_fd = 1;
+    if (!operation_is_registered(manager, &manager->keyboard) &&
+        input_manager_register_operation(manager, &manager->keyboard) < 0) {
+        close_input_operation(&manager->keyboard);
+        return -1;
+    }
+    browser_log(BROWSER_LOG_INFO, "keyboard input reconnected: %s", path);
+    return 1;
+}
+
+/** @brief 重新打开已配置的 evdev 触摸屏或鼠标。 */
+static int reconnect_pointer(struct input_manager *manager)
+{
+    char automatic_path[PATH_MAX];
+    const char *path = manager->touch_path;
+
+    if (manager->touch.fd >= 0 || path[0] == '\0' ||
+        strcmp(path, "-") == 0) {
+        return 0;
+    }
+    if (manager->touch_auto) {
+        if (find_input_device(input_device_is_pointer, "pointer",
+                              automatic_path, sizeof(automatic_path), 0) < 0) {
+            return 0;
+        }
+        path = automatic_path;
+    }
+    manager->touch.fd = open_input(path, 0);
+    if (manager->touch.fd < 0) return 0;
+    manager->touch.owns_fd = 1;
+    manager->touch.close = close_input_operation;
+    manager->x = manager->screen_width / 2;
+    manager->y = manager->screen_height / 2;
+    manager->raw_x = manager->x;
+    manager->raw_y = manager->y;
+    manager->touching = 0;
+    manager->release_pending = 0;
+    if (configure_axes(manager, manager->touch.fd) == 0) {
+        manager->pointer_mode = INPUT_POINTER_ABSOLUTE;
+        manager->touch.name = "touch";
+        manager->touch.read = read_touch;
+        manager->raw_x = manager->abs_x.minimum +
+                         (manager->abs_x.maximum - manager->abs_x.minimum) / 2;
+        manager->raw_y = manager->abs_y.minimum +
+                         (manager->abs_y.maximum - manager->abs_y.minimum) / 2;
+    } else if (configure_relative_mouse(manager->touch.fd) == 0) {
+        manager->pointer_mode = INPUT_POINTER_RELATIVE;
+        manager->touch.name = "mouse";
+        manager->touch.read = read_mouse;
+    } else {
+        close_input_operation(&manager->touch);
+        manager->pointer_mode = INPUT_POINTER_NONE;
+        return 0;
+    }
+    if (!operation_is_registered(manager, &manager->touch) &&
+        input_manager_register_operation(manager, &manager->touch) < 0) {
+        close_input_operation(&manager->touch);
+        return -1;
+    }
+    browser_log(BROWSER_LOG_INFO, "pointer input reconnected: %s", path);
+    return 1;
+}
+
+/** @brief 到达重试时间时尝试恢复离线 evdev operation。 */
+static int input_manager_try_reconnect(struct input_manager *manager,
+                                       uint64_t now_ms)
+{
+    int keyboard_result;
+    int pointer_result;
+
+    if (now_ms < manager->reconnect_after_ms) return 0;
+    manager->reconnect_after_ms = now_ms + INPUT_RECONNECT_INTERVAL_MS;
+    keyboard_result = reconnect_keyboard(manager);
+    if (keyboard_result < 0) return -1;
+    pointer_result = reconnect_pointer(manager);
+    if (pointer_result < 0) return -1;
+    return keyboard_result + pointer_result;
+}
+
+/** @brief 判断 manager 是否存在可重连的离线 evdev。 */
+static int input_manager_has_reconnect_target(
+    const struct input_manager *manager)
+{
+    int keyboard_target = manager->keyboard.fd < 0 &&
+        manager->keyboard_path[0] != '\0' &&
+        strcmp(manager->keyboard_path, "-") != 0 &&
+        strcmp(manager->keyboard_path, INPUT_STDIN_PATH) != 0;
+    int pointer_target = manager->touch.fd < 0 &&
+        manager->touch_path[0] != '\0' &&
+        strcmp(manager->touch_path, "-") != 0;
+
+    return keyboard_target || pointer_target;
+}
+
+/** @brief 将断开的 evdev operation 标记为离线并安排重连。 */
+static void input_manager_disconnect(struct input_manager *manager,
+                                     struct input_operation *operation)
+{
+    browser_log(BROWSER_LOG_WARN, "%s input disconnected; retrying",
+                operation->name == NULL ? "unknown" : operation->name);
+    if (operation->close != NULL) {
+        operation->close(operation);
+    } else {
+        close_input_operation(operation);
+    }
+    if (operation == &manager->touch) {
+        manager->pointer_mode = INPUT_POINTER_NONE;
+        manager->touching = 0;
+        manager->release_pending = 0;
+    }
+    manager->reconnect_after_ms = input_monotonic_ms() +
+                                  INPUT_RECONNECT_INTERVAL_MS;
+}
+
 /**
  * @brief 将原始绝对坐标映射到屏幕坐标。
  * @param value 原始值。
@@ -437,18 +617,27 @@ int input_manager_open(struct input_manager *manager,
     manager->stdin_flags = -1;
     manager->screen_width = screen_width;
     manager->screen_height = screen_height;
+    if (save_input_path(manager->keyboard_path,
+                        sizeof(manager->keyboard_path), keyboard_path) < 0 ||
+        save_input_path(manager->touch_path,
+                        sizeof(manager->touch_path), touch_path) < 0) {
+        return -1;
+    }
+    manager->keyboard_auto = strcmp(keyboard_path, INPUT_AUTO_PATH) == 0;
+    manager->touch_auto = touch_path != NULL &&
+                          strcmp(touch_path, INPUT_AUTO_PATH) == 0;
     resolved_keyboard_path = keyboard_path;
     if (strcmp(keyboard_path, INPUT_AUTO_PATH) == 0) {
         if (find_input_device(input_device_is_keyboard, "keyboard",
                               keyboard_auto_path,
-                              sizeof(keyboard_auto_path)) < 0) {
+                              sizeof(keyboard_auto_path), 1) < 0) {
             return -1;
         }
         resolved_keyboard_path = keyboard_auto_path;
     }
     if (touch_path != NULL && strcmp(touch_path, INPUT_AUTO_PATH) == 0) {
         if (find_input_device(input_device_is_pointer, "pointer",
-                              touch_auto_path, sizeof(touch_auto_path)) == 0) {
+                              touch_auto_path, sizeof(touch_auto_path), 1) == 0) {
             resolved_touch_path = touch_auto_path;
         } else {
             resolved_touch_path = NULL;
@@ -461,7 +650,7 @@ int input_manager_open(struct input_manager *manager,
             manager->keyboard.read = read_stdin;
             manager->keyboard.close = close_input_operation;
         } else {
-            manager->keyboard.fd = open_input(resolved_keyboard_path);
+            manager->keyboard.fd = open_input(resolved_keyboard_path, 1);
             manager->keyboard.name = "keyboard";
             manager->keyboard.read = read_keyboard;
             manager->keyboard.close = close_input_operation;
@@ -477,7 +666,7 @@ int input_manager_open(struct input_manager *manager,
         }
     }
     if (resolved_touch_path != NULL && strcmp(resolved_touch_path, "-") != 0) {
-        manager->touch.fd = open_input(resolved_touch_path);
+        manager->touch.fd = open_input(resolved_touch_path, 1);
         if (manager->touch.fd < 0) {
             input_manager_close(manager);
             return -1;
@@ -519,6 +708,8 @@ int input_manager_open(struct input_manager *manager,
         errno = ENODEV;
         return -1;
     }
+    manager->reconnect_after_ms = input_monotonic_ms() +
+                                  INPUT_RECONNECT_INTERVAL_MS;
     return 0;
 }
 
@@ -896,6 +1087,9 @@ int input_manager_wait(struct input_manager *manager,
         return -1;
     }
     memset(event, 0, sizeof(*event));
+    if (input_manager_try_reconnect(manager, input_monotonic_ms()) < 0) {
+        return -1;
+    }
     for (operation = manager->operations; operation != NULL;
          operation = operation->next) {
         if (count >= INPUT_MAX_OPERATIONS) {
@@ -911,8 +1105,19 @@ int input_manager_wait(struct input_manager *manager,
         operations[count++] = operation;
     }
     if (count == 0) {
-        errno = ENODEV;
-        return -1;
+        int reconnect_wait = timeout_ms;
+
+        if (!input_manager_has_reconnect_target(manager)) {
+            errno = ENODEV;
+            return -1;
+        }
+        if (reconnect_wait < 0 ||
+            reconnect_wait > (int)INPUT_RECONNECT_INTERVAL_MS) {
+            reconnect_wait = (int)INPUT_RECONNECT_INTERVAL_MS;
+        }
+        poll_result = poll(NULL, 0, reconnect_wait);
+        if (poll_result < 0 && errno == EINTR) return 0;
+        return poll_result;
     }
     poll_result = poll(descriptors, (nfds_t)count, timeout_ms);
     if (poll_result < 0 && errno == EINTR) {
@@ -926,6 +1131,12 @@ int input_manager_wait(struct input_manager *manager,
 
         if ((descriptors[index].revents &
              (POLLERR | POLLHUP | POLLNVAL)) != 0) {
+            if (operations[index] == &manager->touch ||
+                (operations[index] == &manager->keyboard &&
+                 strcmp(manager->keyboard_path, INPUT_STDIN_PATH) != 0)) {
+                input_manager_disconnect(manager, operations[index]);
+                continue;
+            }
             errno = EIO;
             return -1;
         }
@@ -933,9 +1144,15 @@ int input_manager_wait(struct input_manager *manager,
             continue;
         }
         result = operations[index]->read(manager, operations[index], event);
-        if (result != 0) {
-            return result;
+        if (result < 0 &&
+            (operations[index] == &manager->touch ||
+             (operations[index] == &manager->keyboard &&
+              strcmp(manager->keyboard_path, INPUT_STDIN_PATH) != 0))) {
+            input_manager_disconnect(manager, operations[index]);
+            memset(event, 0, sizeof(*event));
+            continue;
         }
+        if (result != 0) return result;
     }
     return 0;
 }

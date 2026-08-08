@@ -42,7 +42,7 @@ CPPFLAGS := $(shell $(PKG_CONFIG) --cflags-only-I $(PACKAGES)) \
 LDLIBS := $(shell $(PKG_CONFIG) --libs $(PACKAGES)) -lgif -pthread
 
 .PHONY: all clean install test test-media test-config test-metadata \
-	test-render test-subtitle test-input
+	test-render test-subtitle test-input-reconnect test-input
 
 all: $(TARGET)
 
@@ -55,7 +55,8 @@ $(TARGET): $(OBJECTS)
 install: $(TARGET)
 	install -D -m 0755 $(TARGET) $(DESTDIR)/usr/bin/media-browser
 
-test: test-media test-config test-metadata test-render test-subtitle
+test: test-media test-config test-metadata test-render test-subtitle \
+	test-input-reconnect
 
 test-media:
 	CC="$(HOST_CC)" ./tests/media_smoke.sh "$(TEST_MEDIA_DIR)"
@@ -71,6 +72,9 @@ test-render:
 
 test-subtitle:
 	CC="$(HOST_CC)" ./tests/subtitle_smoke.sh
+
+test-input-reconnect:
+	CC="$(HOST_CC)" ./tests/input_reconnect_smoke.sh
 
 test-input:
 	./tests/input_auto_smoke.sh

@@ -30,7 +30,8 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - Tools 应用以白名单方式运行现有 Linux ARM 命令，可查看 ALSA、mpg123、strace、
   framebuffer 截图和 input 查询等工具输出。
 - 同时支持 Linux Input 键盘、标准输入、绝对坐标触摸与相对坐标鼠标设备，
-  可用 `auto` 自动发现 evdev 节点，并以 input operation 链表统一分发。
+  可用 `auto` 自动发现 evdev 节点，并以 input operation 链表统一分发；evdev
+  拔出或暂时失效后不会终止 Browser，恢复后会自动重扫并重新连接。
 - 文件列表显示文件大小与修改时间，支持名称、类型、时间和大小排序。
 - 文件列表支持递归搜索：按 `/` 或顶部 `SEARCH` 进入，输入文件名片段，按退格删除。
 - 文件列表支持最近打开和收藏夹：成功打开的媒体/文本会进入 `Recent`，按 `R`
@@ -133,7 +134,7 @@ make
 Host smoke test 会生成 4/8/24/32-bit、RLE4/RLE8 BMP、PNG、JPEG、GIF、WAV
 和 ID3 标签，并使用 Buildroot target 中已有的 MP3/MP4，检查正常解码、配置
 读写、文件排序/搜索、音频元数据、三种画面缩放模式、SRT 时间轴、空目录和损坏
-文件拒绝逻辑：
+文件拒绝逻辑，同时用 pipe/FIFO 验证输入 operation 断开隔离和路径重连：
 
 ```sh
 cd /home/cube/WorkSpace/Linux/ARM_Linux_WS/apps/Browser
