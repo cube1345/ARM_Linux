@@ -100,7 +100,31 @@ struct input_manager {
     int keyboard_auto;
     int touch_auto;
     uint64_t reconnect_after_ms;
+    int64_t calibration[7];
+    int calibration_enabled;
 };
+
+/**
+ * @brief 读取 tslib 七参数 pointercal 文件。
+ * @param manager 输入管理器。
+ * @param path pointercal 路径。
+ * @return 已加载返回 1，文件不存在返回 0，格式或读取错误返回 -1。
+ */
+int input_manager_load_calibration(struct input_manager *manager,
+                                   const char *path);
+
+/**
+ * @brief 将触摸原始绝对坐标映射到 framebuffer 坐标。
+ * @param manager 输入管理器。
+ * @param raw_x 原始 X 坐标。
+ * @param raw_y 原始 Y 坐标。
+ * @param screen_x 输出屏幕 X 坐标。
+ * @param screen_y 输出屏幕 Y 坐标。
+ * @return 成功返回 0，参数或坐标轴无效返回 -1。
+ */
+int input_manager_map_absolute(const struct input_manager *manager,
+                               int raw_x, int raw_y,
+                               int *screen_x, int *screen_y);
 
 /**
  * @brief 打开可选键盘、标准输入和指针设备。

@@ -9,6 +9,7 @@
 #include <linux/input.h>
 #include <poll.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <sys/ioctl.h>
 #include <termios.h>
@@ -23,6 +24,8 @@
 #define INPUT_AUTO_PATH "auto"
 #define INPUT_EVENT_SCAN_LIMIT 32
 #define INPUT_RECONNECT_INTERVAL_MS 1000U
+#define INPUT_CALIBRATION_DEFAULT_PATH "/etc/pointercal"
+#define INPUT_CALIBRATION_ENV "TSLIB_CALIBFILE"
 
 static int read_keyboard(struct input_manager *manager,
                          struct input_operation *operation,
@@ -36,6 +39,7 @@ static int read_touch(struct input_manager *manager,
 static int read_mouse(struct input_manager *manager,
                       struct input_operation *operation,
                       struct browser_input *output);
+static void load_default_calibration(struct input_manager *manager);
 
 /**
  * @brief 判断键盘事件是否可触发浏览器动作。
@@ -494,6 +498,7 @@ static int reconnect_pointer(struct input_manager *manager)
         manager->pointer_mode = INPUT_POINTER_ABSOLUTE;
         manager->touch.name = "touch";
         manager->touch.read = read_touch;
+        load_default_calibration(manager);
         manager->raw_x = manager->abs_x.minimum +
                          (manager->abs_x.maximum - manager->abs_x.minimum) / 2;
         manager->raw_y = manager->abs_y.minimum +
@@ -568,6 +573,56 @@ static void input_manager_disconnect(struct input_manager *manager,
 }
 
 /**
+ * @brief 读取 tslib 七参数 pointercal 文件。
+ * @param manager 输入管理器。
+ * @param path pointercal 路径。
+ * @return 已加载返回 1，文件不存在返回 0，格式或读取错误返回 -1。
+ */
+int input_manager_load_calibration(struct input_manager *manager,
+                                   const char *path)
+{
+    long long parsed[7];
+    FILE *stream;
+    size_t index;
+    int fields;
+
+    if (manager == NULL || path == NULL || path[0] == '\0') {
+        errno = EINVAL;
+        return -1;
+    }
+    manager->calibration_enabled = 0;
+    stream = fopen(path, "r");
+    if (stream == NULL) return errno == ENOENT ? 0 : -1;
+    fields = fscanf(stream, "%lld %lld %lld %lld %lld %lld %lld",
+                    &parsed[0], &parsed[1], &parsed[2], &parsed[3],
+                    &parsed[4], &parsed[5], &parsed[6]);
+    if (fclose(stream) < 0) return -1;
+    if (fields != 7 || parsed[6] == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    for (index = 0; index < 7U; index++) {
+        manager->calibration[index] = (int64_t)parsed[index];
+    }
+    manager->calibration_enabled = 1;
+    browser_log(BROWSER_LOG_INFO, "touch calibration: %s", path);
+    return 1;
+}
+
+/** @brief 尝试加载环境变量或默认路径指定的 pointercal。 */
+static void load_default_calibration(struct input_manager *manager)
+{
+    const char *path = getenv(INPUT_CALIBRATION_ENV);
+
+    if (path == NULL || path[0] == '\0') {
+        path = INPUT_CALIBRATION_DEFAULT_PATH;
+    }
+    if (input_manager_load_calibration(manager, path) < 0) {
+        browser_log_errno(BROWSER_LOG_WARN, "touch calibration");
+    }
+}
+
+/**
  * @brief 将原始绝对坐标映射到屏幕坐标。
  * @param value 原始值。
  * @param axis 轴参数。
@@ -586,6 +641,62 @@ static int normalize_axis(int value, const struct input_absinfo *axis,
     }
     numerator = (int64_t)(value - axis->minimum) * (extent - 1);
     return (int)(numerator / (axis->maximum - axis->minimum));
+}
+
+/** @brief 将整数坐标限制到屏幕轴范围。 */
+static int clamp_coordinate(int64_t value, int extent)
+{
+    if (value < 0) return 0;
+    return value >= extent ? extent - 1 : value;
+}
+
+/**
+ * @brief 将触摸原始绝对坐标映射到 framebuffer 坐标。
+ * @param manager 输入管理器。
+ * @param raw_x 原始 X 坐标。
+ * @param raw_y 原始 Y 坐标。
+ * @param screen_x 输出屏幕 X 坐标。
+ * @param screen_y 输出屏幕 Y 坐标。
+ * @return 成功返回 0，参数或坐标轴无效返回 -1。
+ */
+int input_manager_map_absolute(const struct input_manager *manager,
+                               int raw_x, int raw_y,
+                               int *screen_x, int *screen_y)
+{
+    if (manager == NULL || screen_x == NULL || screen_y == NULL ||
+        manager->screen_width <= 0 || manager->screen_height <= 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (manager->calibration_enabled) {
+        int64_t divisor = manager->calibration[6];
+        int64_t calibrated_x;
+        int64_t calibrated_y;
+
+        if (divisor == 0) {
+            errno = EINVAL;
+            return -1;
+        }
+        calibrated_x = (manager->calibration[0] * raw_x +
+                        manager->calibration[1] * raw_y +
+                        manager->calibration[2]) / divisor;
+        calibrated_y = (manager->calibration[3] * raw_x +
+                        manager->calibration[4] * raw_y +
+                        manager->calibration[5]) / divisor;
+        *screen_x = clamp_coordinate(calibrated_x, manager->screen_width);
+        *screen_y = clamp_coordinate(calibrated_y, manager->screen_height);
+        return 0;
+    }
+    if (manager->abs_x.maximum <= manager->abs_x.minimum ||
+        manager->abs_y.maximum <= manager->abs_y.minimum) {
+        errno = EINVAL;
+        return -1;
+    }
+    *screen_x = normalize_axis(raw_x, &manager->abs_x,
+                               manager->screen_width);
+    *screen_y = normalize_axis(raw_y, &manager->abs_y,
+                               manager->screen_height);
+    return 0;
 }
 
 /**
@@ -681,6 +792,7 @@ int input_manager_open(struct input_manager *manager,
             manager->pointer_mode = INPUT_POINTER_ABSOLUTE;
             manager->touch.name = "touch";
             manager->touch.read = read_touch;
+            load_default_calibration(manager);
             manager->raw_x = manager->abs_x.minimum +
                              (manager->abs_x.maximum -
                               manager->abs_x.minimum) / 2;
@@ -725,10 +837,10 @@ static int finish_touch_report(struct input_manager *manager,
     int threshold_x = manager->screen_width / 20;
     int threshold_y = manager->screen_height / 20;
 
-    manager->x = normalize_axis(manager->raw_x, &manager->abs_x,
-                                manager->screen_width);
-    manager->y = normalize_axis(manager->raw_y, &manager->abs_y,
-                                manager->screen_height);
+    if (input_manager_map_absolute(manager, manager->raw_x, manager->raw_y,
+                                   &manager->x, &manager->y) < 0) {
+        return 0;
+    }
     if (threshold_x < 32) {
         threshold_x = 32;
     }

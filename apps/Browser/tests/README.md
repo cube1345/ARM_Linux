@@ -5,7 +5,8 @@
 It also verifies an empty directory and rejects a corrupt PNG.
 `input_reconnect_smoke.sh` uses host pipes and a FIFO to verify that one
 disconnected operation does not stop other input and that an offline explicit
-device path is reopened.
+device path is reopened. It also checks tslib pointercal affine mapping and the
+uncalibrated EVIOCGABS linear fallback.
 
 Run it from the workspace after the Buildroot target contains an MP3 and MP4:
 

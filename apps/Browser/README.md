@@ -31,7 +31,8 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
   framebuffer 截图和 input 查询等工具输出。
 - 同时支持 Linux Input 键盘、标准输入、绝对坐标触摸与相对坐标鼠标设备，
   可用 `auto` 自动发现 evdev 节点，并以 input operation 链表统一分发；evdev
-  拔出或暂时失效后不会终止 Browser，恢复后会自动重扫并重新连接。
+  拔出或暂时失效后不会终止 Browser，恢复后会自动重扫并重新连接；绝对坐标设备
+  自动读取 tslib `/etc/pointercal` 七参数校准，也可用 `TSLIB_CALIBFILE` 覆盖路径。
 - 文件列表显示文件大小与修改时间，支持名称、类型、时间和大小排序。
 - 文件列表支持递归搜索：按 `/` 或顶部 `SEARCH` 进入，输入文件名片段，按退格删除。
 - 文件列表支持最近打开和收藏夹：成功打开的媒体/文本会进入 `Recent`，按 `R`
@@ -262,6 +263,12 @@ evtest /dev/input/event1
 TSLIB_TSDEVICE=/dev/input/event1 \
 TSLIB_FBDEVICE=/dev/fb0 \
 ts_calibrate
+
+# Browser 下次启动会读取 /etc/pointercal；自定义路径时两边使用同一变量。
+TSLIB_CALIBFILE=/root/pointercal ts_calibrate
+TSLIB_CALIBFILE=/root/pointercal /usr/bin/media-browser \
+    /dev/fb0 - /root/media \
+    /usr/share/fonts/wqy-zenhei/wqy-zenhei.ttc default /dev/input/event1
 
 # 保存 framebuffer 截图并运行像素测试。
 fbgrab /tmp/screen.png

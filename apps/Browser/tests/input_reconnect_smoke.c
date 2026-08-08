@@ -34,6 +34,46 @@ static void init_test_manager(struct input_manager *manager)
     manager->screen_height = 480;
 }
 
+/** @brief 验证 pointercal 仿射映射与无校准线性回退。 */
+static int test_touch_calibration(const char *path)
+{
+    struct input_manager manager;
+    FILE *stream;
+    int close_result;
+    int x;
+    int y;
+
+    init_test_manager(&manager);
+    manager.abs_x.minimum = 0;
+    manager.abs_x.maximum = 4095;
+    manager.abs_y.minimum = 0;
+    manager.abs_y.maximum = 4095;
+    if (input_manager_map_absolute(&manager, 2048, 2048, &x, &y) < 0 ||
+        x != 319 || y != 239) {
+        return -1;
+    }
+    stream = fopen(path, "w");
+    if (stream == NULL) return -1;
+    if (fprintf(stream, "2 0 10 0 3 20 1\n") < 0) {
+        fclose(stream);
+        unlink(path);
+        return -1;
+    }
+    close_result = fclose(stream);
+    if (close_result < 0) {
+        unlink(path);
+        return -1;
+    }
+    if (input_manager_load_calibration(&manager, path) != 1 ||
+        input_manager_map_absolute(&manager, 50, 50, &x, &y) < 0 ||
+        x != 110 || y != 170) {
+        unlink(path);
+        return -1;
+    }
+    unlink(path);
+    return 0;
+}
+
 /** @brief 验证单个 operation 掉线不会丢失其他输入。 */
 static int test_partial_disconnect(void)
 {
@@ -119,7 +159,8 @@ int main(int argc, char **argv)
 {
     if (argc != 2) return EXIT_FAILURE;
     browser_log_set_level(BROWSER_LOG_QUIET);
-    if (test_partial_disconnect() < 0 ||
+    if (test_touch_calibration(argv[1]) < 0 ||
+        test_partial_disconnect() < 0 ||
         test_explicit_reconnect(argv[1]) < 0) {
         fprintf(stderr, "FAIL input reconnect\n");
         return EXIT_FAILURE;
