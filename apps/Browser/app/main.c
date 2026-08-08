@@ -122,6 +122,34 @@ static int browser_page_is_media(enum browser_page page)
 }
 
 /**
+ * @brief 处理当前文件目录的 inotify 变化。
+ * @param app 浏览器上下文。
+ * @return 成功返回 0，文件页刷新失败返回 -1。
+ */
+static int update_file_watcher(struct browser_app *app)
+{
+    int changed;
+
+    if (app->watcher.fd < 0 || app->page != BROWSER_PAGE_FILES ||
+        app->file_view != BROWSER_FILE_VIEW_DIRECTORY ||
+        app->active_app == DESKTOP_APP_GALLERY) {
+        return 0;
+    }
+    if (file_watcher_update(&app->watcher, app->files.directory) < 0) {
+        browser_log_errno(BROWSER_LOG_WARN, "watch media directory");
+        file_watcher_destroy(&app->watcher);
+        return 0;
+    }
+    changed = file_watcher_consume(&app->watcher);
+    if (changed < 0) {
+        browser_log_errno(BROWSER_LOG_WARN, "read media directory changes");
+        file_watcher_destroy(&app->watcher);
+        return 0;
+    }
+    return changed > 0 ? refresh_file_page_after_change(app) : 0;
+}
+
+/**
  * @brief 执行当前页面的周期任务。
  * @param pages 页面管理器。
  * @param app 浏览器上下文。
@@ -131,6 +159,7 @@ static int browser_page_is_media(enum browser_page page)
 static int update_periodic(const struct page_manager *pages,
                            struct browser_app *app, uint64_t now_ms)
 {
+    if (update_file_watcher(app) < 0) return -1;
     return page_manager_periodic(pages, app, now_ms);
 }
 
@@ -275,6 +304,8 @@ int main(int argc, char *argv[])
     }
     memset(&app, 0, sizeof(app));
     app.display.fd = -1;
+    app.watcher.fd = -1;
+    app.watcher.watch_descriptor = -1;
     app.file_filter = FILE_LIST_FILTER_ALL;
     browser_config_defaults(&app.config);
     if (browser_config_path(app.config_path, sizeof(app.config_path)) < 0 ||
@@ -343,6 +374,11 @@ int main(int argc, char *argv[])
         browser_log_errno(BROWSER_LOG_ERROR, argv[3]);
         goto cleanup_media_player;
     }
+    if (file_watcher_init(&app.watcher) < 0 ||
+        file_watcher_update(&app.watcher, app.files.directory) < 0) {
+        browser_log_errno(BROWSER_LOG_WARN, "initialize media directory watch");
+        file_watcher_destroy(&app.watcher);
+    }
     if (copy_runtime_setting(app.config.media_root,
                              sizeof(app.config.media_root), app.root) < 0) {
         browser_log_errno(BROWSER_LOG_ERROR, "media root");
@@ -382,6 +418,7 @@ cleanup_audio_player:
     if (input_opened) {
         input_manager_close(&app.input);
     }
+    file_watcher_destroy(&app.watcher);
     if (font_opened) {
         font_manager_close(&app.fonts, &app.font);
     }

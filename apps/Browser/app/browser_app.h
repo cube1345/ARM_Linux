@@ -12,6 +12,7 @@
 #include "file_list.h"
 #include "font_manager.h"
 #include "font_renderer.h"
+#include "file_watcher.h"
 #include "gif_animation.h"
 #include "image_data.h"
 #include "image_render.h"
@@ -68,6 +69,7 @@ struct browser_app {
     struct input_manager input;
     struct font_renderer font;
     struct file_list files;
+    struct file_watcher watcher;
     struct text_reader text;
     struct audio_metadata audio_metadata;
     struct audio_player audio;

@@ -12,6 +12,13 @@
 int render_file_page(struct browser_app *app);
 
 /**
+ * @brief 在当前目录变更后重扫文件列表并恢复原选择。
+ * @param app 浏览器上下文。
+ * @return 成功返回 0，扫描或绘制失败返回 -1。
+ */
+int refresh_file_page_after_change(struct browser_app *app);
+
+/**
  * @brief 打开当前选择的目录或媒体。
  * @param app 浏览器上下文。
  * @return 成功返回 0，失败返回 -1。

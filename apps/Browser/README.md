@@ -41,6 +41,8 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 - 文件列表支持最近打开和收藏夹：成功打开的媒体/文本会进入 `Recent`，按 `R`
   可收藏或取消收藏当前文件，按 `Tab` 可在 `Files`、`Recent` 和 `Favorites`
   之间切换，宽屏触摸界面会显示 `RECENT` 和 `FAV` 快捷按钮。
+- 普通文件列表通过 nonblocking inotify 自动感知当前目录的新增、删除、重命名和
+  写入完成事件，重新扫描后保留原选中项；不支持 inotify 时自动降级为手动刷新。
 - 使用 framebuffer 离屏缓冲区完成整帧刷新。
 - 提供统一日志模块，支持通过 `BROWSER_LOG_LEVEL` 控制 ERROR/WARN/INFO/DEBUG。
 - Settings 会持久化字体大小、音量、文件排序、播放模式、UI 主题、当前媒体根目录、
@@ -67,6 +69,7 @@ mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 | `pages/desktop/page_desktop.c/.h` | 软件桌面卡片、应用选择、键盘和触摸入口 |
 | `core/page_manager.c/.h` | 页面 operation 注册、查找、渲染、输入分发、周期任务和事件等待时间调整 |
 | `core/plugin_manager.c/.h` | versioned plugin ABI、`.so` 扫描加载、operation 注册和逆序 shutdown |
+| `core/file_watcher.c/.h` | 当前普通文件目录的 nonblocking inotify 监听与事件消费 |
 | `pages/files/page_file.c/.h` | 文件列表渲染、目录进入/返回、搜索、最近打开/收藏夹、键盘和触摸处理 |
 | `pages/gallery/page_image.c/.h` | 图片/GIF 打开关闭、相邻图片选择、自动播放、预解码和旋转 |
 | `pages/reader/page_text.c/.h` | UTF-8 文本分页渲染、键盘和触摸翻页处理 |
@@ -168,8 +171,8 @@ make
 Host smoke test 会生成 4/8/24/32-bit、RLE4/RLE8 BMP、PNG、JPEG、GIF、WAV
 和 ID3 标签，并使用 Buildroot target 中已有的 MP3/MP4，检查正常解码、配置
 读写、文件排序/搜索、音频元数据、三种画面缩放模式、SRT 时间轴、动态 `.so`
-插件 ABI/operation/shutdown、空目录和损坏文件拒绝逻辑，同时用 pipe/FIFO 验证
-输入 operation 断开隔离和路径重连：
+插件 ABI/operation/shutdown、inotify 目录变化、空目录和损坏文件拒绝逻辑，同时用
+pipe/FIFO 验证输入 operation 断开隔离和路径重连：
 
 ```sh
 cd /home/cube/WorkSpace/Linux/ARM_Linux_WS/apps/Browser

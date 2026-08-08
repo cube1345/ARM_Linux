@@ -16,7 +16,8 @@ INCLUDE_DIRS := app core platform/display platform/input platform/font \
 SOURCES := app/main.c app/browser_app.c \
 	   core/browser_config.c core/browser_log.c core/debug_manager.c \
 	   core/desktop_app.c \
-	   core/file_list.c core/page_manager.c core/plugin_manager.c \
+	   core/file_list.c core/file_watcher.c core/page_manager.c \
+	   core/plugin_manager.c \
 	   platform/display/bmp_display.c platform/display/video_buffer.c \
 	   platform/display/display_manager.c \
 	   platform/input/input_keyboard.c \
@@ -44,7 +45,7 @@ LDLIBS := $(shell $(PKG_CONFIG) --libs $(PACKAGES)) -lgif -ldl -pthread
 
 .PHONY: all clean install test test-media test-config test-metadata \
 	test-render test-subtitle test-video-decoder test-plugin \
-	test-input-reconnect test-input
+	test-file-watcher test-input-reconnect test-input
 
 all: $(TARGET)
 
@@ -59,7 +60,7 @@ install: $(TARGET)
 	install -d -m 0755 $(DESTDIR)/usr/lib/media-browser/plugins
 
 test: test-media test-config test-metadata test-render test-subtitle \
-	test-video-decoder test-plugin test-input-reconnect
+	test-video-decoder test-plugin test-file-watcher test-input-reconnect
 
 test-media:
 	CC="$(HOST_CC)" ./tests/media_smoke.sh "$(TEST_MEDIA_DIR)"
@@ -81,6 +82,9 @@ test-video-decoder:
 
 test-plugin:
 	CC="$(HOST_CC)" ./tests/plugin_manager_smoke.sh
+
+test-file-watcher:
+	CC="$(HOST_CC)" ./tests/file_watcher_smoke.sh
 
 test-input-reconnect:
 	CC="$(HOST_CC)" ./tests/input_reconnect_smoke.sh

@@ -338,6 +338,39 @@ static int refresh_current_file_view(struct browser_app *app)
     return build_path_list_view(app, app->file_view);
 }
 
+/** @brief 在当前目录重扫后按名称和类型恢复已选条目。 */
+int refresh_file_page_after_change(struct browser_app *app)
+{
+    char selected_name[FILE_LIST_NAME_SIZE] = {0};
+    enum file_type selected_type = FILE_TYPE_UNKNOWN;
+    size_t index;
+
+    if (app == NULL || app->page != BROWSER_PAGE_FILES ||
+        app->file_view != BROWSER_FILE_VIEW_DIRECTORY ||
+        app->active_app == DESKTOP_APP_GALLERY) {
+        return 0;
+    }
+    if (app->selected < app->files.count) {
+        snprintf(selected_name, sizeof(selected_name), "%s",
+                 app->files.entries[app->selected].name);
+        selected_type = app->files.entries[app->selected].type;
+    }
+    if ((app->search_active ? refresh_file_search(app) :
+         refresh_current_file_view(app)) < 0) {
+        return -1;
+    }
+    if (selected_name[0] != '\0') {
+        for (index = 0; index < app->files.count; index++) {
+            if (app->files.entries[index].type == selected_type &&
+                strcmp(app->files.entries[index].name, selected_name) == 0) {
+                app->selected = index;
+                break;
+            }
+        }
+    }
+    return render_file_page(app);
+}
+
 /** @brief 切换文件页视图并刷新列表。 */
 static int switch_file_view(struct browser_app *app,
                             enum browser_file_view view)
