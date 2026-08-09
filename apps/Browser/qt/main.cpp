@@ -9,21 +9,21 @@ int main(int argc, char *argv[])
     application.setApplicationName("Media Browser Qt");
     application.setApplicationVersion("1.0");
     application.setStyleSheet(
-        "QWidget{background:#111923;color:#d9e2ec;font-family:Sans;font-size:13px;}"
-        "QMainWindow{background:#111923;} QFrame#sidebar{background:#0d151f;}"
-        "QPushButton#navButton{background:transparent;color:#9eafc1;border:0;"
+        "QWidget{background:#f3f7fb;color:#253447;font-family:Sans;font-size:13px;}"
+        "QMainWindow{background:#f3f7fb;} QFrame#sidebar{background:#e7eef6;}"
+        "QPushButton#navButton{background:transparent;color:#5a6d81;border:0;"
         "border-radius:6px;padding:8px 10px;text-align:left;min-height:18px;}"
-        "QPushButton#navButton:hover{background:#182536;color:#e7edf5;}"
-        "QPushButton#navButton:pressed{background:#23466b;color:#ffffff;}"
-        "QListWidget,QTextEdit{background:#151f2b;border:1px solid #26384b;"
+        "QPushButton#navButton:hover{background:#d5e3f1;color:#203247;}"
+        "QPushButton#navButton:pressed{background:#4d8fd8;color:#ffffff;}"
+        "QListWidget,QTextEdit{background:#ffffff;border:1px solid #d5e0eb;"
         "border-radius:6px;padding:4px;}"
-        "QListWidget::item{border-radius:5px;padding:6px;color:#c6d2df;}"
-        "QListWidget::item:hover{background:#1b2b3d;}"
-        "QListWidget::item:selected{background:#244b74;color:#ffffff;}"
-        "QLabel#title{font-size:19px;font-weight:600;color:#eef4fa;}"
-        "QLabel#pageTitle{font-size:21px;font-weight:500;color:#eef4fa;}"
-        "QLabel#muted{color:#7f93a8;} QStatusBar{color:#7f93a8;"
-        "background:#0d151f;border-top:1px solid #1b2b3b;}"
+        "QListWidget::item{border-radius:5px;padding:6px;color:#33465a;}"
+        "QListWidget::item:hover{background:#edf4fb;}"
+        "QListWidget::item:selected{background:#d8e9fa;color:#1d5d9d;}"
+        "QLabel#title{font-size:19px;font-weight:600;color:#203247;}"
+        "QLabel#pageTitle{font-size:21px;font-weight:500;color:#203247;}"
+        "QLabel#muted{color:#718398;} QStatusBar{color:#718398;"
+        "background:#e7eef6;border-top:1px solid #d4e0eb;}"
     );
     QString root = argc > 1 ? QString::fromLocal8Bit(argv[1]) : QDir::homePath();
     MainWindow window(root);
