@@ -46,8 +46,8 @@ void MainWindow::buildLayout()
     const QList<QPair<QString, void (MainWindow::*)()>> actions = {
         {tr("▦  Gallery"), &MainWindow::showGallery},
         {tr("☷  Files"), &MainWindow::showFiles},
-        {tr("♫  Audio"), &MainWindow::showFiles},
-        {tr("▶  Video"), &MainWindow::showFiles},
+        {tr("♫  Audio"), &MainWindow::showAudio},
+        {tr("▶  Video"), &MainWindow::showVideo},
         {tr("Aa  Text"), &MainWindow::showText},
         {tr("⚙  Settings"), &MainWindow::showSettings}
     };
@@ -120,11 +120,16 @@ void MainWindow::refreshFiles()
     directory.setSorting(QDir::DirsFirst | QDir::Name | QDir::IgnoreCase);
     fileList_->clear();
     for (const QFileInfo &info : directory.entryInfoList()) {
+        if (!info.isDir() && !matchesFilter(info.fileName())) continue;
         auto *item = new QListWidgetItem(info.isDir() ? QStringLiteral("📁 ") : QStringLiteral("• ") + info.fileName());
         item->setData(Qt::UserRole, info.absoluteFilePath());
         fileList_->addItem(item);
     }
-    locationLabel_->setText(tr("Files  •  %1").arg(mediaRoot_));
+    QString category = tr("Files");
+    if (fileFilter_ == FileFilter::Audio) category = tr("Audio");
+    if (fileFilter_ == FileFilter::Video) category = tr("Video");
+    if (fileFilter_ == FileFilter::Text) category = tr("Text");
+    locationLabel_->setText(tr("%1  •  %2").arg(category, mediaRoot_));
 }
 
 void MainWindow::refreshGallery()
@@ -150,6 +155,19 @@ bool MainWindow::isText(const QString &path) const
 {
     const QString suffix = QFileInfo(path).suffix().toLower();
     return suffix == "txt" || suffix == "log" || suffix == "md" || suffix == "json";
+}
+
+bool MainWindow::matchesFilter(const QString &path) const
+{
+    const QString suffix = QFileInfo(path).suffix().toLower();
+    if (fileFilter_ == FileFilter::Text) return isText(path);
+    if (fileFilter_ == FileFilter::Audio) {
+        return QStringList{"wav", "mp3", "aac", "m4a", "flac", "ogg", "opus"}.contains(suffix);
+    }
+    if (fileFilter_ == FileFilter::Video) {
+        return QStringList{"mp4", "mov", "mkv", "avi", "webm", "m4v"}.contains(suffix);
+    }
+    return true;
 }
 
 void MainWindow::openSelectedFile(QListWidgetItem *item)
@@ -190,6 +208,28 @@ void MainWindow::loadTextFile(const QString &path)
 }
 
 void MainWindow::showGallery() { pages_->setCurrentIndex(0); }
-void MainWindow::showFiles() { pages_->setCurrentIndex(1); }
-void MainWindow::showText() { pages_->setCurrentIndex(2); }
+void MainWindow::showFiles()
+{
+    fileFilter_ = FileFilter::All;
+    refreshFiles();
+    pages_->setCurrentIndex(1);
+}
+void MainWindow::showAudio()
+{
+    fileFilter_ = FileFilter::Audio;
+    refreshFiles();
+    pages_->setCurrentIndex(1);
+}
+void MainWindow::showVideo()
+{
+    fileFilter_ = FileFilter::Video;
+    refreshFiles();
+    pages_->setCurrentIndex(1);
+}
+void MainWindow::showText()
+{
+    fileFilter_ = FileFilter::Text;
+    refreshFiles();
+    pages_->setCurrentIndex(1);
+}
 void MainWindow::showSettings() { pages_->setCurrentIndex(3); }

@@ -31,6 +31,7 @@ export QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS=/dev/input/eventX
 ```
 
 The frontend currently provides the desktop navigation, file browser,
-thumbnail gallery, image preview, text reader, and settings landing page.
+The Files, Audio, Video, and Text entries apply separate filename filters;
+directories remain visible for navigation.
 Audio/video controls will be connected to the existing C media backends in the
 next migration stage.
