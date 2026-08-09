@@ -51,6 +51,7 @@ static int key_event_is_active(const struct input_event *event)
     return event->type == EV_KEY && (event->value == 1 || event->value == 2);
 }
 
+
 /**
  * @brief 将键盘按下或重复事件映射为浏览器动作。
  * @param event Linux Input 原始事件。

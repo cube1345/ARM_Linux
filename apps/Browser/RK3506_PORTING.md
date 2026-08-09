@@ -17,7 +17,7 @@ apps/Browser/qt                              # Qt Widgets UI（Qt 5.15）
 
 Qt 前端当前已经支持：
 
-- 明亮、紧凑的 Qt Widgets 主窗口和导航栏。
+- Qt Widgets 主窗口和导航栏。
 - Gallery 图片缩略图网格。
 - Files/Audio/Video/Text 栏目分类过滤。
 - 图片预览和文本阅读。

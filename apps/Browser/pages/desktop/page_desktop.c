@@ -393,7 +393,6 @@ static void desktop_draw_wallpaper(struct browser_app *app)
     for (row = 0; row < height; row++) {
         uint32_t color = desktop_mix_color(UI_BACKGROUND, UI_SURFACE_ALT,
                                            row * 100 / height);
-
         ui_draw_rect(&app->display, 0, row, width, 1, color);
     }
     desktop_draw_circle(&app->display, width - 110, 118, 148, UI_SELECTED);
