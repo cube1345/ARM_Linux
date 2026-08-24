@@ -15,6 +15,7 @@ int main(int argc, char *argv[])
         "border-radius:6px;padding:8px 10px;text-align:left;min-height:18px;}"
         "QPushButton#navButton:hover{background:#d5e3f1;color:#203247;}"
         "QPushButton#navButton:pressed{background:#4d8fd8;color:#ffffff;}"
+        "QPushButton#navButton[active=\"true\"]{background:#4d8fd8;color:#ffffff;}"
         "QListWidget,QTextEdit{background:#ffffff;border:1px solid #d5e0eb;"
         "border-radius:6px;padding:4px;}"
         "QListWidget::item{border-radius:5px;padding:6px;color:#33465a;}"

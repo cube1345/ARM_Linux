@@ -27,11 +27,14 @@ export QT_QPA_PLATFORM='linuxfb:fb=/dev/fb0'
 export QT_QPA_GENERIC_PLUGINS=evdevtouch
 export QT_QPA_FONTDIR=/usr/share/fonts
 export QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS=/dev/input/eventX
+export BROWSER_VIDEO_DECODER=auto
 ./media-browser-qt /root/media
 ```
 
 The frontend currently provides the desktop navigation, file browser,
 The Files, Audio, Video, and Text entries apply separate filename filters;
 directories remain visible for navigation.
-Audio/video controls will be connected to the existing C media backends in the
-next migration stage.
+Audio playback is connected to the existing C audio backend for WAV/MP3.
+Video playback is connected to the existing FFmpeg/RKMPP backend and displays
+RGB24 frames through Qt; decoder selection follows the BROWSER_VIDEO_DECODER
+environment variable (auto, software, or rkmpp).
