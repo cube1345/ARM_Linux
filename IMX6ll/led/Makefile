@@ -1,4 +1,4 @@
-KERNELDIR := /home/zuozhongkai/linux/IMX6ULL/linux/temp/linux-imx-rel_imx_4.1.15_2.1.0_ga_alientek
+KERNELDIR := /home/dell/WorkSpace/cube_ws/IMX6ll/linux
 CURRENT_PATH := $(shell pwd)
 
 obj-m := chrdevbase.o
