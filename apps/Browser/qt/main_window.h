@@ -19,6 +19,7 @@ public:
     explicit MainWindow(const QString &mediaRoot, QWidget *parent = nullptr);
 
 private slots:
+    void showDesktop();
     void openSelectedFile(QListWidgetItem *item);
     void showGallery();
     void showFiles();

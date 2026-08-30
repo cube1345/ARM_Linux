@@ -9,8 +9,10 @@
 #include <QImageReader>
 #include <QLabel>
 #include <QListWidget>
+#include <QPainter>
 #include <QPushButton>
 #include <QPixmap>
+#include <QToolButton>
 #include <QFrame>
 #include <QScrollArea>
 #include <QSettings>
@@ -20,6 +22,34 @@
 #include <QTextEdit>
 #include <QTextStream>
 #include <QVBoxLayout>
+
+namespace {
+
+QIcon createAppIcon(const QString &glyph, const QColor &baseColor)
+{
+    constexpr int iconSize = 88;
+    QPixmap pixmap(iconSize, iconSize);
+    pixmap.fill(Qt::transparent);
+
+    QPainter painter(&pixmap);
+    painter.setRenderHint(QPainter::Antialiasing);
+    QLinearGradient gradient(0, 0, iconSize, iconSize);
+    gradient.setColorAt(0.0, baseColor.lighter(130));
+    gradient.setColorAt(1.0, baseColor.darker(115));
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(gradient);
+    painter.drawRoundedRect(QRectF(2, 2, iconSize - 4, iconSize - 4), 21, 21);
+
+    QFont glyphFont(QStringLiteral("Segoe UI Symbol"));
+    glyphFont.setPixelSize(glyph == QStringLiteral("Aa") ? 29 : 38);
+    glyphFont.setBold(true);
+    painter.setFont(glyphFont);
+    painter.setPen(QColor(255, 255, 255, 235));
+    painter.drawText(pixmap.rect(), Qt::AlignCenter, glyph);
+    return QIcon(pixmap);
+}
+
+} // namespace
 
 MainWindow::MainWindow(const QString &mediaRoot, QWidget *parent)
     : QMainWindow(parent), mediaRoot_(QDir::cleanPath(mediaRoot))
@@ -34,48 +64,92 @@ MainWindow::MainWindow(const QString &mediaRoot, QWidget *parent)
 void MainWindow::buildLayout()
 {
     auto *central = new QWidget(this);
-    auto *rootLayout = new QHBoxLayout(central);
+    auto *rootLayout = new QVBoxLayout(central);
     rootLayout->setContentsMargins(0, 0, 0, 0);
     rootLayout->setSpacing(0);
-    auto *sidebar = new QVBoxLayout;
-    sidebar->setContentsMargins(14, 18, 14, 14);
-    sidebar->setSpacing(5);
-    auto *title = new QLabel(tr("MEDIA\nBROWSER"));
-    title->setObjectName("title");
-    sidebar->addWidget(title);
-    const QList<QPair<QString, void (MainWindow::*)()>> actions = {
-        {tr("▦  Gallery"), &MainWindow::showGallery},
-        {tr("☷  Files"), &MainWindow::showFiles},
-        {tr("♫  Audio"), &MainWindow::showAudio},
-        {tr("▶  Video"), &MainWindow::showVideo},
-        {tr("Aa  Text"), &MainWindow::showText},
-        {tr("⚙  Settings"), &MainWindow::showSettings}
-    };
-    for (const auto &action : actions) {
-        auto *button = new QPushButton(action.first);
-        button->setObjectName("navButton");
-        button->setCursor(Qt::PointingHandCursor);
-        connect(button, &QPushButton::clicked, this, action.second);
-        sidebar->addWidget(button);
-    }
-    sidebar->addStretch();
-    auto *version = new QLabel(tr("Qt 5.15 • LinuxFB"));
-    version->setObjectName("muted");
-    sidebar->addWidget(version);
-    auto *panel = new QFrame;
-    panel->setObjectName("sidebar");
-    panel->setLayout(sidebar);
-    panel->setFixedWidth(158);
-    rootLayout->addWidget(panel);
 
     pages_ = new QStackedWidget;
+
+    auto *desktopPage = new QWidget;
+    desktopPage->setObjectName("desktopPage");
+    auto *desktopLayout = new QVBoxLayout(desktopPage);
+    desktopLayout->setContentsMargins(34, 28, 34, 22);
+    desktopLayout->setSpacing(12);
+
+    auto *desktopHeader = new QHBoxLayout;
+    auto *desktopTitle = new QLabel(tr("MEDIA BROWSER"));
+    desktopTitle->setObjectName("desktopTitle");
+    desktopHeader->addWidget(desktopTitle);
+    desktopHeader->addStretch();
+    auto *desktopVersion = new QLabel(tr("Qt 5.15 • LinuxFB"));
+    desktopVersion->setObjectName("muted");
+    desktopHeader->addWidget(desktopVersion);
+    desktopLayout->addLayout(desktopHeader);
+
+    auto *desktopHint = new QLabel(tr("Choose an app"));
+    desktopHint->setObjectName("desktopHint");
+    desktopLayout->addWidget(desktopHint);
+
+    auto *appGrid = new QGridLayout;
+    appGrid->setHorizontalSpacing(26);
+    appGrid->setVerticalSpacing(24);
+    appGrid->setAlignment(Qt::AlignCenter);
+    const QList<QPair<QString, QPair<QString, QColor>>> apps = {
+        {tr("Gallery"), {QStringLiteral("G"), QColor("#f36f56")}},
+        {tr("Files"), {QStringLiteral("F"), QColor("#4c9be8")}},
+        {tr("Audio"), {QStringLiteral("♪"), QColor("#9b72e8")}},
+        {tr("Video"), {QStringLiteral("▶"), QColor("#e65f8e")}},
+        {tr("Text"), {QStringLiteral("Aa"), QColor("#43b98a")}},
+        {tr("Settings"), {QStringLiteral("⚙"), QColor("#64748b")}}
+    };
+    for (int index = 0; index < apps.size(); ++index) {
+        const auto &app = apps.at(index);
+        auto *button = new QToolButton;
+        button->setObjectName("appIcon");
+        button->setText(app.first);
+        button->setIcon(createAppIcon(app.second.first, app.second.second));
+        button->setIconSize(QSize(76, 76));
+        button->setToolButtonStyle(Qt::ToolButtonTextUnderIcon);
+        button->setFixedSize(132, 126);
+        button->setCursor(Qt::PointingHandCursor);
+        switch (index) {
+        case 0: connect(button, &QToolButton::clicked, this, &MainWindow::showGallery); break;
+        case 1: connect(button, &QToolButton::clicked, this, &MainWindow::showFiles); break;
+        case 2: connect(button, &QToolButton::clicked, this, &MainWindow::showAudio); break;
+        case 3: connect(button, &QToolButton::clicked, this, &MainWindow::showVideo); break;
+        case 4: connect(button, &QToolButton::clicked, this, &MainWindow::showText); break;
+        case 5: connect(button, &QToolButton::clicked, this, &MainWindow::showSettings); break;
+        default: break;
+        }
+        appGrid->addWidget(button, index / 3, index % 3, Qt::AlignCenter);
+    }
+    desktopLayout->addLayout(appGrid, 1);
+
+    auto *desktopFooter = new QLabel(tr("Your media, one tap away"));
+    desktopFooter->setObjectName("desktopFooter");
+    desktopFooter->setAlignment(Qt::AlignCenter);
+    desktopLayout->addWidget(desktopFooter);
+    pages_->addWidget(desktopPage);
+
+    const auto addPageHeader = [this](QVBoxLayout *layout, const QString &titleText) {
+        auto *header = new QHBoxLayout;
+        auto *homeButton = new QPushButton(tr("Home"));
+        homeButton->setObjectName("homeButton");
+        homeButton->setCursor(Qt::PointingHandCursor);
+        connect(homeButton, &QPushButton::clicked, this, &MainWindow::showDesktop);
+        header->addWidget(homeButton);
+        auto *title = new QLabel(titleText);
+        title->setObjectName("pageTitle");
+        header->addWidget(title);
+        header->addStretch();
+        layout->addLayout(header);
+    };
+
     auto *galleryPage = new QWidget;
     auto *galleryLayout = new QVBoxLayout(galleryPage);
     galleryLayout->setContentsMargins(18, 16, 18, 12);
     galleryLayout->setSpacing(10);
-    auto *galleryTitle = new QLabel(tr("Gallery"));
-    galleryTitle->setObjectName("pageTitle");
-    galleryLayout->addWidget(galleryTitle);
+    addPageHeader(galleryLayout, tr("Gallery"));
     gallery_ = new QListWidget;
     gallery_->setViewMode(QListView::IconMode);
     gallery_->setIconSize(QSize(142, 100));
@@ -90,6 +164,7 @@ void MainWindow::buildLayout()
     auto *filesLayout = new QVBoxLayout(filesPage);
     filesLayout->setContentsMargins(18, 16, 18, 12);
     filesLayout->setSpacing(8);
+    addPageHeader(filesLayout, tr("Files"));
     locationLabel_ = new QLabel;
     locationLabel_->setObjectName("muted");
     filesLayout->addWidget(locationLabel_);
@@ -99,15 +174,26 @@ void MainWindow::buildLayout()
     filesLayout->addWidget(fileList_);
     pages_->addWidget(filesPage);
 
+    auto *textPage = new QWidget;
+    auto *textLayout = new QVBoxLayout(textPage);
+    textLayout->setContentsMargins(18, 16, 18, 12);
+    textLayout->setSpacing(8);
+    addPageHeader(textLayout, tr("Text"));
     textView_ = new QTextEdit;
     textView_->setReadOnly(true);
-    textView_->setContentsMargins(18, 16, 18, 12);
-    pages_->addWidget(textView_);
+    textLayout->addWidget(textView_);
+    pages_->addWidget(textPage);
 
-    auto *settings = new QLabel(tr("Settings\n\nQt UI is enabled.\nRuntime media and input settings remain shared with the C backend."));
+    auto *settingsPage = new QWidget;
+    auto *settingsLayout = new QVBoxLayout(settingsPage);
+    settingsLayout->setContentsMargins(18, 16, 18, 12);
+    addPageHeader(settingsLayout, tr("Settings"));
+    auto *settings = new QLabel(tr("Qt UI is enabled.\n\nRuntime media and input settings remain shared with the C backend."));
     settings->setAlignment(Qt::AlignTop | Qt::AlignLeft);
     settings->setMargin(18);
-    pages_->addWidget(settings);
+    settingsLayout->addWidget(settings);
+    settingsLayout->addStretch();
+    pages_->addWidget(settingsPage);
     rootLayout->addWidget(pages_, 1);
     setCentralWidget(central);
     statusBar()->showMessage(tr("Ready — %1").arg(mediaRoot_));
@@ -204,32 +290,33 @@ void MainWindow::loadTextFile(const QString &path)
     QFile file(path);
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) return;
     textView_->setPlainText(QString::fromUtf8(file.readAll()));
-    pages_->setCurrentWidget(textView_);
+    pages_->setCurrentIndex(3);
 }
 
-void MainWindow::showGallery() { pages_->setCurrentIndex(0); }
+void MainWindow::showDesktop() { pages_->setCurrentIndex(0); }
+void MainWindow::showGallery() { pages_->setCurrentIndex(1); }
 void MainWindow::showFiles()
 {
     fileFilter_ = FileFilter::All;
     refreshFiles();
-    pages_->setCurrentIndex(1);
+    pages_->setCurrentIndex(2);
 }
 void MainWindow::showAudio()
 {
     fileFilter_ = FileFilter::Audio;
     refreshFiles();
-    pages_->setCurrentIndex(1);
+    pages_->setCurrentIndex(2);
 }
 void MainWindow::showVideo()
 {
     fileFilter_ = FileFilter::Video;
     refreshFiles();
-    pages_->setCurrentIndex(1);
+    pages_->setCurrentIndex(2);
 }
 void MainWindow::showText()
 {
     fileFilter_ = FileFilter::Text;
     refreshFiles();
-    pages_->setCurrentIndex(1);
+    pages_->setCurrentIndex(2);
 }
-void MainWindow::showSettings() { pages_->setCurrentIndex(3); }
+void MainWindow::showSettings() { pages_->setCurrentIndex(4); }
