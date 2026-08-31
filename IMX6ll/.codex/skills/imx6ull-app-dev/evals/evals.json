@@ -1,0 +1,23 @@
+{
+  "skill_name": "imx6ull-app-dev",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "在 ARM_Linux/IMX6ll 下给一个通过 /dev/led 控制 LED 的用户态 C 程序补充 Makefile，并确保不会误用主机 gcc。",
+      "expected_output": "选择目标交叉编译器，编译 ARM 用户程序，检查 ELF 架构，并说明 /dev/led ABI。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "为 i.MX6ULL 写一个通过 /dev/i2c-1 读取 7-bit 地址 0x50 寄存器的最小应用，要求处理错误和交叉编译依赖。",
+      "expected_output": "使用 I2C_SLAVE 或 I2C_RDWR、检查返回值/errno、说明 libi2c 与 target rootfs 依赖。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "板端应用需要同时等待串口和按键输入，应该如何设计 read/poll 主循环？",
+      "expected_output": "解释 O_NONBLOCK、poll、EINTR、短读写和资源关闭，不把线程永久阻塞在单个 fd。",
+      "files": []
+    }
+  ]
+}

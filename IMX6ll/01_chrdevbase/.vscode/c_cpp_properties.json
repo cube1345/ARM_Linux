@@ -1,0 +1,19 @@
+{
+    "configurations": [
+        {
+            "name": "Linux",
+            "includePath": [
+                "${workspaceFolder}/**",
+                "/home/cube/WorkSpace/iMX6Ull/linux/include", 
+                "/home/cube/WorkSpace/iMX6Ull/linux/arch/arm/include", 
+                "/home/cube/WorkSpace/iMX6Ull/linux/arch/arm/include/generated/"
+            ],
+            "defines": [],
+            "compilerPath": "/usr/bin/clang",
+            "cStandard": "c11",
+            "cppStandard": "c++17",
+            "intelliSenseMode": "clang-x64"
+        }
+    ],
+    "version": 4
+}

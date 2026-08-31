@@ -1,0 +1,17 @@
+{
+  "skill_name": "imx6ull-bsp",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "板端运行的是正点原子 i.MX6ULL Linux 4.1.15，主机如何准备内核模块构建环境并避免 Module.symvers 不匹配？",
+      "expected_output": "核对板端版本与配置，使用匹配 BSP SDK 和 kernel output，构建 modules 后再构建外部模块。",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "如何通过 USB 给 i.MX6ULL 首次烧写系统，以及日常开发怎样只通过 USB 更新 ko？",
+      "expected_output": "区分 Serial Downloader/MfgTool（整系统）与 USB Gadget 网络/文件传输（增量模块），列出验证点。",
+      "files": []
+    }
+  ]
+}

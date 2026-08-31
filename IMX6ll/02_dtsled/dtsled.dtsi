@@ -1,0 +1,11 @@
+/* Include this node from the board DTS under / { ... }. */
+/ {
+	dtsled: dtsled {
+		compatible = "cube,imx6ull-dts-led";
+		gpios = <&gpio1 3 GPIO_ACTIVE_LOW>;
+		status = "okay";
+	};
+};
+
+/* The stock DTS also assigns GPIO1_IO03 to gpio-leds/sys-led. Disable that
+ * consumer in the board DTS before enabling this teaching driver. */

@@ -20,7 +20,7 @@
 #define SW_MUX_GPIO1_IO03_BASE (0X020E0068)
 #define SW_PAD_GPIO1_IO03_BASE (0X020E02F4)
 #define GPIO1_DR_BASE (0X0209C000)
-#define GPIO1_DR_BASE (0X0209C000)
+#define GPIO1_GDIR_BASE (0X0209C004)
 
 static void __iomem *IMX6U_CCM_CCGR1;
 static void __iomem *SW_MUX_GPIO1_IO03;
@@ -28,7 +28,7 @@ static void __iomem *SW_PAD_GPIO1_IO03;
 static void __iomem *GPIO1_DR;
 static void __iomem *GPIO1_GDIR;
 
-void led_switch(u8 sta)
+static void led_switch(u8 sta)
 {
     u32 val = 0;
     if(sta == LEDON) {
@@ -55,29 +55,29 @@ static ssize_t led_read(struct file *filp, char __user *buf,size_t cnt, loff_t *
 
 static ssize_t led_write(struct file *filp, const char __user *buf, size_t cnt, loff_t *offt)
 {
-    int retvalue;
+    unsigned long not_copied;
     unsigned char databuf[1];
-    unsigned char ledstat;
 
-    retvalue = copy_from_user(databuf,buf,cnt);
-    if(retvalue <  0)
-    {
-        printk("kernel write failed!\r\n");
+    if (cnt == 0)
+        return 0;
+    if (cnt != sizeof(databuf))
+        return -EINVAL;
+
+    not_copied = copy_from_user(databuf, buf, sizeof(databuf));
+    if (not_copied != 0)
         return -EFAULT;
-    }
-    ledstat = databuf[0];
-    if(ledstat == LEDON)
-    {
-        led_switch(LEDON);
-    }else if(ledstat == LEDOFF)
-    {
-        led_switch(LEDOFF);
-    }
 
-    return 0;
+    if (databuf[0] == LEDON)
+        led_switch(LEDON);
+    else if (databuf[0] == LEDOFF)
+        led_switch(LEDOFF);
+    else
+        return -EINVAL;
+
+    return sizeof(databuf);
 }
 
-static int led release(struct inode *inode,struct file *filp)
+static int led_release(struct inode *inode,struct file *filp)
 {
     return 0;
 }
@@ -91,13 +91,19 @@ static struct file_operations led_fops = {
 };
 static int __init led_init(void)
 {
-    int retvalue = 0;
+    int retvalue;
     u32 val = 0;
     IMX6U_CCM_CCGR1 = ioremap(CCM_CCGR1_BASE, 4);
     SW_MUX_GPIO1_IO03 = ioremap(SW_MUX_GPIO1_IO03_BASE, 4);
     SW_PAD_GPIO1_IO03 = ioremap(SW_PAD_GPIO1_IO03_BASE, 4);
     GPIO1_DR = ioremap(GPIO1_DR_BASE, 4);
     GPIO1_GDIR = ioremap(GPIO1_GDIR_BASE, 4);
+
+    if (!IMX6U_CCM_CCGR1 || !SW_MUX_GPIO1_IO03 || !SW_PAD_GPIO1_IO03 ||
+        !GPIO1_DR || !GPIO1_GDIR) {
+        retvalue = -ENOMEM;
+        goto err_unmap;
+    }
 
     val = readl(IMX6U_CCM_CCGR1);
     val &= ~(3 << 26); /* 清除以前的设置 */
@@ -118,12 +124,20 @@ static int __init led_init(void)
 
     retvalue = register_chrdev(LED_MAJOR, LED_NAME, &led_fops);
     
-    if(retvalue < 0){
-        printk("register chrdev failed!\r\n");
-        return -EIO;
+    if (retvalue < 0) {
+        printk(KERN_ERR "led: register_chrdev failed: %d\n", retvalue);
+        goto err_unmap;
     }
 
     return 0;
+
+err_unmap:
+    if (IMX6U_CCM_CCGR1) iounmap(IMX6U_CCM_CCGR1);
+    if (SW_MUX_GPIO1_IO03) iounmap(SW_MUX_GPIO1_IO03);
+    if (SW_PAD_GPIO1_IO03) iounmap(SW_PAD_GPIO1_IO03);
+    if (GPIO1_DR) iounmap(GPIO1_DR);
+    if (GPIO1_GDIR) iounmap(GPIO1_GDIR);
+    return retvalue;
 }
 
 static void __exit led_exit(void)
