@@ -52,6 +52,8 @@ libtool
 # Editor caches and local executables
 .vscode/ipch/
 apps/Camera/jpegsrc.v10.tar.gz
+apps/Camera/jpeg-10/build-arm/
+apps/Camera/jpeg-10/install-arm/
 apps/Camera/jpeg-10/cjpeg
 apps/Camera/jpeg-10/djpeg
 apps/Camera/jpeg-10/jpegtran
