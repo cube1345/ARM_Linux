@@ -1,11 +1,14 @@
 #ifndef PHOTO_VIEW_H
 #define PHOTO_VIEW_H
 
+#include <QElapsedTimer>
+#include <QHash>
 #include <QImage>
+#include <QPointF>
 #include <QRubberBand>
 #include <QWidget>
 
-class QPinchGesture;
+class QTouchEvent;
 class PhotoView : public QWidget
 {
     Q_OBJECT
@@ -44,7 +47,9 @@ private:
     QRectF imageRect() const;
     QRectF imageRectForScale(qreal scale) const;
     void clampOffset();
-    void applyPinch(const QPinchGesture *gesture);
+    void applyPinch(const QPointF &center, qreal scaleFactor);
+    void handleTouchEvent(QTouchEvent *event);
+    void resetTouchState();
     void paintCropOverlay(QPainter &painter);
     QPoint mapToImage(const QPoint &point) const;
 
@@ -58,5 +63,18 @@ private:
     bool selecting;
     QPoint selectionStart;
     QRect selection;
+    QHash<int, QPointF> activeTouches;
+    QPointF touchStartPosition;
+    QPointF lastTouchPosition;
+    QPointF lastTapPosition;
+    QPointF touchOffsetAtStart;
+    QElapsedTimer touchTimer;
+    QElapsedTimer lastTapTimer;
+    qreal pinchDistance;
+    bool pinchActive;
+    bool pinchOccurred;
+    bool singleTouchActive;
+    bool hasLastTap;
+    int singleTouchId;
 };
 #endif

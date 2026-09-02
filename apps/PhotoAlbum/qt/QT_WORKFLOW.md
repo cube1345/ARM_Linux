@@ -265,7 +265,7 @@ kill <PID>
 ```sh
 export QT_QPA_PLATFORM="${QT_QPA_PLATFORM:-linuxfb:fb=/dev/fb0}"
 export QT_QPA_GENERIC_PLUGINS="${QT_QPA_GENERIC_PLUGINS:-evdevtouch}"
-export QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS="${QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS:-/dev/input/event0}"
+export QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS="${QT_QPA_EVDEV_TOUCHSCREEN_PARAMETERS:-/dev/input/event1}"
 export QT_QPA_FONTDIR="${QT_QPA_FONTDIR:-/usr/share/fonts}"
 ```
 
@@ -273,7 +273,7 @@ export QT_QPA_FONTDIR="${QT_QPA_FONTDIR:-/usr/share/fonts}"
 
 - `linuxfb:fb=/dev/fb0`：直接使用 Linux framebuffer；
 - `evdevtouch`：使用 Qt 的 evdev 触摸输入插件；
-- `/dev/input/event0`：触摸设备路径，需按实际板卡修改；
+- `/dev/input/event1`：触摸设备路径，需按实际板卡修改；
 - `QT_QPA_FONTDIR`：指定字体目录。
 
 ### 启动

@@ -217,7 +217,7 @@ QList<QImage> MainWindow::createDemoPhotos()
             << qMakePair(QColor(70, 50, 150), QColor(20, 180, 220));
 
     for (int index = 0; index < colors.size(); ++index) {
-        QImage image(960, 640, QImage::Format_RGB32);
+        QImage image(900, 600, QImage::Format_RGB32);
         QPainter painter(&image);
         QLinearGradient gradient(0, 0, image.width(), image.height());
         gradient.setColorAt(0.0, colors.at(index).first);

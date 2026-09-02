@@ -58,4 +58,4 @@ for event in /dev/input/event*; do
 done
 ```
 
-把 `qt_env.sh` 中的 `/dev/input/event0` 改成实际触摸设备。若板卡没有 `evtest`，以 `/proc/bus/input/devices` 中列出的 `Handlers` 为准。
+当前板卡触摸屏为 `/dev/input/event1`。更换硬件或系统后，若板卡没有 `evtest`，以 `/proc/bus/input/devices` 中列出的 `Handlers` 为准。

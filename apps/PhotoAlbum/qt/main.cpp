@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
 {
     QApplication application(argc, argv);
     application.setApplicationName(QStringLiteral("Photo Album"));
-    application.setApplicationVersion(QStringLiteral("1.0"));
+    application.setApplicationVersion(QStringLiteral("1.1-touchdiag"));
 
     QCommandLineParser parser;
     parser.setApplicationDescription(QStringLiteral("Touch photo album for i.MX6ULL"));

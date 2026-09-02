@@ -2,11 +2,12 @@
 
 #include <QDate>
 #include <QDateTime>
-#include <QGestureEvent>
+#include <QDebug>
+#include <QLineF>
 #include <QLinearGradient>
 #include <QMouseEvent>
 #include <QPainter>
-#include <QPinchGesture>
+#include <QTouchEvent>
 #include <QWheelEvent>
 
 PhotoView::PhotoView(QWidget *parent)
@@ -14,10 +15,15 @@ PhotoView::PhotoView(QWidget *parent)
       mode(BrowseMode),
       scale(1.0),
       dragging(false),
-      selecting(false)
+      selecting(false),
+      pinchDistance(0.0),
+      pinchActive(false),
+      pinchOccurred(false),
+      singleTouchActive(false),
+      hasLastTap(false),
+      singleTouchId(-1)
 {
     setAttribute(Qt::WA_AcceptTouchEvents);
-    grabGesture(Qt::PinchGesture);
     setMouseTracking(true);
     setMinimumSize(320, 180);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
@@ -137,21 +143,155 @@ void PhotoView::clampOffset()
     offset.setY(qBound(-maximumY, offset.y(), maximumY));
 }
 
-void PhotoView::applyPinch(const QPinchGesture *gesture)
+void PhotoView::applyPinch(const QPointF &center, qreal scaleFactor)
 {
-    const QPointF localCenter = mapFromGlobal(gesture->centerPoint().toPoint());
     const qreal oldScale = scale;
-    const qreal candidate = qBound(1.0, scale * gesture->scaleFactor(), 8.0);
+    const qreal candidate = qBound(1.0, scale * scaleFactor, 8.0);
     const QRectF oldRect = imageRectForScale(oldScale);
     const QRectF newRect = imageRectForScale(candidate);
-    const qreal relativeX = (localCenter.x() - oldRect.x()) / oldRect.width();
-    const qreal relativeY = (localCenter.y() - oldRect.y()) / oldRect.height();
+    const qreal relativeX = (center.x() - oldRect.x()) / oldRect.width();
+    const qreal relativeY = (center.y() - oldRect.y()) / oldRect.height();
     const QPointF newAnchor(newRect.x() + relativeX * newRect.width(),
                             newRect.y() + relativeY * newRect.height());
-    offset += newAnchor - localCenter;
+    offset += newAnchor - center;
     scale = candidate;
     clampOffset();
     update();
+}
+
+void PhotoView::handleTouchEvent(QTouchEvent *event)
+{
+    const QList<QTouchEvent::TouchPoint> &points = event->touchPoints();
+    const bool touchDebug = qEnvironmentVariableIsSet("PHOTO_ALBUM_TOUCH_DEBUG");
+
+    if (touchDebug) {
+        qDebug() << "PhotoAlbum touch event:" << event->type()
+                 << "reported points:" << points.size();
+        for (int index = 0; index < points.size(); ++index) {
+            const QTouchEvent::TouchPoint &point = points.at(index);
+            qDebug() << " point" << point.id()
+                     << "state" << point.state()
+                     << "pos" << point.pos();
+        }
+    }
+
+    for (int index = 0; index < points.size(); ++index) {
+        const QTouchEvent::TouchPoint &point = points.at(index);
+        if (point.state() == Qt::TouchPointReleased) {
+            lastTouchPosition = point.pos();
+            activeTouches.remove(point.id());
+        } else {
+            activeTouches.insert(point.id(), point.pos());
+        }
+    }
+
+    if (activeTouches.isEmpty()) {
+        if (selecting) {
+            selecting = false;
+            if (selection.width() < 8 || selection.height() < 8)
+                selection = QRect();
+        }
+
+        const bool quickTouch = singleTouchActive &&
+                                 touchTimer.isValid() &&
+                                 touchTimer.elapsed() <= 700;
+        const qreal movement = QLineF(touchStartPosition,
+                                      lastTouchPosition).length();
+
+        if (quickTouch && !pinchOccurred) {
+            if (mode == BrowseMode && scale == 1.0 &&
+                    qAbs(lastTouchPosition.x() - touchStartPosition.x()) >= 100) {
+                if (lastTouchPosition.x() < touchStartPosition.x())
+                    emit nextRequested();
+                else
+                    emit previousRequested();
+            }
+
+            if (mode == BrowseMode && movement < 12.0) {
+                if (hasLastTap && lastTapTimer.isValid() &&
+                        lastTapTimer.elapsed() <= 450 &&
+                        QLineF(lastTapPosition, lastTouchPosition).length() < 32.0) {
+                    resetView();
+                    hasLastTap = false;
+                } else {
+                    lastTapPosition = lastTouchPosition;
+                    lastTapTimer.start();
+                    hasLastTap = true;
+                }
+            }
+        }
+
+        resetTouchState();
+        update();
+        return;
+    }
+
+    if (activeTouches.size() >= 2) {
+        const QList<QPointF> positions = activeTouches.values();
+        const QPointF first = positions.at(0);
+        const QPointF second = positions.at(1);
+        const qreal distance = QLineF(first, second).length();
+        const QPointF center((first.x() + second.x()) / 2.0,
+                             (first.y() + second.y()) / 2.0);
+
+        pinchActive = true;
+        pinchOccurred = true;
+        singleTouchActive = false;
+        dragging = false;
+        selecting = false;
+
+        const qreal previousDistance = pinchDistance;
+        if (mode == BrowseMode && pinchDistance > 0.0 && distance > 0.0)
+            applyPinch(center, distance / pinchDistance);
+        pinchDistance = distance;
+        if (touchDebug)
+            qDebug() << "PhotoAlbum pinch:" << "distance" << distance
+                     << "previous" << previousDistance << "scale" << scale;
+        return;
+    }
+
+    if (pinchActive || !singleTouchActive) {
+        pinchActive = false;
+        pinchDistance = 0.0;
+        singleTouchActive = true;
+        singleTouchId = activeTouches.constBegin().key();
+        touchStartPosition = activeTouches.value(singleTouchId);
+        lastTouchPosition = touchStartPosition;
+        touchOffsetAtStart = offset;
+        touchTimer.start();
+
+        if (mode == CropMode) {
+            selecting = true;
+            selectionStart = touchStartPosition.toPoint();
+            selection = QRect(selectionStart, QSize());
+        }
+    } else {
+        const QPointF position = activeTouches.value(singleTouchId,
+                                                     lastTouchPosition);
+        lastTouchPosition = position;
+
+        if (mode == CropMode) {
+            selection = QRect(selectionStart, position.toPoint()).normalized();
+        } else {
+            offset = touchOffsetAtStart + position - touchStartPosition;
+            clampOffset();
+        }
+        update();
+    }
+}
+
+void PhotoView::resetTouchState()
+{
+    activeTouches.clear();
+    touchStartPosition = QPointF();
+    lastTouchPosition = QPointF();
+    touchOffsetAtStart = QPointF();
+    touchTimer.invalidate();
+    pinchDistance = 0.0;
+    pinchActive = false;
+    pinchOccurred = false;
+    singleTouchActive = false;
+    singleTouchId = -1;
 }
 
 void PhotoView::paintCropOverlay(QPainter &painter)
@@ -256,14 +396,16 @@ void PhotoView::wheelEvent(QWheelEvent *event)
 
 bool PhotoView::event(QEvent *event)
 {
-    if (event->type() == QEvent::Gesture) {
-        QGestureEvent *gestures = static_cast<QGestureEvent *>(event);
-        if (QPinchGesture *pinch = qobject_cast<QPinchGesture *>(
-                gestures->gesture(Qt::PinchGesture))) {
-            if (mode == BrowseMode)
-                applyPinch(pinch);
-            return true;
-        }
+    switch (event->type()) {
+    case QEvent::TouchBegin:
+    case QEvent::TouchUpdate:
+    case QEvent::TouchEnd:
+        handleTouchEvent(static_cast<QTouchEvent *>(event));
+        event->accept();
+        return true;
+    default:
+        break;
     }
+
     return QWidget::event(event);
 }
