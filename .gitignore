@@ -1,6 +1,61 @@
+# Kernel module and application build artifacts
 *.cmd
 *.ko
 *.o
 *.order
 *.symvers
+*.a
+*.so
+*.so.*
+*.la
+*.lo
+*.lai
+*.d
+*.dwo
+*.elf
+*.out
+*.bin
 
+# Archives, backups, logs, and temporary files
+*.tar
+*.tar.gz
+*.tgz
+*.tar.xz
+*.tar.bz2
+*.zip
+*.gz
+*.xz
+*.bz2
+*.bak
+*.backup
+*.old
+*.orig
+*.rej
+*.log
+*.tmp
+*.swp
+*~
+.DS_Store
+Thumbs.db
+
+# Generated directories and autotools state
+.deps/
+.libs/
+.tmp_versions/
+.dist/
+build/
+modules.order
+Module.symvers
+config.status
+libtool
+
+# Editor caches and local executables
+.vscode/ipch/
+apps/Camera/jpegsrc.v10.tar.gz
+apps/Camera/jpeg-10/build-arm/
+apps/Camera/jpeg-10/install-arm/
+apps/Camera/jpeg-10/cjpeg
+apps/Camera/jpeg-10/djpeg
+apps/Camera/jpeg-10/jpegtran
+apps/Camera/jpeg-10/rdjpgcom
+apps/Camera/jpeg-10/wrjpgcom

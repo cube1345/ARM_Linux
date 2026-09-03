@@ -1,0 +1,23 @@
+{
+  "skill_name": "imx6ull-driver-dev",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "修复 ARM_Linux/IMX6ll/02_led 的外部模块构建并说明为什么只做 modules_prepare 不能保证模块可加载。",
+      "expected_output": "使用匹配内核输出、ARCH/CROSS_COMPILE 和 Module.symvers，修复 obj-m/源码错误并解释 vermagic/modversions。",
+      "files": ["ARM_Linux/IMX6ll/02_led/Makefile", "ARM_Linux/IMX6ll/02_led/led.c"]
+    },
+    {
+      "id": 2,
+      "prompt": "把固定寄存器 LED 教学驱动改成设备树 platform 驱动，应该如何组织 compatible、probe/remove、GPIO 和设备节点？",
+      "expected_output": "给出 4.1.15 兼容的 platform/of_match 结构、DT GPIO active level、资源回收和用户 ABI。",
+      "files": []
+    },
+    {
+      "id": 3,
+      "prompt": "insmod LED 模块报 Invalid module format，同时设备树的 sys-led 还在 heartbeat，按什么顺序排查？",
+      "expected_output": "先比对 uname -r/vermagic/config/Module.symvers，再检查 GPIO1_IO03 的 DT 消费者和触发器，最后看 probe 日志。",
+      "files": []
+    }
+  ]
+}
