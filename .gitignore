@@ -44,6 +44,14 @@ Thumbs.db
 .tmp_versions/
 .dist/
 build/
+build-*/
+.qmake.stash
+*.pro.user
+*.pro.user.*
+moc_*.cpp
+*.moc
+ui_*.h
+qrc_*.cpp
 modules.order
 Module.symvers
 config.status
