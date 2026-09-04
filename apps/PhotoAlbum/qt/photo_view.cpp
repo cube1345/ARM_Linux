@@ -180,10 +180,25 @@ void PhotoView::handleTouchEvent(QTouchEvent *event)
         if (point.state() == Qt::TouchPointReleased) {
             lastTouchPosition = point.pos();
             activeTouches.remove(point.id());
+            touchStartPositions.remove(point.id());
         } else {
+            if (!touchStartPositions.contains(point.id()))
+                touchStartPositions.insert(point.id(), point.pos());
             activeTouches.insert(point.id(), point.pos());
         }
     }
+
+    qreal maximumMovement = 0.0;
+    QHash<int, QPointF>::const_iterator iterator = activeTouches.constBegin();
+    while (iterator != activeTouches.constEnd()) {
+        const QPointF startPosition = touchStartPositions.value(iterator.key(),
+                                                               iterator.value());
+        maximumMovement = qMax(maximumMovement,
+                               QLineF(startPosition, iterator.value()).length());
+        ++iterator;
+    }
+    emit touchDebugChanged(activeTouches.size(), maximumMovement >= 4.0,
+                           maximumMovement);
 
     if (activeTouches.isEmpty()) {
         if (selecting) {
@@ -283,6 +298,7 @@ void PhotoView::handleTouchEvent(QTouchEvent *event)
 void PhotoView::resetTouchState()
 {
     activeTouches.clear();
+    touchStartPositions.clear();
     touchStartPosition = QPointF();
     lastTouchPosition = QPointF();
     touchOffsetAtStart = QPointF();
@@ -328,6 +344,8 @@ void PhotoView::mousePressEvent(QMouseEvent *event)
     if (event->button() != Qt::LeftButton)
         return;
 
+    emit touchDebugChanged(1, false, 0.0);
+
     if (mode == CropMode) {
         selecting = true;
         selectionStart = event->pos();
@@ -342,6 +360,11 @@ void PhotoView::mousePressEvent(QMouseEvent *event)
 
 void PhotoView::mouseMoveEvent(QMouseEvent *event)
 {
+    const QPoint movementStart = selecting ? selectionStart : dragStart;
+    const qreal movement = QLineF(movementStart, event->pos()).length();
+    if (selecting || dragging)
+        emit touchDebugChanged(1, movement >= 4.0, movement);
+
     if (selecting) {
         selection = QRect(selectionStart, event->pos()).normalized();
         update();
@@ -354,6 +377,8 @@ void PhotoView::mouseMoveEvent(QMouseEvent *event)
 
 void PhotoView::mouseReleaseEvent(QMouseEvent *event)
 {
+    emit touchDebugChanged(0, false, 0.0);
+
     if (selecting) {
         selecting = false;
         selection = QRect(selectionStart, event->pos()).normalized();

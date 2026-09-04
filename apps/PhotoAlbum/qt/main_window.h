@@ -24,6 +24,7 @@ private slots:
     void cancelCrop();
     void resetPhoto();
     void savePhoto();
+    void updateTouchDebug(int contactCount, bool sliding, qreal movement);
 
 private:
     void buildUi();
@@ -37,6 +38,8 @@ private:
     PhotoView *photoView;
     QLabel *titleLabel;
     QLabel *statusLabel;
+    QLabel *touchCountLabel;
+    QLabel *touchSlideLabel;
     QPushButton *previousButton;
     QPushButton *nextButton;
     QPushButton *cropButton;

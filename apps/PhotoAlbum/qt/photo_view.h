@@ -33,6 +33,7 @@ public:
 signals:
     void previousRequested();
     void nextRequested();
+    void touchDebugChanged(int contactCount, bool sliding, qreal movement);
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -64,6 +65,7 @@ private:
     QPoint selectionStart;
     QRect selection;
     QHash<int, QPointF> activeTouches;
+    QHash<int, QPointF> touchStartPositions;
     QPointF touchStartPosition;
     QPointF lastTouchPosition;
     QPointF lastTapPosition;

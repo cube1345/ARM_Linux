@@ -18,6 +18,8 @@ MainWindow::MainWindow(const QString &photoDirectory, QWidget *parent)
       photoView(nullptr),
       titleLabel(nullptr),
       statusLabel(nullptr),
+      touchCountLabel(nullptr),
+      touchSlideLabel(nullptr),
       previousButton(nullptr),
       nextButton(nullptr),
       cropButton(nullptr),
@@ -50,8 +52,14 @@ void MainWindow::buildUi()
     titleLabel->setObjectName(QStringLiteral("title"));
     statusLabel = new QLabel(header);
     statusLabel->setObjectName(QStringLiteral("status"));
+    touchCountLabel = new QLabel(tr("接触点:0"), header);
+    touchCountLabel->setObjectName(QStringLiteral("touchCount"));
+    touchSlideLabel = new QLabel(tr("滑动:否"), header);
+    touchSlideLabel->setObjectName(QStringLiteral("touchSlide"));
     headerLayout->addWidget(titleLabel);
     headerLayout->addStretch();
+    headerLayout->addWidget(touchCountLabel);
+    headerLayout->addWidget(touchSlideLabel);
     headerLayout->addWidget(statusLabel);
 
     photoView = new PhotoView(central);
@@ -59,6 +67,8 @@ void MainWindow::buildUi()
             this, SLOT(showPrevious()));
     connect(photoView, SIGNAL(nextRequested()),
             this, SLOT(showNext()));
+    connect(photoView, SIGNAL(touchDebugChanged(int,bool,qreal)),
+            this, SLOT(updateTouchDebug(int,bool,qreal)));
 
     QWidget *footer = new QWidget(central);
     footer->setObjectName(QStringLiteral("footer"));
@@ -110,6 +120,8 @@ void MainWindow::buildUi()
         "QLabel{color:#f5f5f7;}"
         "QLabel#title{font-size:15px;font-weight:700;}"
         "QLabel#status{color:#a1a1aa;font-size:11px;}"
+        "QLabel#touchCount,QLabel#touchSlide{color:#30d158;"
+        "font-size:11px;font-weight:700;}"
         "QPushButton{color:#f5f5f7;background:rgba(255,255,255,0.12);"
         "border:0;border-radius:12px;min-width:36px;min-height:28px;"
         "padding:0 10px;font-size:12px;}"
@@ -117,6 +129,14 @@ void MainWindow::buildUi()
         "QPushButton#primaryButton{background:#0a84ff;}"
         "QPushButton#primaryButton:pressed{background:#0060df;}"
     ));
+}
+
+void MainWindow::updateTouchDebug(int contactCount, bool sliding, qreal movement)
+{
+    touchCountLabel->setText(tr("接触点:%1").arg(contactCount));
+    touchSlideLabel->setText(tr("滑动:%1(%2px)")
+                             .arg(sliding ? tr("是") : tr("否"))
+                             .arg(qRound(movement)));
 }
 
 void MainWindow::loadPhotos(const QString &directory)
@@ -140,7 +160,8 @@ void MainWindow::loadPhotos(const QString &directory)
     if (photoPaths.isEmpty()) {
         photoPaths = QStringList() << QStringLiteral("demo://1")
                                    << QStringLiteral("demo://2")
-                                   << QStringLiteral("demo://3");
+                                   << QStringLiteral("demo://3")
+                                   << QStringLiteral("demo://4");
     }
 
     showPhoto();
@@ -214,10 +235,11 @@ QList<QImage> MainWindow::createDemoPhotos()
     const QList<QPair<QColor, QColor> > colors = QList<QPair<QColor, QColor> >()
             << qMakePair(QColor(17, 80, 160), QColor(230, 70, 140))
             << qMakePair(QColor(20, 140, 110), QColor(220, 190, 70))
-            << qMakePair(QColor(70, 50, 150), QColor(20, 180, 220));
+            << qMakePair(QColor(70, 50, 150), QColor(20, 180, 220))
+            << qMakePair(QColor(100, 180, 30),QColor(60, 90, 100));
 
     for (int index = 0; index < colors.size(); ++index) {
-        QImage image(900, 600, QImage::Format_RGB32);
+        QImage image(810, 540, QImage::Format_RGB32);
         QPainter painter(&image);
         QLinearGradient gradient(0, 0, image.width(), image.height());
         gradient.setColorAt(0.0, colors.at(index).first);
