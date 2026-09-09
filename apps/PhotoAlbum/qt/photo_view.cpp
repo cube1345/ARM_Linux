@@ -10,6 +10,9 @@
 #include <QTouchEvent>
 #include <QWheelEvent>
 
+/**
+ * @brief 初始化图片视图及触摸交互状态。
+ */
 PhotoView::PhotoView(QWidget *parent)
     : QWidget(parent),
       mode(BrowseMode),
@@ -29,6 +32,10 @@ PhotoView::PhotoView(QWidget *parent)
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
 }
 
+/**
+ * @brief 设置当前图片并复位视图。
+ * @param image 要显示的图片。
+ */
 void PhotoView::setImage(const QImage &image)
 {
     currentImage = image;
@@ -54,6 +61,9 @@ void PhotoView::setViewMode(ViewMode newMode)
     update();
 }
 
+/**
+ * @brief 将缩放、偏移和裁剪选择恢复到初始状态。
+ */
 void PhotoView::resetView()
 {
     scale = 1.0;
@@ -143,6 +153,11 @@ void PhotoView::clampOffset()
     offset.setY(qBound(-maximumY, offset.y(), maximumY));
 }
 
+/**
+ * @brief 根据双指距离变化执行缩放。
+ * @param center 双指中心点。
+ * @param scaleFactor 本次缩放倍率。
+ */
 void PhotoView::applyPinch(const QPointF &center, qreal scaleFactor)
 {
     const qreal oldScale = scale;
@@ -159,6 +174,10 @@ void PhotoView::applyPinch(const QPointF &center, qreal scaleFactor)
     update();
 }
 
+/**
+ * @brief 处理 Qt 多点触摸事件。
+ * @param event Qt 触摸事件对象。
+ */
 void PhotoView::handleTouchEvent(QTouchEvent *event)
 {
     const QList<QTouchEvent::TouchPoint> &points = event->touchPoints();
@@ -213,26 +232,29 @@ void PhotoView::handleTouchEvent(QTouchEvent *event)
         const qreal movement = QLineF(touchStartPosition,
                                       lastTouchPosition).length();
 
-        if (quickTouch && !pinchOccurred) {
-            if (mode == BrowseMode && scale == 1.0 &&
-                    qAbs(lastTouchPosition.x() - touchStartPosition.x()) >= 100) {
-                if (lastTouchPosition.x() < touchStartPosition.x())
+        if (!pinchOccurred && mode == BrowseMode && scale == 1.0) {
+            const qreal deltaX = lastTouchPosition.x() - touchStartPosition.x();
+            const qreal deltaY = lastTouchPosition.y() - touchStartPosition.y();
+            if (qAbs(deltaX) >= 100 && qAbs(deltaX) > qAbs(deltaY) * 1.5) {
+                if (deltaX < 0)
                     emit nextRequested();
                 else
                     emit previousRequested();
+            } else if (qAbs(deltaY) >= 60 && qAbs(deltaY) > qAbs(deltaX) * 1.5) {
+                emit filmstripRequested(deltaY < 0);
             }
+        }
 
-            if (mode == BrowseMode && movement < 12.0) {
-                if (hasLastTap && lastTapTimer.isValid() &&
-                        lastTapTimer.elapsed() <= 450 &&
-                        QLineF(lastTapPosition, lastTouchPosition).length() < 32.0) {
-                    resetView();
-                    hasLastTap = false;
-                } else {
-                    lastTapPosition = lastTouchPosition;
-                    lastTapTimer.start();
-                    hasLastTap = true;
-                }
+        if (quickTouch && mode == BrowseMode && movement < 12.0) {
+            if (hasLastTap && lastTapTimer.isValid() &&
+                    lastTapTimer.elapsed() <= 450 &&
+                    QLineF(lastTapPosition, lastTouchPosition).length() < 32.0) {
+                resetView();
+                hasLastTap = false;
+            } else {
+                lastTapPosition = lastTouchPosition;
+                lastTapTimer.start();
+                hasLastTap = true;
             }
         }
 
@@ -295,6 +317,9 @@ void PhotoView::handleTouchEvent(QTouchEvent *event)
     }
 }
 
+/**
+ * @brief 清空触摸点及手势状态。
+ */
 void PhotoView::resetTouchState()
 {
     activeTouches.clear();
@@ -324,8 +349,16 @@ void PhotoView::paintCropOverlay(QPainter &painter)
         painter.setPen(QPen(QColor(255, 255, 255, 220), 2));
         painter.drawRect(selected);
         painter.setPen(QPen(QColor(255, 255, 255, 140), 1));
-        painter.drawRect(selected.adjusted(0, selected.height() / 3,
-                                           0, selected.height() / 3));
+        const int thirdWidth = selected.width() / 3;
+        const int thirdHeight = selected.height() / 3;
+        painter.drawLine(selected.left() + thirdWidth, selected.top(),
+                         selected.left() + thirdWidth, selected.bottom());
+        painter.drawLine(selected.left() + thirdWidth * 2, selected.top(),
+                         selected.left() + thirdWidth * 2, selected.bottom());
+        painter.drawLine(selected.left(), selected.top() + thirdHeight,
+                         selected.right(), selected.top() + thirdHeight);
+        painter.drawLine(selected.left(), selected.top() + thirdHeight * 2,
+                         selected.right(), selected.top() + thirdHeight * 2);
     } else {
         painter.fillRect(rect(), QColor(0, 0, 0, 35));
         painter.setPen(QColor(255, 255, 255, 170));
@@ -339,6 +372,10 @@ QPoint PhotoView::mapToImage(const QPoint &point) const
     return point;
 }
 
+/**
+ * @brief 处理鼠标或单点触摸按下事件。
+ * @param event 鼠标事件对象。
+ */
 void PhotoView::mousePressEvent(QMouseEvent *event)
 {
     if (event->button() != Qt::LeftButton)
@@ -358,6 +395,10 @@ void PhotoView::mousePressEvent(QMouseEvent *event)
     update();
 }
 
+/**
+ * @brief 处理拖动或裁剪框选移动事件。
+ * @param event 鼠标事件对象。
+ */
 void PhotoView::mouseMoveEvent(QMouseEvent *event)
 {
     const QPoint movementStart = selecting ? selectionStart : dragStart;
@@ -375,6 +416,11 @@ void PhotoView::mouseMoveEvent(QMouseEvent *event)
     }
 }
 
+
+/**
+ * @brief 处理鼠标或单点触摸释放事件。
+ * @param event 鼠标事件对象。
+ */
 void PhotoView::mouseReleaseEvent(QMouseEvent *event)
 {
     emit touchDebugChanged(0, false, 0.0);
@@ -391,14 +437,20 @@ void PhotoView::mouseReleaseEvent(QMouseEvent *event)
     if (dragging) {
         dragging = false;
         const int deltaX = event->x() - dragStart.x();
-        if (scale == 1.0 && qAbs(deltaX) >= 100) {
-            if (deltaX < 0)
-                emit nextRequested();
-            else
-                emit previousRequested();
+        const int deltaY = event->y() - dragStart.y();
+        if (scale == 1.0) {
+            if (qAbs(deltaX) >= 100 && qAbs(deltaX) > qAbs(deltaY) * 1.5) {
+                if (deltaX < 0)
+                    emit nextRequested();
+                else
+                    emit previousRequested();
+            } else if (qAbs(deltaY) >= 60 && qAbs(deltaY) > qAbs(deltaX) * 1.5) {
+                emit filmstripRequested(deltaY < 0);
+            }
         }
     }
 }
+
 
 void PhotoView::mouseDoubleClickEvent(QMouseEvent *event)
 {
@@ -419,6 +471,11 @@ void PhotoView::wheelEvent(QWheelEvent *event)
     update();
 }
 
+/**
+ * @brief 分发 Qt 触摸事件，其余事件交给 QWidget。
+ * @param event Qt 通用事件对象。
+ * @return 事件是否已处理。
+ */
 bool PhotoView::event(QEvent *event)
 {
     switch (event->type()) {

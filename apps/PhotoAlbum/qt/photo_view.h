@@ -9,30 +9,64 @@
 #include <QWidget>
 
 class QTouchEvent;
+/**
+ * @brief 显示图片并处理浏览、拖动、双指缩放和裁剪。
+ *
+ * 控件同时接收 Qt 触摸事件和鼠标事件。鼠标事件用于兼容 evdevtouch
+ * 将触摸输入转换为单指指针事件的平台。
+ */
 class PhotoView : public QWidget
 {
     Q_OBJECT
 
 public:
+    /**
+     * @brief 图片视图的交互模式。
+     */
     enum ViewMode {
         BrowseMode,
         CropMode
     };
 
+    /**
+     * @brief 创建空的图片视图。
+     * @param parent Qt 父控件，可选。
+     */
     explicit PhotoView(QWidget *parent = nullptr);
 
+    /** @brief 设置显示图片并复位视图。 */
     void setImage(const QImage &image);
+    /** @brief 返回当前图片。 */
     QImage image() const;
+    /** @brief 返回当前交互模式。 */
     ViewMode viewMode() const;
+    /** @brief 在浏览模式和裁剪模式之间切换。 */
     void setViewMode(ViewMode mode);
+    /** @brief 复位缩放、平移偏移量和裁剪区域。 */
     void resetView();
+    /** @brief 返回当前是否存在有效裁剪矩形。 */
     bool hasCropSelection() const;
+    /** @brief 返回当前裁剪矩形对应的图片。 */
     QImage selectedImage() const;
+    /** @brief 返回当前图片尺寸。 */
     QSize imageSize() const;
 
 signals:
+    /** @brief 请求显示上一张图片。 */
     void previousRequested();
+    /** @brief 请求显示下一张图片。 */
     void nextRequested();
+    /**
+     * @brief 请求展开或收起底部横向缩略图列表。
+     * @param visible true 表示展开（上滑），false 表示收起（下滑）。
+     */
+    void filmstripRequested(bool visible);
+    /**
+     * @brief 向主窗口报告触摸调试信息。
+     * @param contactCount Number of active contacts.
+     * @param sliding 是否有接触点移动达到判定阈值。
+     * @param movement 接触点最大移动距离，单位为像素。
+     */
     void touchDebugChanged(int contactCount, bool sliding, qreal movement);
 
 protected:

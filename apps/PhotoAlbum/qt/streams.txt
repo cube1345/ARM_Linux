@@ -1,0 +1,18 @@
+# 网络直播流地址，每行一个。支持 rtsp://、rtmp://、rtmps://、rtmpt:// 和 HLS(.m3u8) 的 http。
+# '#' 开头或空行会被忽略。改完保存，在相册「视频」页即可看到网络流条目。
+# 注意：板卡 ffmpeg 未带可用的 TLS 后端，https:// 流打不开，请用 http:// / rtsp:// / rtmp://。
+
+# ---- 真实直播源模板（按需启用） ----
+
+# ① 局域网 IP 摄像头（RTSP，最典型；路径随品牌而异，如 hikvision/dahua/ONVIF）
+# rtsp://192.168.137.100:554/Streaming/Channels/101
+# rtsp://admin:密码@192.168.137.100:554/h264/ch1/main/av_stream
+
+# ② RTMP 推流（OBS/ffmpeg 推到局域网 RTMP 服务器，如 nginx-rtmp / mediamtx）
+# rtmp://192.168.137.1:1935/live/stream
+
+# ③ Windows/局域网 ffmpeg 推的 HLS 直播（本项目自测方案）
+# http://192.168.137.1:8000/out.m3u8
+
+# ④ 公网 http 测试流（480x270，验证用；真公网直播多为 https 或高分辨率，板卡受限）
+# http://maitv-vod.lab.eyevinn.technology/VINN.mp4/600/600-.m3u8
