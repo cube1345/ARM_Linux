@@ -274,9 +274,9 @@ I  B P B P B P B ... I  B P B ...
 
 ```
 关键：-g <帧率> -keyint_min <帧率>（否则 GOP 16.7s，分片被拉长到~17s，延迟 20s+）
-实测：-g 15 + -hls_time 1 + -hls_list_size 4 → 端到端 ~4s
-再压：-g 7 + -hls_time 0.5 + list 3 → 可到 ~2s
-再低：换 RTSP → 0.5~2s
+实测：-g 15 + -hls_time 1 + -hls_list_size 4 → 端到端 ~2s（源 25fps，GOP=0.6s）
+再压：-g 7 + -hls_time 0.5 + list 3 → 可到 ~1.5s
+再低：换 RTSP → 0.5~1.5s
 ```
 
 ---
@@ -1099,7 +1099,7 @@ ffmpeg -rtsp_transport tcp -i rtsp://cam/... -c copy -f hls out.m3u8
 
 | 协议         | 可用？      | 说明                                      |
 | ------------ | ----------- | ----------------------------------------- |
-| HLS (http)   | ✅ 首选     | 已跑通，~2~4s，穿透最好，直播+回放通吃   |
+| HLS (http)   | ✅ 首选     | 已跑通，~2s，穿透最好，直播+回放通吃   |
 | RTSP         | ✅ 代码就绪 | 需 RTSP 服务器（摄像头/mediamtx），0.5~2s |
 | RTMP         | ✅ 可拉     | 需 RTMP 服务器；1~3s                      |
 | HTTP-FLV     | ⚠️ 需测   | ffmpeg 3.0 flv demuxer 可拉，无 seek      |
@@ -1108,7 +1108,7 @@ ffmpeg -rtsp_transport tcp -i rtsp://cam/... -c copy -f hls out.m3u8
 
 ### 16.3 选型结论
 
-1. **HLS 主力**：简单、可靠、穿透好、直播+回放、~2~4s 可接受
+1. **HLS 主力**：简单、可靠、穿透好、直播+回放、~2s 可接受
 2. **RTSP 低延迟备选**：0.5~2s，接摄像头
 3. 避开 WebRTC/SRT/DASH
 
@@ -1118,7 +1118,7 @@ ffmpeg -rtsp_transport tcp -i rtsp://cam/... -c copy -f hls out.m3u8
 
 | 模块        | 实现                                                                                 |
 | ----------- | ------------------------------------------------------------------------------------ |
-| 直播        | HLS（`-hls_time 1 -hls_list_size 4 -g 15`，~4s）                                   |
+| 直播        | HLS（`-hls_time 1 -hls_list_size 4 -g 15`，~2s）                                   |
 | 录像回放    | MP4（`-f segment -segment_time 60`）+ HTTP Range seek + 进度条 + 时间戳叠加 + 删除 |
 | RTSP 客户端 | `rtsp_transport=tcp` + 5s 超时 + 3s 重连（待启用）                                 |
 | 分发        | `stream_server.py`（HTTP + Range + /list + DELETE）                                |
@@ -1142,7 +1142,7 @@ ffmpeg -rtsp_transport tcp -i rtsp://cam/... -c copy -f hls out.m3u8
 | Webcam 352x288@15           | FPS=15，延迟~4s     | 源限速         |
 | Webcam 640x480@15           | ~9fps               | 解码上限       |
 | 关键：`-g` 不设           | 分片~17s，延迟 20s+ | GOP 16.7s      |
-| `-g 15` + `-hls_time 1` | 分片 1s，延迟 ~4s   | 修复后         |
+| `-g 15` + `-hls_time 1` | 分片 1s，延迟 ~2s   | 修复后(25fps源) |
 
 ## 18. 术语表
 

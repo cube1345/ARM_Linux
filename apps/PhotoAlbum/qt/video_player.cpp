@@ -7,15 +7,47 @@ extern "C" {
 #include <libavcodec/avcodec.h>
 #include <libavformat/avformat.h>
 #include <libswscale/swscale.h>
+#include <alsa/asoundlib.h>
 }
 
 #if LIBAVCODEC_VERSION_MAJOR >= 58
 #define USE_NEW_DECODE_API 1
 #define USE_OLD_DECODE_API 0
+#define AUDIO_CHANNELS(ctx) ((ctx)->ch_layout.nb_channels > 0 ? (ctx)->ch_layout.nb_channels : 2)
 #else
 #define USE_NEW_DECODE_API 0
 #define USE_OLD_DECODE_API 1
+#define AUDIO_CHANNELS(ctx) ((ctx)->channels)
 #endif
+
+static const char *kAlsaDevice = "plughw:0,0";
+
+static bool openAlsaOutput(snd_pcm_t **pcm, int rate, int channels)
+{
+    snd_pcm_t *handle = nullptr;
+    if (snd_pcm_open(&handle, kAlsaDevice, SND_PCM_STREAM_PLAYBACK, 0) < 0)
+        return false;
+    snd_pcm_hw_params_t *hw = nullptr;
+    snd_pcm_hw_params_malloc(&hw);
+    snd_pcm_hw_params_any(handle, hw);
+    snd_pcm_hw_params_set_access(handle, hw, SND_PCM_ACCESS_RW_INTERLEAVED);
+    snd_pcm_hw_params_set_format(handle, hw, SND_PCM_FORMAT_S16_LE);
+    snd_pcm_hw_params_set_channels(handle, hw, channels);
+    if (snd_pcm_hw_params_set_rate(handle, hw, rate, 0) < 0) {
+        snd_pcm_hw_params_free(hw);
+        snd_pcm_close(handle);
+        return false;
+    }
+    if (snd_pcm_hw_params(handle, hw) < 0) {
+        snd_pcm_hw_params_free(hw);
+        snd_pcm_close(handle);
+        return false;
+    }
+    snd_pcm_hw_params_free(hw);
+    snd_pcm_prepare(handle);
+    *pcm = handle;
+    return true;
+}
 
 static bool emitDecodedFrame(VideoDecodeThread *thread, AVFrame *frame,
                              AVCodecContext *codecCtx, SwsContext *&sws,
@@ -60,7 +92,12 @@ VideoDecodeThread::VideoDecodeThread(QObject *parent)
       stopped(0),
       pendingSeek(0),
       pendingSeekMs(0),
-      lastPositionEmit(-1)
+      lastPositionEmit(-1),
+      audioCtx(nullptr),
+      audioCtxOwned(false),
+      audioStream(-1),
+      alsaPcm(nullptr),
+      audioEnabled(1)
 {
 }
 
@@ -98,6 +135,77 @@ void VideoDecodeThread::setPaused(bool value)
     paused.storeRelease(value ? 1 : 0);
 }
 
+void VideoDecodeThread::setAudioEnabled(bool on)
+{
+    audioEnabled.storeRelease(on ? 1 : 0);
+}
+
+bool VideoDecodeThread::audioOn() const
+{
+    return audioEnabled.loadAcquire() != 0;
+}
+
+void VideoDecodeThread::writeAudioFrames(AVFrame *aframe)
+{
+    if (!alsaPcm || !audioEnabled.loadAcquire() || !audioCtx)
+        return;
+    const int channels = AUDIO_CHANNELS(audioCtx) > 0 ? AUDIO_CHANNELS(audioCtx) : 2;
+    const int samples = aframe->nb_samples;
+    if (samples <= 0)
+        return;
+    audioBuffer.resize(samples * channels * 2);
+    int16_t *dst = reinterpret_cast<int16_t *>(audioBuffer.data());
+    if (aframe->format == AV_SAMPLE_FMT_S16) {
+        memcpy(dst, aframe->data[0], static_cast<size_t>(samples) * channels * 2);
+    } else if (aframe->format == AV_SAMPLE_FMT_S16P) {
+        for (int c = 0; c < channels; ++c) {
+            const int16_t *src = reinterpret_cast<const int16_t *>(aframe->data[c]);
+            for (int i = 0; i < samples; ++i)
+                dst[i * channels + c] = src[i];
+        }
+    } else if (aframe->format == AV_SAMPLE_FMT_FLTP) {
+        for (int c = 0; c < channels; ++c) {
+            const float *src = reinterpret_cast<const float *>(aframe->data[c]);
+            for (int i = 0; i < samples; ++i) {
+                const float v = qBound(-1.0f, src[i], 1.0f);
+                dst[i * channels + c] = static_cast<int16_t>(v * 32767.0f);
+            }
+        }
+    } else {
+        return;
+    }
+    const int err = snd_pcm_writei(alsaPcm, dst, samples);
+    if (err < 0) {
+        if (err == -EPIPE || err == -ESTRPIPE) {
+            snd_pcm_prepare(alsaPcm);
+            snd_pcm_writei(alsaPcm, dst, samples);
+        } else {
+            static int audioErrCount = 0;
+            if (++audioErrCount <= 3)
+                qInfo().noquote() << QStringLiteral("[VideoPlayer] ALSA 写入错误: %1")
+                        .arg(QString::fromUtf8(snd_strerror(err)));
+        }
+    } else {
+        static qint64 audioWriteCount = 0;
+        if ((++audioWriteCount % 500) == 1)
+            qInfo().noquote() << QStringLiteral("[VideoPlayer] 音频已写入 %1 帧").arg(audioWriteCount);
+    }
+}
+
+void VideoDecodeThread::closeAudio()
+{
+    if (alsaPcm) {
+        snd_pcm_close(alsaPcm);
+        alsaPcm = nullptr;
+    }
+    if (audioCtx) {
+        if (audioCtxOwned)
+            avcodec_free_context(&audioCtx);
+        audioCtx = nullptr;
+    }
+    audioStream = -1;
+}
+
 void VideoDecodeThread::run()
 {
     running.storeRelease(1);
@@ -125,6 +233,7 @@ QString VideoDecodeThread::decodeNew()
     AVCodecContext *codecCtx = nullptr;
     SwsContext *sws = nullptr;
     AVFrame *frame = av_frame_alloc();
+    AVFrame *aframe = av_frame_alloc();
     AVPacket *packet = av_packet_alloc();
     QByteArray rgbBuffer;
     QString error;
@@ -144,6 +253,7 @@ QString VideoDecodeThread::decodeNew()
             avformat_close_input(&format);
             format = nullptr;
         }
+        closeAudio();
 
         AVDictionary *options = nullptr;
         av_dict_set(&options, "rw_timeout", "2000000", 0);
@@ -194,6 +304,31 @@ QString VideoDecodeThread::decodeNew()
             break;
         }
 
+        closeAudio();
+        audioStream = av_find_best_stream(format, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
+        if (audioStream >= 0) {
+            AVStream *ast = format->streams[audioStream];
+            const AVCodec *adec = avcodec_find_decoder(ast->codecpar->codec_id);
+            if (adec) {
+                audioCtx = avcodec_alloc_context3(adec);
+                audioCtxOwned = true;
+                if (avcodec_parameters_to_context(audioCtx, ast->codecpar) < 0
+                        || avcodec_open2(audioCtx, nullptr, nullptr) < 0) {
+                    avcodec_free_context(&audioCtx);
+                    audioCtx = nullptr;
+                }
+                if (audioCtx)
+                    openAlsaOutput(&alsaPcm, audioCtx->sample_rate, AUDIO_CHANNELS(audioCtx));
+            }
+        }
+        if (audioCtx && alsaPcm)
+            qInfo().noquote() << QStringLiteral("[VideoPlayer] 音频输出已开启: %1Hz %2ch")
+                    .arg(audioCtx->sample_rate).arg(AUDIO_CHANNELS(audioCtx));
+        else if (audioCtx)
+            qInfo().noquote() << QStringLiteral("[VideoPlayer] 有音频流但 ALSA 打开失败");
+        else
+            qInfo().noquote() << QStringLiteral("[VideoPlayer] 无音频流");
+
         while (running.loadAcquire()) {
             if (paused.loadAcquire()) {
                 msleep(40);
@@ -238,8 +373,16 @@ QString VideoDecodeThread::decodeNew()
                         }
                     }
                     emitDecodedFrame(this, frame, codecCtx, sws, rgbBuffer);
-                    paceFrame(frameTimer, fps);
+                    if (!audioCtx)
+                        paceFrame(frameTimer, fps);
                     av_frame_unref(frame);
+                }
+            } else if (audioCtx && packet->stream_index == audioStream) {
+                avcodec_send_packet(audioCtx, packet);
+                av_packet_unref(packet);
+                while (avcodec_receive_frame(audioCtx, aframe) == 0) {
+                    writeAudioFrames(aframe);
+                    av_frame_unref(aframe);
                 }
             } else {
                 av_packet_unref(packet);
@@ -255,12 +398,15 @@ QString VideoDecodeThread::decodeNew()
         sws_freeContext(sws);
     if (codecCtx)
         avcodec_free_context(&codecCtx);
+    closeAudio();
     if (format)
         avformat_close_input(&format);
     if (packet)
         av_packet_free(&packet);
     if (frame)
         av_frame_free(&frame);
+    if (aframe)
+        av_frame_free(&aframe);
     avformat_network_deinit();
     return error;
 }
@@ -273,6 +419,7 @@ QString VideoDecodeThread::decodeOld()
     AVCodecContext *codecCtx = nullptr;
     SwsContext *sws = nullptr;
     AVFrame *frame = av_frame_alloc();
+    AVFrame *aframe = av_frame_alloc();
     QByteArray rgbBuffer;
     QString error;
 
@@ -285,6 +432,7 @@ QString VideoDecodeThread::decodeOld()
             avformat_close_input(&format);
             format = nullptr;
         }
+        closeAudio();
 
         AVDictionary *options = nullptr;
         av_dict_set(&options, "rw_timeout", "2000000", 0);
@@ -344,6 +492,30 @@ QString VideoDecodeThread::decodeOld()
             break;
         }
 
+        closeAudio();
+        audioStream = av_find_best_stream(format, AVMEDIA_TYPE_AUDIO, -1, -1, nullptr, 0);
+        if (audioStream >= 0) {
+            AVStream *ast = format->streams[audioStream];
+            if (ast->codec) {
+                audioCtx = ast->codec;
+                audioCtxOwned = false;
+                audioCtx->thread_count = 1;
+                const AVCodec *adec = avcodec_find_decoder(audioCtx->codec_id);
+                if (adec && avcodec_open2(audioCtx, adec, nullptr) >= 0) {
+                    openAlsaOutput(&alsaPcm, audioCtx->sample_rate, AUDIO_CHANNELS(audioCtx));
+                } else {
+                    audioCtx = nullptr;
+                }
+            }
+        }
+        if (audioCtx && alsaPcm)
+            qInfo().noquote() << QStringLiteral("[VideoPlayer] 音频输出已开启: %1Hz %2ch")
+                    .arg(audioCtx->sample_rate).arg(AUDIO_CHANNELS(audioCtx));
+        else if (audioCtx)
+            qInfo().noquote() << QStringLiteral("[VideoPlayer] 有音频流但 ALSA 打开失败");
+        else
+            qInfo().noquote() << QStringLiteral("[VideoPlayer] 无音频流");
+
         while (running.loadAcquire()) {
             if (paused.loadAcquire()) {
                 msleep(40);
@@ -386,7 +558,19 @@ QString VideoDecodeThread::decodeOld()
                         }
                     }
                     emitDecodedFrame(this, frame, codecCtx, sws, rgbBuffer);
-                    paceFrame(frameTimer, fps);
+                    if (!audioCtx)
+                        paceFrame(frameTimer, fps);
+                }
+            } else if (audioCtx && packet.stream_index == audioStream) {
+                int gotAudio = 0;
+                avcodec_decode_audio4(audioCtx, aframe, &gotAudio, &packet);
+                av_packet_unref(&packet);
+                if (gotAudio) {
+                    writeAudioFrames(aframe);
+                } else {
+                    static int noAudioCount = 0;
+                    if (++noAudioCount <= 5)
+                        qInfo().noquote() << QStringLiteral("[VideoPlayer] 音频包解码无输出帧");
                 }
             } else {
                 av_packet_unref(&packet);
@@ -400,9 +584,11 @@ QString VideoDecodeThread::decodeOld()
 
     if (sws)
         sws_freeContext(sws);
+    closeAudio();
     if (format)
         avformat_close_input(&format);
     av_frame_free(&frame);
+    av_frame_free(&aframe);
     avformat_network_deinit();
     return error;
 }
@@ -518,6 +704,16 @@ void VideoPlayerWidget::setRecordingStart(const QDateTime &start)
 {
     recordingStart = start;
     update();
+}
+
+void VideoPlayerWidget::setAudioEnabled(bool on)
+{
+    decodeThread->setAudioEnabled(on);
+}
+
+bool VideoPlayerWidget::audioEnabled() const
+{
+    return decodeThread->audioOn();
 }
 
 void VideoPlayerWidget::seek(qint64 ms)

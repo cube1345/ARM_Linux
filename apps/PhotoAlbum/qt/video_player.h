@@ -2,6 +2,7 @@
 #define VIDEO_PLAYER_H
 
 #include <QAtomicInt>
+#include <QByteArray>
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QImage>
@@ -9,6 +10,12 @@
 #include <QThread>
 #include <QTimer>
 #include <QWidget>
+
+struct AVFormatContext;
+struct AVCodecContext;
+struct AVPacket;
+struct AVFrame;
+typedef struct _snd_pcm snd_pcm_t;
 
 /**
  * @brief ffmpeg 解码线程：打开媒体文件（或网络流），软解视频帧并输出 QImage。
@@ -41,6 +48,10 @@ signals:
 public slots:
     /** @brief 跳转到指定毫秒位置（非直播源）。 */
     void seek(qint64 ms);
+    /** @brief 打开/关闭音频输出（麦克风/摄像头声音）。 */
+    void setAudioEnabled(bool on);
+    /** @brief 音频输出当前是否开启。 */
+    bool audioOn() const;
 
 protected:
     void run() override;
@@ -48,6 +59,10 @@ protected:
 private:
     QString decodeNew();
     QString decodeOld();
+    /** @brief 将解码出的音频帧转 S16 并写入 ALSA 播放。 */
+    void writeAudioFrames(AVFrame *aframe);
+    /** @brief 关闭音频解码器与 ALSA 输出。 */
+    void closeAudio();
     QString mediaPath;
     bool streamMode;
     QAtomicInt running;
@@ -56,6 +71,12 @@ private:
     QAtomicInt pendingSeek;
     QAtomicInteger<qint64> pendingSeekMs;
     qint64 lastPositionEmit;
+    AVCodecContext *audioCtx;
+    bool audioCtxOwned;
+    int audioStream;
+    snd_pcm_t *alsaPcm;
+    QByteArray audioBuffer;
+    QAtomicInt audioEnabled;
 };
 
 /**
@@ -85,6 +106,10 @@ public:
     bool isLive() const;
     /** @brief 设置录像拍摄开始时间（用于画面叠加时间戳）。 */
     void setRecordingStart(const QDateTime &start);
+    /** @brief 打开/关闭音频输出。 */
+    void setAudioEnabled(bool on);
+    /** @brief 当前音频是否开启。 */
+    bool audioEnabled() const;
     /** @brief 跳转播放位置（毫秒）。 */
     void seek(qint64 ms);
     /** @brief 当前播放位置（毫秒）。 */

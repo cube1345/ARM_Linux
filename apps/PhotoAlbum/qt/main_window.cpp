@@ -333,14 +333,95 @@ void MainWindow::buildUi()
 void MainWindow::showHomePage()
 {
     monitorRefreshTimer->stop();
+    stopMonitorMjpeg();
     static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(homePage);
 }
 
 void MainWindow::showMonitorPage()
 {
     static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(monitorPage);
+    startMonitorMjpeg();
     refreshMonitorSnapshots();
     monitorRefreshTimer->start();
+}
+
+QString MainWindow::gridServerBase() const
+{
+    const QStringList configCandidates = QStringList()
+            << QCoreApplication::applicationDirPath() + QStringLiteral("/gridServer.txt")
+            << QDir::currentPath() + QStringLiteral("/gridServer.txt");
+    foreach (const QString &candidate, configCandidates) {
+        QFile file(candidate);
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            const QString base = QString::fromUtf8(file.readAll()).trimmed();
+            if (!base.isEmpty())
+                return base;
+        }
+    }
+    return QStringLiteral("http://192.168.137.1:8010");
+}
+
+void MainWindow::stopMonitorMjpeg()
+{
+    foreach (QNetworkReply *reply, monitorMjpegReplies) {
+        reply->abort();
+        reply->deleteLater();
+    }
+    monitorMjpegReplies.clear();
+    monitorMjpegBuffers.clear();
+}
+
+void MainWindow::startMonitorMjpeg()
+{
+    stopMonitorMjpeg();
+    const QString base = gridServerBase();
+    if (base.isEmpty())
+        return;
+    for (int i = 0; i < monitorCells.size(); ++i) {
+        const QString url = base + QStringLiteral("/cam%1").arg(i + 1);
+        QNetworkReply *reply = networkManager->get(QNetworkRequest{QUrl(url)});
+        monitorMjpegReplies.append(reply);
+        monitorMjpegBuffers.append(QByteArray());
+        const int index = i;
+        connect(reply, &QNetworkReply::readyRead, this, [this, reply, index]() {
+            if (index >= monitorMjpegBuffers.size())
+                return;
+            QByteArray &buf = monitorMjpegBuffers[index];
+            buf.append(reply->readAll());
+            if (buf.size() > 256 * 1024)
+                buf.clear();
+            const int start = buf.lastIndexOf(QByteArray("\xFF\xD8", 2));
+            if (start < 0)
+                return;
+            const int end = buf.indexOf(QByteArray("\xFF\xD9", 2), start + 2);
+            if (end < 0)
+                return;
+            const QByteArray jpg = buf.mid(start, end - start + 2);
+            buf.clear();
+            QImage image;
+            if (!image.loadFromData(jpg, "JPG"))
+                return;
+            if (index >= monitorCells.size())
+                return;
+            QPushButton *cell = monitorCells[index];
+            QSize target = cell->size();
+            if (target.width() < 8 || target.height() < 8)
+                target = QSize(158, 77);
+            QImage cover = image.scaled(target, Qt::KeepAspectRatioByExpanding,
+                                        Qt::FastTransformation);
+            if (cover.width() > target.width() || cover.height() > target.height())
+                cover = cover.copy((cover.width() - target.width()) / 2,
+                                   (cover.height() - target.height()) / 2,
+                                   target.width(), target.height());
+            cell->setIcon(QIcon(QPixmap::fromImage(cover)));
+            cell->setIconSize(target);
+        });
+        connect(reply, &QNetworkReply::finished, this, [this, reply, index]() {
+            reply->deleteLater();
+            monitorMjpegReplies.removeAll(reply);
+            Q_UNUSED(index);
+        });
+    }
 }
 
 void MainWindow::buildMonitorPage(QWidget *page)
@@ -460,6 +541,7 @@ void MainWindow::refreshMonitorSnapshots()
 
 void MainWindow::openMonitorChannel(int index)
 {
+    stopMonitorMjpeg();
     const QString base = monitorLiveBase();
     if (base.isEmpty())
         return;
@@ -743,10 +825,13 @@ void MainWindow::buildVideoPage(QWidget *page)
     videoTitle->setObjectName(QStringLiteral("title"));
     videoPlayButton = new QPushButton(tr("暂停"), page);
     videoPlayButton->setMinimumSize(48, 32);
+    videoMuteButton = new QPushButton(tr("静音"), page);
+    videoMuteButton->setMinimumSize(48, 32);
     headerRow->addWidget(back);
     headerRow->addSpacing(8);
     headerRow->addWidget(videoTitle, 1);
     headerRow->addWidget(videoPlayButton);
+    headerRow->addWidget(videoMuteButton);
     layout->addLayout(headerRow);
 
     videoPlayer = new VideoPlayerWidget(page);
@@ -754,6 +839,7 @@ void MainWindow::buildVideoPage(QWidget *page)
     layout->addWidget(videoPlayer, 1);
     connect(back, SIGNAL(clicked()), this, SLOT(videoBack()));
     connect(videoPlayButton, SIGNAL(clicked()), this, SLOT(toggleVideoPlay()));
+    connect(videoMuteButton, SIGNAL(clicked()), this, SLOT(toggleVideoMute()));
 
     QHBoxLayout *seekRow = new QHBoxLayout();
     videoSeekSlider = new QSlider(Qt::Horizontal, page);
@@ -968,6 +1054,15 @@ void MainWindow::toggleVideoPlay()
         return;
     videoPlayer->togglePause();
     videoPlayButton->setText(videoPlayer->isPaused() ? tr("播放") : tr("暂停"));
+}
+
+void MainWindow::toggleVideoMute()
+{
+    if (!videoPlayer)
+        return;
+    const bool muted = videoPlayer->audioEnabled();
+    videoPlayer->setAudioEnabled(!muted);
+    videoMuteButton->setText(muted ? tr("静音") : tr("出声"));
 }
 
 void MainWindow::stopVideo()

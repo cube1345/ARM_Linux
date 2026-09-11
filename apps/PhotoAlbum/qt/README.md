@@ -55,7 +55,7 @@ echo "http://maitv-vod.lab.eyevinn.technology/VINN.mp4/600/600-.m3u8" > /root/st
 - **RTMP 推流**：`rtmp://<服务器IP>:1935/live/stream`（OBS/ffmpeg 推到 nginx-rtmp/mediamtx 等）
 - **HLS 直播**：`http://<IP>:<端口>/out.m3u8`（本项目 Windows 自测方案已验证：实时 ~22fps 与源同步）
 
-> 说明：播放器只解码显示**视频**，音频流忽略；板卡无 TLS，`https://` 打不开；真实直播延迟取决于源（RTSP 最低，HLS 约 2~4s）。
+> 说明：播放器只解码显示**视频**，音频流忽略；板卡无 TLS，`https://` 打不开；真实直播延迟取决于源（RTSP 最低，HLS 约 2s）。
 
 ### 历史录像回放
 

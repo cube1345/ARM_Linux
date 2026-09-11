@@ -34,7 +34,8 @@ foreach ($i in $channels) {
     $camUrl = "rtsp://admin:$camPass@$camHost:554/Streaming/Channels/${i}02"
     $proc = Start-Process -FilePath "ffmpeg" -WorkingDirectory $base `
         -ArgumentList @("-rtsp_transport","tcp","-i",$camUrl,
-                        "-vf","scale=480:270","-an",
+                        "-vf","scale=480:270","-af","volume=40,acompressor=threshold=0.1:ratio=8:attack=10:release=100:makeup=6",
+                        "-c:a","aac","-b:a","64k","-ar","32000","-ac","1",
                         "-c:v","libx264","-preset","veryfast","-tune","zerolatency",
                         "-g","15","-keyint_min","15","-pix_fmt","yuv420p",
                         "-f","flv","rtmp://127.0.0.1:1935/live/cam$i") `
@@ -63,10 +64,17 @@ $p4 = Start-Process -FilePath "python" -WorkingDirectory $base `
      -RedirectStandardError "$base\snap.err" -PassThru
 $pids += $p4.Id
 
+# 5) grid MJPEG server (九宫格多路实时, port 8010)
+$p5 = Start-Process -FilePath "python" -WorkingDirectory $base `
+     -ArgumentList @("$base\windows\grid_mjpeg.py","8010") `
+     -NoNewWindow -RedirectStandardOutput "$base\grid_mjpeg.log" `
+     -RedirectStandardError "$base\grid_mjpeg.err" -PassThru
+$pids += $p5.Id
+
 Write-Host ""
 Write-Host "Started. PIDs: $($pids -join ' ')"
 Write-Host "Logs: $base\*.log"
-Write-Host "Check: netstat -ano | findstr 8888 1935 8554 8000"
+Write-Host "Check: netstat -ano | findstr 8888 1935 8554 8000 8010"
 Write-Host ""
 Write-Host "Press Enter to stop all processes..."
 Read-Host

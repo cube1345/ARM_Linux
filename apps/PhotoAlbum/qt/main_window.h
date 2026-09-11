@@ -55,6 +55,9 @@ private slots:
     void showMonitorPage();
     /** @brief 刷新九宫格快照。 */
     void refreshMonitorSnapshots();
+    void startMonitorMjpeg();
+    void stopMonitorMjpeg();
+    QString gridServerBase() const;
     /** @brief 打开某路摄像头的单路实时画面。 */
     void openMonitorChannel(int index);
     /** @brief 大图异步解码完成后更新当前图片。 */
@@ -67,6 +70,7 @@ private slots:
     void videoBack();
     /** @brief 切换播放/暂停。 */
     void toggleVideoPlay();
+    void toggleVideoMute();
     /** @brief 拖动进度条跳转。 */
     void onVideoSeek(int ms);
     /** @brief 回放位置变化更新进度条。 */
@@ -126,6 +130,8 @@ void buildFilmstripContent();
     QList<QPushButton *> monitorCells;
     QTimer *monitorRefreshTimer;
     QList<QNetworkReply *> monitorReplies;
+    QList<QNetworkReply *> monitorMjpegReplies;
+    QList<QByteArray> monitorMjpegBuffers;
     QWidget *filmstripContainer;
     QScrollArea *filmstripScrollArea;
     QPropertyAnimation *filmstripAnimation;
@@ -140,6 +146,7 @@ void buildFilmstripContent();
     VideoPlayerWidget *videoPlayer;
     QLabel *videoTitle;
     QPushButton *videoPlayButton;
+    QPushButton *videoMuteButton;
     QSlider *videoSeekSlider;
     QLabel *videoTimeLabel;
     QPushButton *videoDeleteButton;
