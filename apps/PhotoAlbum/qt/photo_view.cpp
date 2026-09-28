@@ -20,6 +20,7 @@ PhotoView::PhotoView(QWidget *parent)
       dragging(false),
       selecting(false),
       pinchDistance(0.0),
+      m_rotationAngle(0),
       pinchActive(false),
       pinchOccurred(false),
       singleTouchActive(false),
@@ -83,6 +84,7 @@ QImage PhotoView::selectedImage() const
         return QImage();
 
     const QRectF drawn = imageRect();
+    const QRect selection = this->selection.normalized(); // 选择矩形在控件坐标系中
     const QRect normalized = selection.normalized().intersected(drawn.toRect());
     const qreal xRatio = currentImage.width() / drawn.width();
     const qreal yRatio = currentImage.height() / drawn.height();
@@ -273,8 +275,9 @@ void PhotoView::handleTouchEvent(QTouchEvent *event)
                                       lastTouchPosition).length();
 
         if (!pinchOccurred && mode == BrowseMode && scale == 1.0) {
-            const qreal deltaX = lastTouchPosition.x() - touchStartPosition.x();
-            const qreal deltaY = lastTouchPosition.y() - touchStartPosition.y();
+            qreal deltaX = lastTouchPosition.x() - touchStartPosition.x();
+            qreal deltaY = lastTouchPosition.y() - touchStartPosition.y();
+            transformDelta(deltaX, deltaY);
             if (qAbs(deltaX) >= 100 && qAbs(deltaX) > qAbs(deltaY) * 1.5) {
                 if (deltaX < 0)
                     emit nextRequested();
@@ -422,6 +425,26 @@ QPoint PhotoView::mapToImage(const QPoint &point) const
     return point;
 }
 
+void PhotoView::transformDelta(qreal &dx, qreal &dy) const
+{
+    switch (m_rotationAngle) {
+    case 90:
+        qSwap(dx, dy);
+        dy = -dy;
+        break;
+    case 180:
+        dx = -dx;
+        dy = -dy;
+        break;
+    case 270:
+        qSwap(dx, dy);
+        dx = -dx;
+        break;
+    default:
+        break;
+    }
+}
+
 /**
  * @brief 处理鼠标或单点触摸按下事件。
  * @param event 鼠标事件对象。
@@ -486,8 +509,9 @@ void PhotoView::mouseReleaseEvent(QMouseEvent *event)
 
     if (dragging) {
         dragging = false;
-        const int deltaX = event->x() - dragStart.x();
-        const int deltaY = event->y() - dragStart.y();
+        qreal deltaX = event->x() - dragStart.x();
+        qreal deltaY = event->y() - dragStart.y();
+        transformDelta(deltaX, deltaY);
         if (scale == 1.0) {
             if (qAbs(deltaX) >= 100 && qAbs(deltaX) > qAbs(deltaY) * 1.5) {
                 if (deltaX < 0)

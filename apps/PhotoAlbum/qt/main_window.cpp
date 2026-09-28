@@ -15,7 +15,12 @@
 #include <QScrollBar>
 #include <QStackedWidget>
 #include <QTextStream>
+#include <QDebug>
+#include <QGraphicsProxyWidget>
+#include <QGraphicsScene>
+#include <QGraphicsView>
 #include <QImageReader>
+#include <QtMath>
 #include <QIcon>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -29,6 +34,7 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QPushButton>
+#include <QProgressBar>
 #include <QToolButton>
 #include <QSlider>
 #include <QTime>
@@ -38,6 +44,17 @@
 
 #include "photo_view.h"
 #include "video_player.h"
+#include "icm20608.h"
+#include "tank_game.h"
+#include "snake_game.h"
+#include "tetris_game.h"
+#include "brick_game.h"
+#include "game2048.h"
+#include "music_player.h"
+#include "weather.h"
+#include "calculator.h"
+#include "drawboard.h"
+#include <unistd.h>
 
 /**
  * @brief 让缩略图区域支持按住拖动滚动：从图片按钮上起手也能滚动，
@@ -47,10 +64,12 @@ class ThumbDragScroll : public QObject
 {
 public:
     explicit ThumbDragScroll(QScrollArea *area, QObject *parent = nullptr)
-        : QObject(parent), area(area), pressing(false), active(false)
+        : QObject(parent), area(area), pressing(false), active(false), m_rotationAngle(0)
     {
         area->viewport()->installEventFilter(this);
     }
+
+    void setRotationAngle(int angle) { m_rotationAngle = angle; }
 
     void attach(QWidget *widget)
     {
@@ -84,12 +103,20 @@ protected:
             }
             const QPoint delta = mouseEvent->globalPos() - lastGlobal;
             lastGlobal = mouseEvent->globalPos();
+            qreal dx = delta.x();
+            qreal dy = delta.y();
+            switch (m_rotationAngle) {
+            case 90: qSwap(dx, dy); dy = -dy; break;
+            case 180: dx = -dx; dy = -dy; break;
+            case 270: qSwap(dx, dy); dx = -dx; break;
+            default: break;
+            }
             if (QScrollBar *verticalBar = area->verticalScrollBar())
                 if (verticalBar->isVisible() && verticalBar->maximum() > 0)
-                    verticalBar->setValue(verticalBar->value() - delta.y());
+                    verticalBar->setValue(verticalBar->value() - dy);
             if (QScrollBar *horizontalBar = area->horizontalScrollBar())
                 if (horizontalBar->isVisible() && horizontalBar->maximum() > 0)
-                    horizontalBar->setValue(horizontalBar->value() - delta.x());
+                    horizontalBar->setValue(horizontalBar->value() - dx);
             return true;
         }
         case QEvent::MouseButtonRelease: {
@@ -109,6 +136,7 @@ protected:
 
 private:
     QScrollArea *area;
+    int m_rotationAngle;
     bool pressing;
     bool active;
     QPoint lastGlobal;
@@ -127,10 +155,22 @@ protected:
     void paintEvent(QPaintEvent *) override
     {
         QPainter painter(this);
-        if (!m_image.isNull())
-            painter.drawImage(rect(), m_image);
-        else
+        if (m_image.isNull()) {
             painter.fillRect(rect(), QColor(0x14, 0x14, 0x1a));
+            return;
+        }
+        const QSize isz = m_image.size();
+        if (isz.width() <= 0 || isz.height() <= 0)
+            return;
+        const QRectF target(rect());
+        const qreal scale = qMax(target.width() / isz.width(),
+                                 target.height() / isz.height());
+        const qreal cw = target.width() / scale;
+        const qreal ch = target.height() / scale;
+        const QRectF source((isz.width() - cw) / 2.0,
+                            (isz.height() - ch) / 2.0,
+                            cw, ch);
+        painter.drawImage(target, m_image, source);
     }
 private:
     QImage m_image;
@@ -149,6 +189,26 @@ MainWindow::MainWindow(const QString &photoDirectory, QWidget *parent)
       videoListPage(nullptr),
       videoPage(nullptr),
       videoReturnPage(nullptr),
+      gamePage(nullptr),
+      levelSelectPage(nullptr),
+      tankGame(nullptr),
+      snakePage(nullptr),
+      tetrisPage(nullptr),
+      brickPage(nullptr),
+      game2048Page(nullptr),
+      musicPage(nullptr),
+      snakeGame(nullptr),
+      tetrisGame(nullptr),
+      brickGame(nullptr),
+      game2048(nullptr),
+      musicPlayer(nullptr),
+      calculatorPage(nullptr),
+      drawPage(nullptr),
+      calculator(nullptr),
+      drawBoard(nullptr),
+      weather(nullptr),
+      weatherLabel(nullptr),
+      alsLabel(nullptr),
       monitorRefreshTimer(nullptr),
       footerBar(nullptr),
       infoPanel(nullptr),
@@ -179,10 +239,111 @@ MainWindow::MainWindow(const QString &photoDirectory, QWidget *parent)
       loadWatcher(nullptr),
       loadingPath(QString()),
       loadGeneration(0),
+      m_imuTimer(nullptr),
+      m_orientation(-1),
+      m_view(nullptr),
+      m_scene(nullptr),
+      m_proxy(nullptr),
       currentIndex(0)
 {
     buildUi();
     loadPhotos(photoDirectory);
+
+    m_imuTimer = new QTimer(this);
+    if (m_imu.open()) {
+        m_imu.init();
+        connect(m_imuTimer, &QTimer::timeout, this, &MainWindow::onImuTick);
+        m_imuTimer->start(200);
+    } else {
+        qWarning() << "[IMU] spidev 不可用，方向锁定功能禁用";
+    }
+
+    weather = new Weather(this);
+    connect(weather, &Weather::ready, this, [this](const QString &temp, const QString &desc, const QString &) {
+        if (weatherLabel)
+            weatherLabel->setText(QStringLiteral("%1 %2°C").arg(desc).arg(temp));
+    });
+    weather->fetch();
+    QTimer *weatherTimer = new QTimer(this);
+    weatherTimer->setInterval(1800000);
+    connect(weatherTimer, &QTimer::timeout, weather, &Weather::fetch);
+    weatherTimer->start();
+
+    if (m_als.open()) {
+        m_als.init();
+        QTimer *alsTimer = new QTimer(this);
+        alsTimer->setInterval(500);
+        connect(alsTimer, &QTimer::timeout, this, [this]() {
+            if (alsLabel)
+                alsLabel->setText(QStringLiteral("光照 %1").arg(m_als.readAls()));
+        });
+        alsTimer->start();
+    }
+}
+
+static int detectOrientation(const QVector3D &a)
+{
+    const float ax = a.x();
+    const float ay = a.y();
+    const float az = a.z();
+    const float absx = qAbs(ax);
+    const float absy = qAbs(ay);
+    const float absz = qAbs(az);
+    if (absz > absx && absz > absy)
+        return -1;
+    if (absx > absy)
+        return ax > 0 ? 0 : 2;
+    return ay > 0 ? 1 : 3;
+}
+
+void MainWindow::onImuTick()
+{
+    if (!m_imu.isOpen())
+        return;
+    const QVector3D a = m_imu.readAccel();
+    const int orient = detectOrientation(a);
+    if (orient != m_orientation) {
+        m_orientation = orient;
+        qInfo().noquote() << QStringLiteral("[IMU] orientation=%1 accel=%2 %3 %4")
+            .arg(orient)
+            .arg(a.x(), 0, 'f', 2).arg(a.y(), 0, 'f', 2).arg(a.z(), 0, 'f', 2);
+        applyOrientation(orient);
+    }
+
+    const qreal mag = qSqrt(qreal(a.x() * a.x() + a.y() * a.y() + a.z() * a.z()));
+    if (mag > 1.8 || mag < 0.4) {
+        const qint64 now = QDateTime::currentMSecsSinceEpoch();
+        if (now - m_lastShake > 1200) {
+            m_lastShake = now;
+            if (static_cast<QStackedWidget *>(stackedWidget)->currentWidget() == detailPage)
+                showNext();
+        }
+    }
+}
+
+void MainWindow::applyOrientation(int orient)
+{
+    if (!m_view || !m_proxy || orient < 0)
+        return;
+    int angle = 0;
+    QSize size(1024, 600);
+    switch (orient) {
+    case 0: angle = 90; size = QSize(600, 1024); break;
+    case 1: angle = 0; break;
+    case 2: angle = 270; size = QSize(600, 1024); break;
+    case 3: angle = 180; break;
+    }
+    m_view->resetTransform();
+    if (angle != 0)
+        m_view->rotate(angle);
+    if (photoView)
+        photoView->setRotationAngle(angle);
+    if (gridDragScroll)
+        gridDragScroll->setRotationAngle(angle);
+    m_proxy->resize(size);
+    m_view->setSceneRect(m_proxy->boundingRect());
+    if (static_cast<QStackedWidget *>(stackedWidget)->currentWidget() == thumbnailPage)
+        rebuildThumbnailGrid();
 }
 
 /**
@@ -196,7 +357,7 @@ void MainWindow::buildUi()
     setWindowTitle(tr("Photo Album"));
     setMinimumSize(480, 272);
 
-    QWidget *central = new QWidget(this);
+    QWidget *central = new QWidget();
     central->setObjectName(QStringLiteral("root"));
     QVBoxLayout *layout = new QVBoxLayout(central);
     layout->setContentsMargins(6, 4, 6, 4);
@@ -210,12 +371,30 @@ void MainWindow::buildUi()
     detailPage = new QWidget(stack);
     videoListPage = new QWidget(stack);
     videoPage = new QWidget(stack);
+    gamePage = new QWidget(stack);
+    levelSelectPage = new QWidget(stack);
+    snakePage = new QWidget(stack);
+    tetrisPage = new QWidget(stack);
+    brickPage = new QWidget(stack);
+    game2048Page = new QWidget(stack);
+    musicPage = new QWidget(stack);
+    calculatorPage = new QWidget(stack);
+    drawPage = new QWidget(stack);
     stack->addWidget(homePage);
     stack->addWidget(monitorPage);
     stack->addWidget(thumbnailPage);
     stack->addWidget(detailPage);
     stack->addWidget(videoListPage);
     stack->addWidget(videoPage);
+    stack->addWidget(gamePage);
+    stack->addWidget(levelSelectPage);
+    stack->addWidget(snakePage);
+    stack->addWidget(tetrisPage);
+    stack->addWidget(brickPage);
+    stack->addWidget(game2048Page);
+    stack->addWidget(musicPage);
+    stack->addWidget(calculatorPage);
+    stack->addWidget(drawPage);
     layout->addWidget(stack, 1);
 
     buildHomePage(homePage);
@@ -223,6 +402,15 @@ void MainWindow::buildUi()
     buildThumbnailPage(thumbnailPage);
     buildVideoListPage(videoListPage);
     buildVideoPage(videoPage);
+    buildGamePage(gamePage);
+    buildLevelSelectPage(levelSelectPage);
+    buildSnakePage(snakePage);
+    buildTetrisPage(tetrisPage);
+    buildBrickPage(brickPage);
+    buildGame2048Page(game2048Page);
+    buildMusicPage(musicPage);
+    buildCalculatorPage(calculatorPage);
+    buildDrawPage(drawPage);
 
     QVBoxLayout *detailLayout = new QVBoxLayout(detailPage);
     detailLayout->setContentsMargins(0, 0, 0, 0);
@@ -307,8 +495,15 @@ void MainWindow::buildUi()
     connect(resetButton, SIGNAL(clicked()), this, SLOT(resetPhoto()));
     connect(saveButton, SIGNAL(clicked()), this, SLOT(savePhoto()));
     detailLayout->addWidget(footerBar);
-    setCentralWidget(central);
-    setStyleSheet(QStringLiteral(
+    m_scene = new QGraphicsScene(this);
+    m_view = new QGraphicsView(m_scene, this);
+    m_view->setFrameShape(QFrame::NoFrame);
+    m_view->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+    m_view->setBackgroundBrush(QColor(0x0b, 0x0b, 0x0f));
+    m_proxy = m_scene->addWidget(central);
+    setCentralWidget(m_view);
+    central->setStyleSheet(QStringLiteral(
         "QWidget{background:#0b0b0f;} QLabel{background:transparent;color:#f5f5f7;}"
         "QLabel#title{font-size:18px;font-weight:700;} QLabel#status,QLabel#videoTime{color:#a1a1aa;}"
         "QLabel#homeTime{font-size:52px;font-weight:200;color:#ffffff;margin-top:14px;}"
@@ -571,8 +766,17 @@ void MainWindow::openMonitorChannel(int index)
 
 void MainWindow::buildHomePage(QWidget *page)
 {
+    QLabel *bg = new QLabel(page);
+    QPixmap wp(QStringLiteral("/home/root/wallpaper.jpg"));
+    if (!wp.isNull()) {
+        bg->setPixmap(wp);
+        bg->setScaledContents(true);
+    }
+    bg->setGeometry(0, 0, 1024, 600);
+    bg->lower();
+
     QVBoxLayout *layout = new QVBoxLayout(page);
-    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setContentsMargins(16, 12, 16, 16);
 
     QLabel *timeLabel = new QLabel(page);
     timeLabel->setObjectName(QStringLiteral("homeTime"));
@@ -586,19 +790,34 @@ void MainWindow::buildHomePage(QWidget *page)
     clock->start();
     layout->addWidget(timeLabel);
 
-    layout->addStretch();
-    QHBoxLayout *apps = new QHBoxLayout();
-    apps->addStretch();
-    apps->addWidget(makeAppCell(tr("相册"), QStringLiteral("album"),
-                                makeAlbumIcon(), SLOT(showThumbnailPage())));
-    apps->addSpacing(28);
-    apps->addWidget(makeAppCell(tr("监控"), QStringLiteral("monitor"),
-                                makeMonitorIcon(), SLOT(showMonitorPage())));
-    apps->addSpacing(28);
-    apps->addWidget(makeAppCell(tr("视频"), QStringLiteral("video"),
-                                makeVideoIcon(), SLOT(showVideoListPage())));
-    apps->addStretch();
-    layout->addLayout(apps);
+    QHBoxLayout *infoRow = new QHBoxLayout();
+    weatherLabel = new QLabel(tr("天气加载中..."), page);
+    weatherLabel->setObjectName(QStringLiteral("appName"));
+    weatherLabel->setAlignment(Qt::AlignCenter);
+    alsLabel = new QLabel(tr("光照 --"), page);
+    alsLabel->setObjectName(QStringLiteral("appName"));
+    alsLabel->setAlignment(Qt::AlignCenter);
+    infoRow->addStretch();
+    infoRow->addWidget(weatherLabel);
+    infoRow->addSpacing(40);
+    infoRow->addWidget(alsLabel);
+    infoRow->addStretch();
+    layout->addLayout(infoRow);
+
+    QGridLayout *grid = new QGridLayout();
+    grid->setSpacing(24);
+    grid->addWidget(makeAppCell(tr("相册"), QStringLiteral("album"), makeAlbumIcon(), SLOT(showThumbnailPage())), 0, 0);
+    grid->addWidget(makeAppCell(tr("监控"), QStringLiteral("monitor"), makeMonitorIcon(), SLOT(showMonitorPage())), 0, 1);
+    grid->addWidget(makeAppCell(tr("视频"), QStringLiteral("video"), makeVideoIcon(), SLOT(showVideoListPage())), 0, 2);
+    grid->addWidget(makeAppCell(tr("坦克大战"), QStringLiteral("game"), makeGameIcon(), SLOT(showLevelSelectPage())), 0, 3);
+    grid->addWidget(makeAppCell(tr("贪吃蛇"), QStringLiteral("snake"), makeSnakeIcon(), SLOT(showSnakePage())), 1, 0);
+    grid->addWidget(makeAppCell(tr("俄罗斯方块"), QStringLiteral("tetris"), makeTetrisIcon(), SLOT(showTetrisPage())), 1, 1);
+    grid->addWidget(makeAppCell(tr("打砖块"), QStringLiteral("brick"), makeBrickIcon(), SLOT(showBrickPage())), 1, 2);
+    grid->addWidget(makeAppCell(tr("2048"), QStringLiteral("game2048"), make2048Icon(), SLOT(showGame2048Page())), 1, 3);
+    grid->addWidget(makeAppCell(tr("音乐"), QStringLiteral("music"), makeMusicIcon(), SLOT(showMusicPage())), 2, 0);
+    grid->addWidget(makeAppCell(tr("计算器"), QStringLiteral("calc"), makeCalculatorIcon(), SLOT(showCalculatorPage())), 2, 1);
+    grid->addWidget(makeAppCell(tr("画板"), QStringLiteral("draw"), makeDrawIcon(), SLOT(showDrawPage())), 2, 2);
+    layout->addLayout(grid);
     layout->addStretch();
 }
 
@@ -606,21 +825,25 @@ QWidget *MainWindow::makeAppCell(const QString &name, const QString &appId,
                                  const QPixmap &icon, const char *slot)
 {
     QWidget *cell = new QWidget;
+    cell->setStyleSheet(QStringLiteral("background:transparent;"));
     QVBoxLayout *v = new QVBoxLayout(cell);
     v->setContentsMargins(0, 0, 0, 0);
-    v->setSpacing(6);
+    v->setSpacing(4);
     QPushButton *button = new QPushButton(cell);
-    button->setObjectName(QStringLiteral("appIcon"));
     button->setProperty("app", appId);
+    const QSize iconSize(56, 56);
     button->setIcon(QIcon(icon));
-    button->setIconSize(icon.size());
-    button->setFixedSize(icon.size());
+    button->setIconSize(iconSize);
+    button->setFixedSize(iconSize);
+    button->setFlat(true);
+    button->setStyleSheet(QStringLiteral("background:transparent;border:0;padding:0;"));
     connect(button, SIGNAL(clicked()), this, slot);
     QLabel *label = new QLabel(name, cell);
     label->setObjectName(QStringLiteral("appName"));
     label->setAlignment(Qt::AlignCenter);
-    v->addWidget(button);
-    v->addWidget(label);
+    label->setStyleSheet(QStringLiteral("background:transparent;"));
+    v->addWidget(button, 0, Qt::AlignHCenter);
+    v->addWidget(label, 0, Qt::AlignHCenter);
     return cell;
 }
 
@@ -657,6 +880,157 @@ QPixmap MainWindow::makeVideoIcon() const
     triangle << QPoint(34, 26) << QPoint(66, 44) << QPoint(34, 62);
     painter.setBrush(Qt::white);
     painter.drawPolygon(triangle);
+    return icon;
+}
+
+QPixmap MainWindow::makeGameIcon() const
+{
+    QPixmap icon(88, 88);
+    icon.fill(Qt::transparent);
+    QPainter painter(&icon);
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(0x3a, 0xc0, 0x4a));
+    painter.drawRoundedRect(0, 0, 88, 88, 20, 20);
+    painter.setBrush(QColor(0x20, 0x80, 0x30));
+    painter.drawRect(22, 42, 44, 28);
+    painter.setBrush(QColor(0x20, 0x20, 0x20));
+    painter.drawRect(41, 32, 6, 20);
+    painter.drawRect(18, 42, 52, 8);
+    painter.drawRect(18, 62, 52, 8);
+    return icon;
+}
+
+QPixmap MainWindow::makeSnakeIcon() const
+{
+    QPixmap icon(88, 88);
+    icon.fill(Qt::transparent);
+    QPainter p(&icon);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0x28, 0xa0, 0x38));
+    p.drawRoundedRect(0, 0, 88, 88, 20, 20);
+    p.setBrush(QColor(0x3a, 0xd0, 0x4a));
+    p.drawEllipse(18, 40, 14, 14);
+    p.drawEllipse(32, 40, 14, 14);
+    p.drawEllipse(46, 40, 14, 14);
+    p.drawEllipse(60, 40, 14, 14);
+    p.setBrush(QColor(0x20, 0x20, 0x20));
+    p.drawEllipse(65, 43, 5, 5);
+    return icon;
+}
+
+QPixmap MainWindow::makeTetrisIcon() const
+{
+    QPixmap icon(88, 88);
+    icon.fill(Qt::transparent);
+    QPainter p(&icon);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0x1e, 0x1e, 0x2c));
+    p.drawRoundedRect(0, 0, 88, 88, 20, 20);
+    p.setBrush(QColor(0xe0, 0x40, 0x40));
+    p.drawRect(26, 24, 18, 18);
+    p.setBrush(QColor(0x30, 0xc0, 0xe0));
+    p.drawRect(44, 24, 18, 18);
+    p.setBrush(QColor(0x40, 0xd0, 0x60));
+    p.drawRect(26, 42, 18, 18);
+    p.setBrush(QColor(0xe0, 0xc0, 0x30));
+    p.drawRect(44, 42, 18, 18);
+    p.setBrush(QColor(0xa0, 0x50, 0xd0));
+    p.drawRect(26, 60, 18, 18);
+    return icon;
+}
+
+QPixmap MainWindow::makeBrickIcon() const
+{
+    QPixmap icon(88, 88);
+    icon.fill(Qt::transparent);
+    QPainter p(&icon);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0x1a, 0x1a, 0x24));
+    p.drawRoundedRect(0, 0, 88, 88, 20, 20);
+    p.setBrush(QColor(0xd0, 0x60, 0x40));
+    p.drawRect(16, 18, 18, 12);
+    p.drawRect(38, 18, 18, 12);
+    p.drawRect(60, 18, 14, 12);
+    p.setBrush(QColor(0xe0, 0x90, 0x30));
+    p.drawRect(16, 34, 18, 12);
+    p.drawRect(38, 34, 18, 12);
+    p.drawRect(60, 34, 14, 12);
+    p.setBrush(QColor(0x30, 0xa0, 0xe0));
+    p.drawRect(28, 62, 32, 8);
+    p.setBrush(QColor(0xff, 0xff, 0xff));
+    p.drawEllipse(40, 50, 10, 10);
+    return icon;
+}
+
+QPixmap MainWindow::make2048Icon() const
+{
+    QPixmap icon(88, 88);
+    icon.fill(Qt::transparent);
+    QPainter p(&icon);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0x20, 0x20, 0x28));
+    p.drawRoundedRect(0, 0, 88, 88, 20, 20);
+    p.setBrush(QColor(0xe0, 0x90, 0x40));
+    p.drawRoundedRect(18, 26, 52, 36, 8, 8);
+    p.setPen(QColor(0xff, 0xff, 0xff));
+    QFont f = p.font();
+    f.setPixelSize(22);
+    f.setBold(true);
+    p.setFont(f);
+    p.drawText(QRect(18, 26, 52, 36), Qt::AlignCenter, QStringLiteral("2048"));
+    return icon;
+}
+
+QPixmap MainWindow::makeMusicIcon() const
+{
+    QPixmap icon(88, 88);
+    icon.fill(Qt::transparent);
+    QPainter p(&icon);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0xa0, 0x50, 0xd0));
+    p.drawRoundedRect(0, 0, 88, 88, 20, 20);
+    p.setBrush(QColor(0xff, 0xff, 0xff));
+    p.drawEllipse(22, 48, 16, 12);
+    p.drawRect(36, 28, 6, 32);
+    p.drawEllipse(52, 48, 16, 12);
+    p.drawRect(66, 28, 6, 32);
+    p.drawRect(36, 28, 36, 6);
+    return icon;
+}
+
+QPixmap MainWindow::makeCalculatorIcon() const
+{
+    QPixmap icon(88, 88);
+    icon.fill(Qt::transparent);
+    QPainter p(&icon);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0x30, 0x30, 0x40));
+    p.drawRoundedRect(0, 0, 88, 88, 20, 20);
+    p.setBrush(QColor(0x20, 0x20, 0x28));
+    p.drawRect(20, 20, 48, 20);
+    p.setBrush(QColor(0xe0, 0xe0, 0xe0));
+    p.drawRect(20, 48, 11, 10);
+    p.drawRect(35, 48, 11, 10);
+    p.drawRect(50, 48, 11, 10);
+    p.setBrush(QColor(0x30, 0xa0, 0xe0));
+    p.drawRect(20, 62, 11, 10);
+    p.drawRect(35, 62, 11, 10);
+    p.drawRect(50, 62, 11, 10);
+    return icon;
+}
+
+QPixmap MainWindow::makeDrawIcon() const
+{
+    QPixmap icon(88, 88);
+    icon.fill(Qt::transparent);
+    QPainter p(&icon);
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0x40, 0x40, 0x50));
+    p.drawRoundedRect(0, 0, 88, 88, 20, 20);
+    p.setPen(QPen(QColor(0xff, 0xff, 0xff), 8, Qt::SolidLine, Qt::RoundCap));
+    p.drawLine(26, 62, 62, 26);
+    p.setBrush(QColor(0xff, 0xff, 0xff));
+    p.drawEllipse(QPoint(62, 26), 5, 5);
     return icon;
 }
 
@@ -725,14 +1099,14 @@ void MainWindow::rebuildThumbnailGrid()
         delete item->widget(); delete item;
     }
     QWidget *content = thumbnailGrid->parentWidget();
-    int cellW = (width() - 32) / 5;
+    int baseW = (m_proxy && m_proxy->widget()) ? m_proxy->widget()->width() : width();
     if (QScrollArea *scroll = qobject_cast<QScrollArea *>(content->parentWidget())) {
-        const int viewport = scroll->viewport()->width();
-        if (viewport >= 100)
-            cellW = viewport / 5;
+        const int vw = scroll->viewport()->width();
+        if (vw >= 100)
+            baseW = vw;
     }
-    if (cellW < 60)
-        cellW = 89;
+    const int cols = (baseW >= 900) ? 5 : (baseW >= 650) ? 4 : (baseW >= 450) ? 3 : 2;
+    const int cellW = (baseW - (cols - 1) * 2) / cols;
     const QSize cell(cellW, cellW * 3 / 4);
     for (int index = 0; index < photoPaths.size(); ++index) {
         ThumbnailButton *button = new ThumbnailButton(content);
@@ -743,8 +1117,12 @@ void MainWindow::rebuildThumbnailGrid()
         connect(button, &ThumbnailButton::clicked, this, [this, index]() { showDetailPage(index); });
         if (gridDragScroll)
             gridDragScroll->attach(button);
-        thumbnailGrid->addWidget(button, index / 5, index % 5);
+        thumbnailGrid->addWidget(button, index / cols, index % cols);
     }
+    const int rows = (photoPaths.size() + cols - 1) / cols;
+    for (int r = 0; r <= 30; ++r)
+        thumbnailGrid->setRowStretch(r, 0);
+    thumbnailGrid->setRowStretch(rows, 1);
 }
 
 void MainWindow::showThumbnailPage()
@@ -844,6 +1222,475 @@ void MainWindow::buildVideoPage(QWidget *page)
     connect(videoDeleteButton, SIGNAL(clicked()), this, SLOT(deleteRecording()));
 
     networkManager = new QNetworkAccessManager(this);
+}
+
+void MainWindow::buildGamePage(QWidget *page)
+{
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(4);
+
+    QHBoxLayout *headerRow = new QHBoxLayout();
+    QPushButton *back = new QPushButton(tr("返回"), page);
+    back->setMinimumSize(48, 32);
+    QLabel *title = new QLabel(tr("坦克大战"), page);
+    title->setObjectName(QStringLiteral("title"));
+    headerRow->addWidget(back);
+    headerRow->addSpacing(8);
+    headerRow->addWidget(title);
+    headerRow->addStretch();
+    layout->addLayout(headerRow);
+    connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
+
+    tankGame = new TankGame(page);
+
+    QGridLayout *mainArea = new QGridLayout();
+    mainArea->setContentsMargins(8, 0, 8, 4);
+    mainArea->setVerticalSpacing(0);
+    mainArea->setHorizontalSpacing(8);
+
+    QProgressBar *healthBar = new QProgressBar(page);
+    healthBar->setRange(0, 100);
+    healthBar->setValue(100);
+    healthBar->setFixedSize(130, 16);
+    healthBar->setTextVisible(false);
+    QProgressBar *manaBar = new QProgressBar(page);
+    manaBar->setRange(0, 100);
+    manaBar->setValue(100);
+    manaBar->setFixedSize(130, 16);
+    manaBar->setTextVisible(false);
+    QVBoxLayout *topLeft = new QVBoxLayout();
+    topLeft->setSpacing(3);
+    topLeft->addWidget(healthBar);
+    topLeft->addWidget(manaBar);
+    topLeft->addStretch();
+    mainArea->addLayout(topLeft, 0, 0, Qt::AlignTop);
+
+    QGridLayout *dpad = new QGridLayout();
+    dpad->setSpacing(4);
+    QPushButton *up = new QPushButton(tr("上"), page);
+    QPushButton *down = new QPushButton(tr("下"), page);
+    QPushButton *left = new QPushButton(tr("左"), page);
+    QPushButton *right = new QPushButton(tr("右"), page);
+    QList<QPushButton *> dpadBtns;
+    dpadBtns << up << down << left << right;
+    foreach (QPushButton *b, dpadBtns)
+        b->setFixedSize(52, 44);
+    dpad->addWidget(up, 0, 1);
+    dpad->addWidget(left, 1, 0);
+    dpad->addWidget(right, 1, 2);
+    dpad->addWidget(down, 2, 1);
+    mainArea->addLayout(dpad, 1, 0, Qt::AlignLeft | Qt::AlignBottom);
+
+    mainArea->addWidget(tankGame, 0, 1, 2, 1);
+
+    QPushButton *fire = new QPushButton(tr("攻击"), page);
+    QPushButton *skill1 = new QPushButton(tr("激光"), page);
+    QPushButton *skill2 = new QPushButton(tr("炸弹"), page);
+    fire->setObjectName(QStringLiteral("dangerButton"));
+    skill1->setObjectName(QStringLiteral("primaryButton"));
+    skill2->setObjectName(QStringLiteral("primaryButton"));
+    QList<QPushButton *> actBtns;
+    actBtns << fire << skill1 << skill2;
+    foreach (QPushButton *b, actBtns)
+        b->setFixedSize(64, 44);
+    QVBoxLayout *bottomRight = new QVBoxLayout();
+    bottomRight->setSpacing(6);
+    bottomRight->addStretch();
+    bottomRight->addWidget(fire);
+    bottomRight->addWidget(skill1);
+    bottomRight->addWidget(skill2);
+    mainArea->addLayout(bottomRight, 1, 2, Qt::AlignRight | Qt::AlignBottom);
+
+    mainArea->setColumnStretch(0, 0);
+    mainArea->setColumnStretch(1, 1);
+    mainArea->setColumnStretch(2, 0);
+
+    layout->addLayout(mainArea, 1);
+
+    connect(up, &QPushButton::pressed, this, [this]() { tankGame->setMoveDir(TankGame::DirUp); });
+    connect(down, &QPushButton::pressed, this, [this]() { tankGame->setMoveDir(TankGame::DirDown); });
+    connect(left, &QPushButton::pressed, this, [this]() { tankGame->setMoveDir(TankGame::DirLeft); });
+    connect(right, &QPushButton::pressed, this, [this]() { tankGame->setMoveDir(TankGame::DirRight); });
+    connect(up, &QPushButton::released, this, [this]() { tankGame->setMoveDir(TankGame::DirNone); });
+    connect(down, &QPushButton::released, this, [this]() { tankGame->setMoveDir(TankGame::DirNone); });
+    connect(left, &QPushButton::released, this, [this]() { tankGame->setMoveDir(TankGame::DirNone); });
+    connect(right, &QPushButton::released, this, [this]() { tankGame->setMoveDir(TankGame::DirNone); });
+    connect(fire, &QPushButton::clicked, this, [this]() { tankGame->fire(); });
+    connect(skill1, &QPushButton::clicked, this, [this]() { tankGame->skillLaser(); });
+    connect(skill2, &QPushButton::clicked, this, [this]() { tankGame->skillBomb(); });
+    connect(tankGame, &TankGame::healthChanged, healthBar, &QProgressBar::setValue);
+    connect(tankGame, &TankGame::manaChanged, manaBar, &QProgressBar::setValue);
+    connect(tankGame, &TankGame::gameOver, this, [title](bool win) {
+        title->setText(win ? tr("坦克大战 - 胜利") : tr("坦克大战 - 失败"));
+    });
+}
+
+void MainWindow::buildLevelSelectPage(QWidget *page)
+{
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(4);
+
+    QHBoxLayout *headerRow = new QHBoxLayout();
+    QPushButton *back = new QPushButton(tr("返回"), page);
+    back->setMinimumSize(48, 32);
+    QLabel *title = new QLabel(tr("选择关卡"), page);
+    title->setObjectName(QStringLiteral("title"));
+    headerRow->addWidget(back);
+    headerRow->addSpacing(8);
+    headerRow->addWidget(title);
+    headerRow->addStretch();
+    layout->addLayout(headerRow);
+    connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
+
+    QGridLayout *grid = new QGridLayout();
+    grid->setSpacing(12);
+    for (int i = 0; i < 10; ++i) {
+        QPushButton *btn = new QPushButton(tr("第 %1 关").arg(i + 1), page);
+        btn->setMinimumSize(140, 60);
+        const int level = i + 1;
+        connect(btn, &QPushButton::clicked, this, [this, level]() { showGamePage(level); });
+        grid->addWidget(btn, i / 5, i % 5);
+    }
+    layout->addLayout(grid);
+    layout->addStretch();
+}
+
+void MainWindow::showLevelSelectPage()
+{
+    stopVideo();
+    monitorRefreshTimer->stop();
+    static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(levelSelectPage);
+}
+
+void MainWindow::showGamePage(int level)
+{
+    stopVideo();
+    monitorRefreshTimer->stop();
+    if (tankGame) {
+        tankGame->setLevel(level);
+        tankGame->startGame();
+    }
+    static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(gamePage);
+}
+
+void MainWindow::buildSnakePage(QWidget *page)
+{
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(4);
+    QHBoxLayout *header = new QHBoxLayout();
+    QPushButton *back = new QPushButton(tr("返回"), page);
+    back->setMinimumSize(48, 32);
+    QLabel *title = new QLabel(tr("贪吃蛇"), page);
+    title->setObjectName(QStringLiteral("title"));
+    header->addWidget(back);
+    header->addSpacing(8);
+    header->addWidget(title);
+    header->addStretch();
+    layout->addLayout(header);
+    connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
+
+    snakeGame = new SnakeGame(page);
+    layout->addWidget(snakeGame, 1);
+
+    QHBoxLayout *controls = new QHBoxLayout();
+    controls->addStretch();
+    QPushButton *up = new QPushButton(tr("上"), page);
+    QPushButton *down = new QPushButton(tr("下"), page);
+    QPushButton *left = new QPushButton(tr("左"), page);
+    QPushButton *right = new QPushButton(tr("右"), page);
+    QList<QPushButton *> btns;
+    btns << up << down << left << right;
+    foreach (QPushButton *b, btns)
+        b->setMinimumSize(56, 44);
+    controls->addWidget(up);
+    controls->addWidget(left);
+    controls->addWidget(down);
+    controls->addWidget(right);
+    controls->addStretch();
+    layout->addLayout(controls);
+
+    connect(up, &QPushButton::clicked, this, [this]() { snakeGame->setDirection(SnakeGame::DirUp); });
+    connect(down, &QPushButton::clicked, this, [this]() { snakeGame->setDirection(SnakeGame::DirDown); });
+    connect(left, &QPushButton::clicked, this, [this]() { snakeGame->setDirection(SnakeGame::DirLeft); });
+    connect(right, &QPushButton::clicked, this, [this]() { snakeGame->setDirection(SnakeGame::DirRight); });
+}
+
+void MainWindow::showSnakePage()
+{
+    stopVideo();
+    monitorRefreshTimer->stop();
+    if (snakeGame)
+        snakeGame->startGame();
+    static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(snakePage);
+}
+
+void MainWindow::buildTetrisPage(QWidget *page)
+{
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(4);
+    QHBoxLayout *header = new QHBoxLayout();
+    QPushButton *back = new QPushButton(tr("返回"), page);
+    back->setMinimumSize(48, 32);
+    QLabel *title = new QLabel(tr("俄罗斯方块"), page);
+    title->setObjectName(QStringLiteral("title"));
+    header->addWidget(back);
+    header->addSpacing(8);
+    header->addWidget(title);
+    header->addStretch();
+    layout->addLayout(header);
+    connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
+
+    tetrisGame = new TetrisGame(page);
+    layout->addWidget(tetrisGame, 1);
+
+    QHBoxLayout *controls = new QHBoxLayout();
+    controls->addStretch();
+    QPushButton *left = new QPushButton(tr("左"), page);
+    QPushButton *right = new QPushButton(tr("右"), page);
+    QPushButton *rotate = new QPushButton(tr("旋转"), page);
+    QPushButton *drop = new QPushButton(tr("下"), page);
+    QList<QPushButton *> btns;
+    btns << left << right << rotate << drop;
+    foreach (QPushButton *b, btns)
+        b->setMinimumSize(56, 44);
+    controls->addWidget(left);
+    controls->addWidget(rotate);
+    controls->addWidget(drop);
+    controls->addWidget(right);
+    controls->addStretch();
+    layout->addLayout(controls);
+
+    connect(left, &QPushButton::clicked, this, [this]() { tetrisGame->moveLeft(); });
+    connect(right, &QPushButton::clicked, this, [this]() { tetrisGame->moveRight(); });
+    connect(rotate, &QPushButton::clicked, this, [this]() { tetrisGame->rotate(); });
+    connect(drop, &QPushButton::clicked, this, [this]() { tetrisGame->softDrop(); });
+}
+
+void MainWindow::showTetrisPage()
+{
+    stopVideo();
+    monitorRefreshTimer->stop();
+    if (tetrisGame)
+        tetrisGame->startGame();
+    static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(tetrisPage);
+}
+
+void MainWindow::buildBrickPage(QWidget *page)
+{
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(4);
+    QHBoxLayout *header = new QHBoxLayout();
+    QPushButton *back = new QPushButton(tr("返回"), page);
+    back->setMinimumSize(48, 32);
+    QLabel *title = new QLabel(tr("打砖块"), page);
+    title->setObjectName(QStringLiteral("title"));
+    header->addWidget(back);
+    header->addSpacing(8);
+    header->addWidget(title);
+    header->addStretch();
+    layout->addLayout(header);
+    connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
+
+    brickGame = new BrickGame(page);
+    layout->addWidget(brickGame, 1);
+
+    QHBoxLayout *controls = new QHBoxLayout();
+    controls->addStretch();
+    QPushButton *left = new QPushButton(tr("左"), page);
+    QPushButton *right = new QPushButton(tr("右"), page);
+    left->setMinimumSize(72, 44);
+    right->setMinimumSize(72, 44);
+    controls->addWidget(left);
+    controls->addSpacing(20);
+    controls->addWidget(right);
+    controls->addStretch();
+    layout->addLayout(controls);
+
+    connect(left, &QPushButton::pressed, this, [this]() { brickGame->setPaddleDir(-1); });
+    connect(left, &QPushButton::released, this, [this]() { brickGame->setPaddleDir(0); });
+    connect(right, &QPushButton::pressed, this, [this]() { brickGame->setPaddleDir(1); });
+    connect(right, &QPushButton::released, this, [this]() { brickGame->setPaddleDir(0); });
+}
+
+void MainWindow::showBrickPage()
+{
+    stopVideo();
+    monitorRefreshTimer->stop();
+    if (brickGame)
+        brickGame->startGame();
+    static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(brickPage);
+}
+
+void MainWindow::buildGame2048Page(QWidget *page)
+{
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(4);
+    QHBoxLayout *header = new QHBoxLayout();
+    QPushButton *back = new QPushButton(tr("返回"), page);
+    back->setMinimumSize(48, 32);
+    QLabel *title = new QLabel(tr("2048"), page);
+    title->setObjectName(QStringLiteral("title"));
+    header->addWidget(back);
+    header->addSpacing(8);
+    header->addWidget(title);
+    header->addStretch();
+    layout->addLayout(header);
+    connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
+
+    game2048 = new Game2048(page);
+    layout->addWidget(game2048, 1);
+
+    QHBoxLayout *controls = new QHBoxLayout();
+    controls->addStretch();
+    QPushButton *up = new QPushButton(tr("上"), page);
+    QPushButton *down = new QPushButton(tr("下"), page);
+    QPushButton *left = new QPushButton(tr("左"), page);
+    QPushButton *right = new QPushButton(tr("右"), page);
+    QList<QPushButton *> btns;
+    btns << up << down << left << right;
+    foreach (QPushButton *b, btns)
+        b->setMinimumSize(56, 44);
+    controls->addWidget(up);
+    controls->addWidget(left);
+    controls->addWidget(down);
+    controls->addWidget(right);
+    controls->addStretch();
+    layout->addLayout(controls);
+
+    connect(up, &QPushButton::clicked, this, [this]() { game2048->move(Game2048::DirUp); });
+    connect(down, &QPushButton::clicked, this, [this]() { game2048->move(Game2048::DirDown); });
+    connect(left, &QPushButton::clicked, this, [this]() { game2048->move(Game2048::DirLeft); });
+    connect(right, &QPushButton::clicked, this, [this]() { game2048->move(Game2048::DirRight); });
+}
+
+void MainWindow::showGame2048Page()
+{
+    stopVideo();
+    monitorRefreshTimer->stop();
+    if (game2048)
+        game2048->startGame();
+    static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(game2048Page);
+}
+
+void MainWindow::buildMusicPage(QWidget *page)
+{
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(4);
+    QHBoxLayout *header = new QHBoxLayout();
+    QPushButton *back = new QPushButton(tr("返回"), page);
+    back->setMinimumSize(48, 32);
+    QLabel *title = new QLabel(tr("音乐"), page);
+    title->setObjectName(QStringLiteral("title"));
+    header->addWidget(back);
+    header->addSpacing(8);
+    header->addWidget(title);
+    header->addStretch();
+    layout->addLayout(header);
+    connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
+
+    musicPlayer = new MusicPlayer(page);
+    layout->addWidget(musicPlayer, 1);
+
+    QHBoxLayout *controls = new QHBoxLayout();
+    controls->addStretch();
+    QPushButton *prev = new QPushButton(tr("上一首"), page);
+    QPushButton *play = new QPushButton(tr("播放/暂停"), page);
+    QPushButton *next = new QPushButton(tr("下一首"), page);
+    prev->setMinimumSize(64, 44);
+    play->setMinimumSize(80, 44);
+    next->setMinimumSize(64, 44);
+    controls->addWidget(prev);
+    controls->addSpacing(16);
+    controls->addWidget(play);
+    controls->addSpacing(16);
+    controls->addWidget(next);
+    controls->addStretch();
+    layout->addLayout(controls);
+
+    connect(prev, &QPushButton::clicked, this, [this]() { musicPlayer->prev(); });
+    connect(play, &QPushButton::clicked, this, [this]() { musicPlayer->togglePlay(); });
+    connect(next, &QPushButton::clicked, this, [this]() { musicPlayer->next(); });
+}
+
+void MainWindow::showMusicPage()
+{
+    stopVideo();
+    monitorRefreshTimer->stop();
+    if (musicPlayer)
+        musicPlayer->start();
+    static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(musicPage);
+}
+
+void MainWindow::buildCalculatorPage(QWidget *page)
+{
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(4);
+    QHBoxLayout *header = new QHBoxLayout();
+    QPushButton *back = new QPushButton(tr("返回"), page);
+    back->setMinimumSize(48, 32);
+    QLabel *title = new QLabel(tr("计算器"), page);
+    title->setObjectName(QStringLiteral("title"));
+    header->addWidget(back);
+    header->addSpacing(8);
+    header->addWidget(title);
+    header->addStretch();
+    layout->addLayout(header);
+    connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
+
+    calculator = new Calculator(page);
+    layout->addWidget(calculator, 1);
+}
+
+void MainWindow::showCalculatorPage()
+{
+    stopVideo();
+    monitorRefreshTimer->stop();
+    static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(calculatorPage);
+}
+
+void MainWindow::buildDrawPage(QWidget *page)
+{
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(4);
+    QHBoxLayout *header = new QHBoxLayout();
+    QPushButton *back = new QPushButton(tr("返回"), page);
+    back->setMinimumSize(48, 32);
+    QLabel *title = new QLabel(tr("画板"), page);
+    title->setObjectName(QStringLiteral("title"));
+    header->addWidget(back);
+    header->addSpacing(8);
+    header->addWidget(title);
+    header->addStretch();
+    QPushButton *clearBtn = new QPushButton(tr("清空"), page);
+    clearBtn->setMinimumSize(48, 32);
+    QPushButton *saveBtn = new QPushButton(tr("保存"), page);
+    saveBtn->setMinimumSize(48, 32);
+    header->addWidget(clearBtn);
+    header->addWidget(saveBtn);
+    layout->addLayout(header);
+    connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
+
+    drawBoard = new DrawBoard(page);
+    layout->addWidget(drawBoard, 1);
+
+    connect(clearBtn, &QPushButton::clicked, this, [this]() { drawBoard->clear(); });
+    connect(saveBtn, &QPushButton::clicked, this, [this]() { drawBoard->save(); });
+}
+
+void MainWindow::showDrawPage()
+{
+    stopVideo();
+    monitorRefreshTimer->stop();
+    static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(drawPage);
 }
 
 void MainWindow::showVideoListPage()
@@ -1302,7 +2149,11 @@ QImage MainWindow::thumbnailForPath(const QString &path, const QSize &size)
     } else {
         QImageReader reader(path);
         reader.setAutoTransform(true);
-        reader.setScaledSize(size * 2);
+        const QSize orig = reader.size();
+        QSize scaledSize = size * 2;
+        if (orig.isValid() && orig.width() > 0 && orig.height() > 0)
+            scaledSize = orig.scaled(size * 2, Qt::KeepAspectRatio);
+        reader.setScaledSize(scaledSize);
         source = reader.read();
     }
 
@@ -1311,6 +2162,8 @@ QImage MainWindow::thumbnailForPath(const QString &path, const QSize &size)
 
     QImage thumb = source.scaled(size, Qt::KeepAspectRatioByExpanding,
                                  Qt::FastTransformation);
+    qInfo().noquote() << "THUMB" << path << "source" << source.size()
+                      << "scaled" << thumb.size() << "cell" << size;
     if (thumb.width() > size.width() || thumb.height() > size.height()) {
         thumb = thumb.copy((thumb.width() - size.width()) / 2,
                            (thumb.height() - size.height()) / 2,

@@ -50,6 +50,8 @@ public:
     QImage selectedImage() const;
     /** @brief 返回当前图片尺寸。 */
     QSize imageSize() const;
+    /** @brief 设置屏幕旋转角度（0/90/180/270），用于手势方向映射。 */
+    void setRotationAngle(int angle) { m_rotationAngle = angle; }
 
 signals:
     /** @brief 请求显示上一张图片。 */
@@ -86,6 +88,7 @@ private:
     void resetTouchState();
     void paintCropOverlay(QPainter &painter);
     QPoint mapToImage(const QPoint &point) const;
+    void transformDelta(qreal &dx, qreal &dy) const;
 
     QImage currentImage;
     ViewMode mode;
@@ -107,6 +110,7 @@ private:
     QElapsedTimer lastTapTimer;
     qreal pinchDistance;
     QPointF pinchCenter;
+    int m_rotationAngle;
     bool pinchActive;
     bool pinchOccurred;
     bool singleTouchActive;

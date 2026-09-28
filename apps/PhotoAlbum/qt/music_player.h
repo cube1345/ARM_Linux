@@ -1,0 +1,62 @@
+#ifndef MUSIC_PLAYER_H
+#define MUSIC_PLAYER_H
+
+#include <QAtomicInt>
+#include <QString>
+#include <QStringList>
+#include <QThread>
+#include <QWidget>
+
+class AudioDecodeThread : public QThread
+{
+    Q_OBJECT
+public:
+    explicit AudioDecodeThread(QObject *parent = nullptr);
+    ~AudioDecodeThread() override;
+    void play(const QString &path);
+    void stop();
+    void setPaused(bool paused);
+
+signals:
+    void playbackFinished();
+
+protected:
+    void run() override;
+
+private:
+    QString m_path;
+    QAtomicInt m_running;
+    QAtomicInt m_paused;
+};
+
+class MusicPlayer : public QWidget
+{
+    Q_OBJECT
+public:
+    explicit MusicPlayer(QWidget *parent = nullptr);
+    ~MusicPlayer() override;
+
+    void start();
+    void stopAll();
+    void togglePlay();
+    void next();
+    void prev();
+    bool isPlaying() const { return m_playing; }
+
+signals:
+    void songChanged(const QString &name);
+
+protected:
+    void paintEvent(QPaintEvent *event) override;
+
+private:
+    QStringList m_songs;
+    int m_current;
+    bool m_playing;
+    AudioDecodeThread *m_thread;
+
+    void loadSongs();
+    void playCurrent();
+};
+
+#endif

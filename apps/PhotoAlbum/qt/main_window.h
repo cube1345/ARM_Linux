@@ -5,7 +5,14 @@
 #include <QHash>
 #include <QImage>
 #include <QMainWindow>
+#include <QVector3D>
 
+#include "icm20608.h"
+#include "ap3216c.h"
+
+class QGraphicsProxyWidget;
+class QGraphicsScene;
+class QGraphicsView;
 class QLabel;
 class QListWidget;
 class QNetworkAccessManager;
@@ -17,6 +24,15 @@ class QGridLayout;
 class QPropertyAnimation;
 class QScrollArea;
 class QWidget;
+class BrickGame;
+class Game2048;
+class MusicPlayer;
+class Calculator;
+class DrawBoard;
+class Weather;
+class SnakeGame;
+class TankGame;
+class TetrisGame;
 class ThumbDragScroll;
 class VideoPlayerWidget;
 
@@ -38,6 +54,7 @@ public:
 private slots:
     void showPrevious();
     void showNext();
+    void onImuTick();
     void startCrop();
     void applyCrop();
     void cancelCrop();
@@ -63,6 +80,17 @@ private slots:
     void onImageLoaded();
     /** @brief 进入视频列表页。 */
     void showVideoListPage();
+    /** @brief 进入坦克大战选关页。 */
+    void showLevelSelectPage();
+    /** @brief 进入坦克大战游戏。 */
+    void showGamePage(int level);
+    void showSnakePage();
+    void showTetrisPage();
+    void showBrickPage();
+    void showGame2048Page();
+    void showMusicPage();
+    void showCalculatorPage();
+    void showDrawPage();
     /** @brief 播放列表中的某一路视频。 */
     void openVideo(int row);
     /** @brief 返回视频列表页并停止播放。 */
@@ -94,11 +122,28 @@ private:
     void rebuildThumbnailGrid();
     void buildVideoListPage(QWidget *page);
     void buildVideoPage(QWidget *page);
+    void buildGamePage(QWidget *page);
+    void buildLevelSelectPage(QWidget *page);
+    void buildSnakePage(QWidget *page);
+    void buildTetrisPage(QWidget *page);
+    void buildBrickPage(QWidget *page);
+    void buildGame2048Page(QWidget *page);
+    void buildMusicPage(QWidget *page);
+    void buildCalculatorPage(QWidget *page);
+    void buildDrawPage(QWidget *page);
     QWidget *makeAppCell(const QString &name, const QString &appId,
                          const QPixmap &icon, const char *slot);
     QPixmap makeAlbumIcon() const;
     QPixmap makeVideoIcon() const;
     QPixmap makeMonitorIcon() const;
+    QPixmap makeGameIcon() const;
+    QPixmap makeSnakeIcon() const;
+    QPixmap makeTetrisIcon() const;
+    QPixmap makeBrickIcon() const;
+    QPixmap make2048Icon() const;
+    QPixmap makeMusicIcon() const;
+    QPixmap makeCalculatorIcon() const;
+    QPixmap makeDrawIcon() const;
     QString monitorLiveBase() const;
     QString monitorServerBase() const;
     void loadPhotos(const QString &directory);
@@ -115,6 +160,7 @@ private:
     QImage decodeImage(const QString &path) const;
     QImage imageForPath(const QString &path) const;
     static const QList<QImage> &createDemoPhotos();
+    void applyOrientation(int orient);
 
     QWidget *stackedWidget;
     QWidget *homePage;
@@ -124,6 +170,27 @@ private:
     QWidget *videoListPage;
     QWidget *videoPage;
     QWidget *videoReturnPage;
+    QWidget *gamePage;
+    QWidget *levelSelectPage;
+    TankGame *tankGame;
+    QWidget *snakePage;
+    QWidget *tetrisPage;
+    QWidget *brickPage;
+    QWidget *game2048Page;
+    QWidget *musicPage;
+    SnakeGame *snakeGame;
+    TetrisGame *tetrisGame;
+    BrickGame *brickGame;
+    Game2048 *game2048;
+    MusicPlayer *musicPlayer;
+    QWidget *calculatorPage;
+    QWidget *drawPage;
+    Calculator *calculator;
+    DrawBoard *drawBoard;
+    Weather *weather;
+    Ap3216c m_als;
+    QLabel *weatherLabel;
+    QLabel *alsLabel;
     QList<QPushButton *> monitorCells;
     QTimer *monitorRefreshTimer;
     QList<QNetworkReply *> monitorReplies;
@@ -131,6 +198,13 @@ private:
     QList<QByteArray> monitorMjpegBuffers;
     QWidget *footerBar;
     QLabel *infoPanel;
+    Icm20608 m_imu;
+    QTimer *m_imuTimer;
+    int m_orientation;
+    qint64 m_lastShake;
+    QGraphicsView *m_view;
+    QGraphicsScene *m_scene;
+    QGraphicsProxyWidget *m_proxy;
     ThumbDragScroll *gridDragScroll;
     QGridLayout *thumbnailGrid;
     PhotoView *photoView;
