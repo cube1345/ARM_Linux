@@ -1,4 +1,5 @@
 #include "music_player.h"
+#include "config.h"
 
 #include <QDir>
 #include <QFileInfo>
@@ -180,7 +181,7 @@ MusicPlayer::~MusicPlayer()
 void MusicPlayer::loadSongs()
 {
     m_songs.clear();
-    QDir dir(QStringLiteral("/home/root/music"));
+    QDir dir(Config::kMusicDir);
     const QStringList filters = QStringList() << QStringLiteral("*.mp3") << QStringLiteral("*.wav")
                                              << QStringLiteral("*.flac") << QStringLiteral("*.ogg");
     const QFileInfoList list = dir.entryInfoList(filters, QDir::Files, QDir::Name);

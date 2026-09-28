@@ -1,4 +1,5 @@
 #include "weather.h"
+#include "config.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -15,7 +16,7 @@ Weather::Weather(QObject *parent)
 
 void Weather::fetch()
 {
-    QNetworkRequest request(QUrl(QStringLiteral("http://wttr.in/?format=j1&lang=zh")));
+    QNetworkRequest request(QUrl(Config::kWeatherUrl));
     QNetworkReply *reply = m_nam->get(request);
     connect(reply, &QNetworkReply::finished, this, [this, reply]() {
         onFinished(reply);
@@ -25,8 +26,10 @@ void Weather::fetch()
 
 void Weather::onFinished(QNetworkReply *reply)
 {
-    if (reply->error() != QNetworkReply::NoError)
+    if (reply->error() != QNetworkReply::NoError) {
+        emit ready(QString(), QStringLiteral("天气不可用"), QString());
         return;
+    }
     const QJsonDocument doc = QJsonDocument::fromJson(reply->readAll());
     if (doc.isNull())
         return;

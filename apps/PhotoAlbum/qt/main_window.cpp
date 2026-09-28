@@ -34,6 +34,7 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QPushButton>
+#include <QCheckBox>
 #include <QProgressBar>
 #include <QToolButton>
 #include <QSlider>
@@ -54,6 +55,10 @@
 #include "weather.h"
 #include "calculator.h"
 #include "drawboard.h"
+#include "icon_factory.h"
+#include "debug_page.h"
+#include "debug_overlay.h"
+#include "config.h"
 #include <unistd.h>
 
 /**
@@ -197,6 +202,10 @@ MainWindow::MainWindow(const QString &photoDirectory, QWidget *parent)
       brickPage(nullptr),
       game2048Page(nullptr),
       musicPage(nullptr),
+      settingsPage(nullptr),
+      debugPage(nullptr),
+      debugWidget(nullptr),
+      m_debugOverlay(nullptr),
       snakeGame(nullptr),
       tetrisGame(nullptr),
       brickGame(nullptr),
@@ -241,6 +250,7 @@ MainWindow::MainWindow(const QString &photoDirectory, QWidget *parent)
       loadGeneration(0),
       m_imuTimer(nullptr),
       m_orientation(-1),
+      m_orientationLocked(false),
       m_view(nullptr),
       m_scene(nullptr),
       m_proxy(nullptr),
@@ -278,7 +288,14 @@ MainWindow::MainWindow(const QString &photoDirectory, QWidget *parent)
                 alsLabel->setText(QStringLiteral("光照 %1").arg(m_als.readAls()));
         });
         alsTimer->start();
+    } else if (alsLabel) {
+        alsLabel->setText(tr("光照不可用"));
     }
+
+    m_debugOverlay = new DebugOverlay(this);
+    m_debugOverlay->setVisible(qEnvironmentVariableIsSet("PHOTO_ALBUM_DEBUG"));
+    m_debugOverlay->move(10, 10);
+    m_debugOverlay->raise();
 }
 
 static int detectOrientation(const QVector3D &a)
@@ -307,7 +324,8 @@ void MainWindow::onImuTick()
         qInfo().noquote() << QStringLiteral("[IMU] orientation=%1 accel=%2 %3 %4")
             .arg(orient)
             .arg(a.x(), 0, 'f', 2).arg(a.y(), 0, 'f', 2).arg(a.z(), 0, 'f', 2);
-        applyOrientation(orient);
+        if (!m_orientationLocked)
+            applyOrientation(orient);
     }
 
     const qreal mag = qSqrt(qreal(a.x() * a.x() + a.y() * a.y() + a.z() * a.z()));
@@ -380,6 +398,8 @@ void MainWindow::buildUi()
     musicPage = new QWidget(stack);
     calculatorPage = new QWidget(stack);
     drawPage = new QWidget(stack);
+    settingsPage = new QWidget(stack);
+    debugPage = new QWidget(stack);
     stack->addWidget(homePage);
     stack->addWidget(monitorPage);
     stack->addWidget(thumbnailPage);
@@ -395,6 +415,8 @@ void MainWindow::buildUi()
     stack->addWidget(musicPage);
     stack->addWidget(calculatorPage);
     stack->addWidget(drawPage);
+    stack->addWidget(settingsPage);
+    stack->addWidget(debugPage);
     layout->addWidget(stack, 1);
 
     buildHomePage(homePage);
@@ -411,6 +433,8 @@ void MainWindow::buildUi()
     buildMusicPage(musicPage);
     buildCalculatorPage(calculatorPage);
     buildDrawPage(drawPage);
+    buildSettingsPage(settingsPage);
+    buildDebugPage(debugPage);
 
     QVBoxLayout *detailLayout = new QVBoxLayout(detailPage);
     detailLayout->setContentsMargins(0, 0, 0, 0);
@@ -508,6 +532,7 @@ void MainWindow::buildUi()
         "QLabel#title{font-size:18px;font-weight:700;} QLabel#status,QLabel#videoTime{color:#a1a1aa;}"
         "QLabel#homeTime{font-size:52px;font-weight:200;color:#ffffff;margin-top:14px;}"
         "QLabel#appName{font-size:14px;font-weight:600;color:#ffffff;}"
+        "QLabel#homeInfo{font-size:18px;font-weight:600;color:#ffffff;}"
         "QPushButton#appIcon{background:transparent;border:0;border-radius:20px;}"
         "QLabel#touchCount,QLabel#touchSlide{color:#30d158;font-weight:700;}"
         "QLabel#infoPanel{background:rgba(0,0,0,0.68);color:#f5f5f7;border-radius:6px;padding:6px;}"
@@ -671,22 +696,6 @@ void MainWindow::buildMonitorPage(QWidget *page)
             this, &MainWindow::refreshMonitorSnapshots);
 }
 
-QPixmap MainWindow::makeMonitorIcon() const
-{
-    QPixmap icon(88, 88);
-    icon.fill(Qt::transparent);
-    QPainter painter(&icon);
-    painter.setBrush(QColor(30, 42, 56));
-    painter.setPen(Qt::NoPen);
-    painter.drawRoundedRect(0, 0, 88, 88, 20, 20);
-    painter.setBrush(QColor(58, 131, 255));
-    painter.drawRect(10, 14, 30, 22);
-    painter.drawRect(48, 14, 30, 22);
-    painter.drawRect(10, 52, 30, 22);
-    painter.drawRect(48, 52, 30, 22);
-    return icon;
-}
-
 QString MainWindow::monitorLiveBase() const
 {
     const QStringList streams = findStreams();
@@ -767,7 +776,7 @@ void MainWindow::openMonitorChannel(int index)
 void MainWindow::buildHomePage(QWidget *page)
 {
     QLabel *bg = new QLabel(page);
-    QPixmap wp(QStringLiteral("/home/root/wallpaper.jpg"));
+    QPixmap wp(Config::kWallpaper);
     if (!wp.isNull()) {
         bg->setPixmap(wp);
         bg->setScaledContents(true);
@@ -792,10 +801,10 @@ void MainWindow::buildHomePage(QWidget *page)
 
     QHBoxLayout *infoRow = new QHBoxLayout();
     weatherLabel = new QLabel(tr("天气加载中..."), page);
-    weatherLabel->setObjectName(QStringLiteral("appName"));
+    weatherLabel->setObjectName(QStringLiteral("homeInfo"));
     weatherLabel->setAlignment(Qt::AlignCenter);
     alsLabel = new QLabel(tr("光照 --"), page);
-    alsLabel->setObjectName(QStringLiteral("appName"));
+    alsLabel->setObjectName(QStringLiteral("homeInfo"));
     alsLabel->setAlignment(Qt::AlignCenter);
     infoRow->addStretch();
     infoRow->addWidget(weatherLabel);
@@ -806,17 +815,19 @@ void MainWindow::buildHomePage(QWidget *page)
 
     QGridLayout *grid = new QGridLayout();
     grid->setSpacing(24);
-    grid->addWidget(makeAppCell(tr("相册"), QStringLiteral("album"), makeAlbumIcon(), SLOT(showThumbnailPage())), 0, 0);
-    grid->addWidget(makeAppCell(tr("监控"), QStringLiteral("monitor"), makeMonitorIcon(), SLOT(showMonitorPage())), 0, 1);
-    grid->addWidget(makeAppCell(tr("视频"), QStringLiteral("video"), makeVideoIcon(), SLOT(showVideoListPage())), 0, 2);
-    grid->addWidget(makeAppCell(tr("坦克大战"), QStringLiteral("game"), makeGameIcon(), SLOT(showLevelSelectPage())), 0, 3);
-    grid->addWidget(makeAppCell(tr("贪吃蛇"), QStringLiteral("snake"), makeSnakeIcon(), SLOT(showSnakePage())), 1, 0);
-    grid->addWidget(makeAppCell(tr("俄罗斯方块"), QStringLiteral("tetris"), makeTetrisIcon(), SLOT(showTetrisPage())), 1, 1);
-    grid->addWidget(makeAppCell(tr("打砖块"), QStringLiteral("brick"), makeBrickIcon(), SLOT(showBrickPage())), 1, 2);
-    grid->addWidget(makeAppCell(tr("2048"), QStringLiteral("game2048"), make2048Icon(), SLOT(showGame2048Page())), 1, 3);
-    grid->addWidget(makeAppCell(tr("音乐"), QStringLiteral("music"), makeMusicIcon(), SLOT(showMusicPage())), 2, 0);
-    grid->addWidget(makeAppCell(tr("计算器"), QStringLiteral("calc"), makeCalculatorIcon(), SLOT(showCalculatorPage())), 2, 1);
-    grid->addWidget(makeAppCell(tr("画板"), QStringLiteral("draw"), makeDrawIcon(), SLOT(showDrawPage())), 2, 2);
+    grid->addWidget(makeAppCell(tr("相册"), QStringLiteral("album"), IconFactory::album(), SLOT(showThumbnailPage())), 0, 0);
+    grid->addWidget(makeAppCell(tr("监控"), QStringLiteral("monitor"), IconFactory::monitor(), SLOT(showMonitorPage())), 0, 1);
+    grid->addWidget(makeAppCell(tr("视频"), QStringLiteral("video"), IconFactory::video(), SLOT(showVideoListPage())), 0, 2);
+    grid->addWidget(makeAppCell(tr("坦克大战"), QStringLiteral("game"), IconFactory::game(), SLOT(showLevelSelectPage())), 0, 3);
+    grid->addWidget(makeAppCell(tr("贪吃蛇"), QStringLiteral("snake"), IconFactory::snake(), SLOT(showSnakePage())), 1, 0);
+    grid->addWidget(makeAppCell(tr("俄罗斯方块"), QStringLiteral("tetris"), IconFactory::tetris(), SLOT(showTetrisPage())), 1, 1);
+    grid->addWidget(makeAppCell(tr("打砖块"), QStringLiteral("brick"), IconFactory::brick(), SLOT(showBrickPage())), 1, 2);
+    grid->addWidget(makeAppCell(tr("2048"), QStringLiteral("game2048"), IconFactory::game2048(), SLOT(showGame2048Page())), 1, 3);
+    grid->addWidget(makeAppCell(tr("音乐"), QStringLiteral("music"), IconFactory::music(), SLOT(showMusicPage())), 2, 0);
+    grid->addWidget(makeAppCell(tr("计算器"), QStringLiteral("calc"), IconFactory::calculator(), SLOT(showCalculatorPage())), 2, 1);
+    grid->addWidget(makeAppCell(tr("画板"), QStringLiteral("draw"), IconFactory::draw(), SLOT(showDrawPage())), 2, 2);
+    grid->addWidget(makeAppCell(tr("设置"), QStringLiteral("settings"), IconFactory::settings(), SLOT(showSettingsPage())), 2, 3);
+    grid->addWidget(makeAppCell(tr("调试"), QStringLiteral("debug"), IconFactory::debug(), SLOT(showDebugPage())), 3, 0);
     layout->addLayout(grid);
     layout->addStretch();
 }
@@ -831,7 +842,7 @@ QWidget *MainWindow::makeAppCell(const QString &name, const QString &appId,
     v->setSpacing(4);
     QPushButton *button = new QPushButton(cell);
     button->setProperty("app", appId);
-    const QSize iconSize(56, 56);
+    const QSize iconSize(76, 76);
     button->setIcon(QIcon(icon));
     button->setIconSize(iconSize);
     button->setFixedSize(iconSize);
@@ -845,193 +856,6 @@ QWidget *MainWindow::makeAppCell(const QString &name, const QString &appId,
     v->addWidget(button, 0, Qt::AlignHCenter);
     v->addWidget(label, 0, Qt::AlignHCenter);
     return cell;
-}
-
-QPixmap MainWindow::makeAlbumIcon() const
-{
-    QPixmap icon(88, 88);
-    icon.fill(Qt::transparent);
-    QPainter painter(&icon);
-    QLinearGradient gradient(0, 0, 88, 88);
-    gradient.setColorAt(0.0, QColor(58, 131, 255));
-    gradient.setColorAt(1.0, QColor(164, 90, 255));
-    painter.setBrush(gradient);
-    painter.setPen(Qt::NoPen);
-    painter.drawRoundedRect(0, 0, 88, 88, 20, 20);
-    painter.setPen(QPen(QColor(255, 255, 255, 235), 5,
-                        Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
-    painter.drawLine(12, 66, 34, 42);
-    painter.drawLine(34, 42, 46, 58);
-    painter.drawLine(46, 58, 62, 36);
-    painter.drawLine(62, 36, 76, 66);
-    painter.drawEllipse(QPointF(64, 24), 5, 5);
-    return icon;
-}
-
-QPixmap MainWindow::makeVideoIcon() const
-{
-    QPixmap icon(88, 88);
-    icon.fill(Qt::transparent);
-    QPainter painter(&icon);
-    painter.setBrush(QColor(255, 59, 48));
-    painter.setPen(Qt::NoPen);
-    painter.drawRoundedRect(0, 0, 88, 88, 20, 20);
-    QPolygon triangle;
-    triangle << QPoint(34, 26) << QPoint(66, 44) << QPoint(34, 62);
-    painter.setBrush(Qt::white);
-    painter.drawPolygon(triangle);
-    return icon;
-}
-
-QPixmap MainWindow::makeGameIcon() const
-{
-    QPixmap icon(88, 88);
-    icon.fill(Qt::transparent);
-    QPainter painter(&icon);
-    painter.setPen(Qt::NoPen);
-    painter.setBrush(QColor(0x3a, 0xc0, 0x4a));
-    painter.drawRoundedRect(0, 0, 88, 88, 20, 20);
-    painter.setBrush(QColor(0x20, 0x80, 0x30));
-    painter.drawRect(22, 42, 44, 28);
-    painter.setBrush(QColor(0x20, 0x20, 0x20));
-    painter.drawRect(41, 32, 6, 20);
-    painter.drawRect(18, 42, 52, 8);
-    painter.drawRect(18, 62, 52, 8);
-    return icon;
-}
-
-QPixmap MainWindow::makeSnakeIcon() const
-{
-    QPixmap icon(88, 88);
-    icon.fill(Qt::transparent);
-    QPainter p(&icon);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0x28, 0xa0, 0x38));
-    p.drawRoundedRect(0, 0, 88, 88, 20, 20);
-    p.setBrush(QColor(0x3a, 0xd0, 0x4a));
-    p.drawEllipse(18, 40, 14, 14);
-    p.drawEllipse(32, 40, 14, 14);
-    p.drawEllipse(46, 40, 14, 14);
-    p.drawEllipse(60, 40, 14, 14);
-    p.setBrush(QColor(0x20, 0x20, 0x20));
-    p.drawEllipse(65, 43, 5, 5);
-    return icon;
-}
-
-QPixmap MainWindow::makeTetrisIcon() const
-{
-    QPixmap icon(88, 88);
-    icon.fill(Qt::transparent);
-    QPainter p(&icon);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0x1e, 0x1e, 0x2c));
-    p.drawRoundedRect(0, 0, 88, 88, 20, 20);
-    p.setBrush(QColor(0xe0, 0x40, 0x40));
-    p.drawRect(26, 24, 18, 18);
-    p.setBrush(QColor(0x30, 0xc0, 0xe0));
-    p.drawRect(44, 24, 18, 18);
-    p.setBrush(QColor(0x40, 0xd0, 0x60));
-    p.drawRect(26, 42, 18, 18);
-    p.setBrush(QColor(0xe0, 0xc0, 0x30));
-    p.drawRect(44, 42, 18, 18);
-    p.setBrush(QColor(0xa0, 0x50, 0xd0));
-    p.drawRect(26, 60, 18, 18);
-    return icon;
-}
-
-QPixmap MainWindow::makeBrickIcon() const
-{
-    QPixmap icon(88, 88);
-    icon.fill(Qt::transparent);
-    QPainter p(&icon);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0x1a, 0x1a, 0x24));
-    p.drawRoundedRect(0, 0, 88, 88, 20, 20);
-    p.setBrush(QColor(0xd0, 0x60, 0x40));
-    p.drawRect(16, 18, 18, 12);
-    p.drawRect(38, 18, 18, 12);
-    p.drawRect(60, 18, 14, 12);
-    p.setBrush(QColor(0xe0, 0x90, 0x30));
-    p.drawRect(16, 34, 18, 12);
-    p.drawRect(38, 34, 18, 12);
-    p.drawRect(60, 34, 14, 12);
-    p.setBrush(QColor(0x30, 0xa0, 0xe0));
-    p.drawRect(28, 62, 32, 8);
-    p.setBrush(QColor(0xff, 0xff, 0xff));
-    p.drawEllipse(40, 50, 10, 10);
-    return icon;
-}
-
-QPixmap MainWindow::make2048Icon() const
-{
-    QPixmap icon(88, 88);
-    icon.fill(Qt::transparent);
-    QPainter p(&icon);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0x20, 0x20, 0x28));
-    p.drawRoundedRect(0, 0, 88, 88, 20, 20);
-    p.setBrush(QColor(0xe0, 0x90, 0x40));
-    p.drawRoundedRect(18, 26, 52, 36, 8, 8);
-    p.setPen(QColor(0xff, 0xff, 0xff));
-    QFont f = p.font();
-    f.setPixelSize(22);
-    f.setBold(true);
-    p.setFont(f);
-    p.drawText(QRect(18, 26, 52, 36), Qt::AlignCenter, QStringLiteral("2048"));
-    return icon;
-}
-
-QPixmap MainWindow::makeMusicIcon() const
-{
-    QPixmap icon(88, 88);
-    icon.fill(Qt::transparent);
-    QPainter p(&icon);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0xa0, 0x50, 0xd0));
-    p.drawRoundedRect(0, 0, 88, 88, 20, 20);
-    p.setBrush(QColor(0xff, 0xff, 0xff));
-    p.drawEllipse(22, 48, 16, 12);
-    p.drawRect(36, 28, 6, 32);
-    p.drawEllipse(52, 48, 16, 12);
-    p.drawRect(66, 28, 6, 32);
-    p.drawRect(36, 28, 36, 6);
-    return icon;
-}
-
-QPixmap MainWindow::makeCalculatorIcon() const
-{
-    QPixmap icon(88, 88);
-    icon.fill(Qt::transparent);
-    QPainter p(&icon);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0x30, 0x30, 0x40));
-    p.drawRoundedRect(0, 0, 88, 88, 20, 20);
-    p.setBrush(QColor(0x20, 0x20, 0x28));
-    p.drawRect(20, 20, 48, 20);
-    p.setBrush(QColor(0xe0, 0xe0, 0xe0));
-    p.drawRect(20, 48, 11, 10);
-    p.drawRect(35, 48, 11, 10);
-    p.drawRect(50, 48, 11, 10);
-    p.setBrush(QColor(0x30, 0xa0, 0xe0));
-    p.drawRect(20, 62, 11, 10);
-    p.drawRect(35, 62, 11, 10);
-    p.drawRect(50, 62, 11, 10);
-    return icon;
-}
-
-QPixmap MainWindow::makeDrawIcon() const
-{
-    QPixmap icon(88, 88);
-    icon.fill(Qt::transparent);
-    QPainter p(&icon);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0x40, 0x40, 0x50));
-    p.drawRoundedRect(0, 0, 88, 88, 20, 20);
-    p.setPen(QPen(QColor(0xff, 0xff, 0xff), 8, Qt::SolidLine, Qt::RoundCap));
-    p.drawLine(26, 62, 62, 26);
-    p.setBrush(QColor(0xff, 0xff, 0xff));
-    p.drawEllipse(QPoint(62, 26), 5, 5);
-    return icon;
 }
 
 void MainWindow::buildThumbnailPage(QWidget *page)
@@ -1275,7 +1099,7 @@ void MainWindow::buildGamePage(QWidget *page)
     QList<QPushButton *> dpadBtns;
     dpadBtns << up << down << left << right;
     foreach (QPushButton *b, dpadBtns)
-        b->setFixedSize(52, 44);
+        b->setFixedSize(64, 48);
     dpad->addWidget(up, 0, 1);
     dpad->addWidget(left, 1, 0);
     dpad->addWidget(right, 1, 2);
@@ -1293,7 +1117,7 @@ void MainWindow::buildGamePage(QWidget *page)
     QList<QPushButton *> actBtns;
     actBtns << fire << skill1 << skill2;
     foreach (QPushButton *b, actBtns)
-        b->setFixedSize(64, 44);
+        b->setFixedSize(64, 48);
     QVBoxLayout *bottomRight = new QVBoxLayout();
     bottomRight->setSpacing(6);
     bottomRight->addStretch();
@@ -1404,7 +1228,7 @@ void MainWindow::buildSnakePage(QWidget *page)
     QList<QPushButton *> btns;
     btns << up << down << left << right;
     foreach (QPushButton *b, btns)
-        b->setMinimumSize(56, 44);
+        b->setMinimumSize(64, 48);
     controls->addWidget(up);
     controls->addWidget(left);
     controls->addWidget(down);
@@ -1456,7 +1280,7 @@ void MainWindow::buildTetrisPage(QWidget *page)
     QList<QPushButton *> btns;
     btns << left << right << rotate << drop;
     foreach (QPushButton *b, btns)
-        b->setMinimumSize(56, 44);
+        b->setMinimumSize(64, 48);
     controls->addWidget(left);
     controls->addWidget(rotate);
     controls->addWidget(drop);
@@ -1503,8 +1327,8 @@ void MainWindow::buildBrickPage(QWidget *page)
     controls->addStretch();
     QPushButton *left = new QPushButton(tr("左"), page);
     QPushButton *right = new QPushButton(tr("右"), page);
-    left->setMinimumSize(72, 44);
-    right->setMinimumSize(72, 44);
+    left->setMinimumSize(64, 48);
+    right->setMinimumSize(64, 48);
     controls->addWidget(left);
     controls->addSpacing(20);
     controls->addWidget(right);
@@ -1555,7 +1379,7 @@ void MainWindow::buildGame2048Page(QWidget *page)
     QList<QPushButton *> btns;
     btns << up << down << left << right;
     foreach (QPushButton *b, btns)
-        b->setMinimumSize(56, 44);
+        b->setMinimumSize(64, 48);
     controls->addWidget(up);
     controls->addWidget(left);
     controls->addWidget(down);
@@ -1603,9 +1427,9 @@ void MainWindow::buildMusicPage(QWidget *page)
     QPushButton *prev = new QPushButton(tr("上一首"), page);
     QPushButton *play = new QPushButton(tr("播放/暂停"), page);
     QPushButton *next = new QPushButton(tr("下一首"), page);
-    prev->setMinimumSize(64, 44);
-    play->setMinimumSize(80, 44);
-    next->setMinimumSize(64, 44);
+    prev->setMinimumSize(64, 48);
+    play->setMinimumSize(80, 48);
+    next->setMinimumSize(64, 48);
     controls->addWidget(prev);
     controls->addSpacing(16);
     controls->addWidget(play);
@@ -1691,6 +1515,75 @@ void MainWindow::showDrawPage()
     stopVideo();
     monitorRefreshTimer->stop();
     static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(drawPage);
+}
+
+void MainWindow::buildSettingsPage(QWidget *page)
+{
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(16, 16, 16, 16);
+    layout->setSpacing(12);
+
+    QHBoxLayout *header = new QHBoxLayout();
+    QPushButton *back = new QPushButton(tr("返回"), page);
+    back->setMinimumSize(48, 32);
+    QLabel *title = new QLabel(tr("设置"), page);
+    title->setObjectName(QStringLiteral("title"));
+    header->addWidget(back);
+    header->addSpacing(8);
+    header->addWidget(title);
+    header->addStretch();
+    layout->addLayout(header);
+    connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
+
+    QHBoxLayout *row = new QHBoxLayout();
+    QLabel *label = new QLabel(tr("屏幕方向锁定"), page);
+    label->setObjectName(QStringLiteral("appName"));
+    QCheckBox *lockCheck = new QCheckBox(page);
+    lockCheck->setChecked(m_orientationLocked);
+    connect(lockCheck, &QCheckBox::toggled, this, [this](bool checked) {
+        m_orientationLocked = checked;
+    });
+    row->addWidget(label);
+    row->addStretch();
+    row->addWidget(lockCheck);
+    layout->addLayout(row);
+
+    layout->addStretch();
+}
+
+void MainWindow::showSettingsPage()
+{
+    stopVideo();
+    monitorRefreshTimer->stop();
+    static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(settingsPage);
+}
+
+void MainWindow::buildDebugPage(QWidget *page)
+{
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(4);
+    QHBoxLayout *header = new QHBoxLayout();
+    QPushButton *back = new QPushButton(tr("返回"), page);
+    back->setMinimumSize(48, 32);
+    QLabel *title = new QLabel(tr("调试"), page);
+    title->setObjectName(QStringLiteral("title"));
+    header->addWidget(back);
+    header->addSpacing(8);
+    header->addWidget(title);
+    header->addStretch();
+    layout->addLayout(header);
+    connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
+
+    debugWidget = new DebugPage(page);
+    layout->addWidget(debugWidget, 1);
+}
+
+void MainWindow::showDebugPage()
+{
+    stopVideo();
+    monitorRefreshTimer->stop();
+    static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(debugPage);
 }
 
 void MainWindow::showVideoListPage()

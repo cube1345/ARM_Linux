@@ -1,4 +1,5 @@
 #include "drawboard.h"
+#include "config.h"
 
 #include <QDateTime>
 #include <QDir>
@@ -37,7 +38,7 @@ void DrawBoard::save()
 {
     if (m_image.isNull())
         return;
-    const QString dir = QStringLiteral("/home/root/photos");
+    const QString dir = Config::kPhotoDir;
     QDir().mkpath(dir);
     const QString path = dir + QStringLiteral("/draw_%1.png")
         .arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd_HHmmss")));

@@ -29,6 +29,8 @@ class Game2048;
 class MusicPlayer;
 class Calculator;
 class DrawBoard;
+class DebugPage;
+class DebugOverlay;
 class Weather;
 class SnakeGame;
 class TankGame;
@@ -89,6 +91,8 @@ private slots:
     void showBrickPage();
     void showGame2048Page();
     void showMusicPage();
+    void showSettingsPage();
+    void showDebugPage();
     void showCalculatorPage();
     void showDrawPage();
     /** @brief 播放列表中的某一路视频。 */
@@ -129,21 +133,12 @@ private:
     void buildBrickPage(QWidget *page);
     void buildGame2048Page(QWidget *page);
     void buildMusicPage(QWidget *page);
+    void buildSettingsPage(QWidget *page);
+    void buildDebugPage(QWidget *page);
     void buildCalculatorPage(QWidget *page);
     void buildDrawPage(QWidget *page);
     QWidget *makeAppCell(const QString &name, const QString &appId,
                          const QPixmap &icon, const char *slot);
-    QPixmap makeAlbumIcon() const;
-    QPixmap makeVideoIcon() const;
-    QPixmap makeMonitorIcon() const;
-    QPixmap makeGameIcon() const;
-    QPixmap makeSnakeIcon() const;
-    QPixmap makeTetrisIcon() const;
-    QPixmap makeBrickIcon() const;
-    QPixmap make2048Icon() const;
-    QPixmap makeMusicIcon() const;
-    QPixmap makeCalculatorIcon() const;
-    QPixmap makeDrawIcon() const;
     QString monitorLiveBase() const;
     QString monitorServerBase() const;
     void loadPhotos(const QString &directory);
@@ -178,6 +173,10 @@ private:
     QWidget *brickPage;
     QWidget *game2048Page;
     QWidget *musicPage;
+    QWidget *settingsPage;
+    QWidget *debugPage;
+    DebugPage *debugWidget;
+    DebugOverlay *m_debugOverlay;
     SnakeGame *snakeGame;
     TetrisGame *tetrisGame;
     BrickGame *brickGame;
@@ -201,6 +200,7 @@ private:
     Icm20608 m_imu;
     QTimer *m_imuTimer;
     int m_orientation;
+    bool m_orientationLocked;
     qint64 m_lastShake;
     QGraphicsView *m_view;
     QGraphicsScene *m_scene;
