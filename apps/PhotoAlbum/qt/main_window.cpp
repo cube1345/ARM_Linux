@@ -1913,6 +1913,7 @@ void MainWindow::showPhoto()
 
     currentIndex = (currentIndex + photoPaths.size()) % photoPaths.size();
     const QString path = photoPaths.at(currentIndex);
+    preloadAdjacent();
 
     const QImage ready = imageForPath(path);
     if (!ready.isNull()) {
@@ -1956,6 +1957,27 @@ void MainWindow::cacheImage(const QString &path, const QImage &image)
     while (imageCacheOrder.size() > 6) {
         const QString oldest = imageCacheOrder.takeFirst();
         imageCache.remove(oldest);
+    }
+}
+
+void MainWindow::preloadAdjacent()
+{
+    const int offsets[2] = { 1, -1 };
+    for (int off : offsets) {
+        const int idx = (currentIndex + off + photoPaths.size()) % photoPaths.size();
+        const QString path = photoPaths.value(idx);
+        if (path.isEmpty() || path.startsWith(QStringLiteral("demo://")))
+            continue;
+        if (imageCache.contains(path))
+            continue;
+        QtConcurrent::run([this, path]() {
+            const QImage img = decodeImage(path);
+            if (!img.isNull()) {
+                QMetaObject::invokeMethod(this, [this, path, img]() {
+                    cacheImage(path, img);
+                }, Qt::QueuedConnection);
+            }
+        });
     }
 }
 

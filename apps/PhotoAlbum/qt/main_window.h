@@ -151,6 +151,7 @@ private:
     QString streamServerBase() const;
     void loadRecordings();
     void cacheImage(const QString &path, const QImage &image);
+    void preloadAdjacent();
     QImage thumbnailForPath(const QString &path, const QSize &size);
     QImage decodeImage(const QString &path) const;
     QImage imageForPath(const QString &path) const;
