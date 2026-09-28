@@ -57,10 +57,9 @@ signals:
     /** @brief 请求显示下一张图片。 */
     void nextRequested();
     /**
-     * @brief 请求展开或收起底部横向缩略图列表。
-     * @param visible true 表示展开（上滑），false 表示收起（下滑）。
+     * @brief 单指垂直滑动。upward=true 上滑（展示拍摄信息），false 下滑（展示操作栏）。
      */
-    void filmstripRequested(bool visible);
+    void verticalSwipeRequested(bool upward);
     /**
      * @brief 向主窗口报告触摸调试信息。
      * @param contactCount Number of active contacts.
@@ -107,6 +106,7 @@ private:
     QElapsedTimer touchTimer;
     QElapsedTimer lastTapTimer;
     qreal pinchDistance;
+    QPointF pinchCenter;
     bool pinchActive;
     bool pinchOccurred;
     bool singleTouchActive;

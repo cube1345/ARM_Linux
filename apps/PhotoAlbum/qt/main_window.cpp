@@ -29,6 +29,7 @@
 #include <QPainter>
 #include <QPixmap>
 #include <QPushButton>
+#include <QToolButton>
 #include <QSlider>
 #include <QTime>
 #include <QVariant>
@@ -113,6 +114,28 @@ private:
     QPoint lastGlobal;
 };
 
+class ThumbnailButton : public QAbstractButton
+{
+public:
+    explicit ThumbnailButton(QWidget *parent = nullptr) : QAbstractButton(parent) {}
+    void setThumbnail(const QImage &image)
+    {
+        m_image = image;
+        update();
+    }
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter painter(this);
+        if (!m_image.isNull())
+            painter.drawImage(rect(), m_image);
+        else
+            painter.fillRect(rect(), QColor(0x14, 0x14, 0x1a));
+    }
+private:
+    QImage m_image;
+};
+
 /**
  * @brief 初始化相册主窗口。
  */
@@ -127,14 +150,9 @@ MainWindow::MainWindow(const QString &photoDirectory, QWidget *parent)
       videoPage(nullptr),
       videoReturnPage(nullptr),
       monitorRefreshTimer(nullptr),
-      filmstripContainer(nullptr),
-      filmstripScrollArea(nullptr),
-      filmstripAnimation(nullptr),
-      filmstripVisible(false),
       footerBar(nullptr),
-      footerAnimation(nullptr),
+      infoPanel(nullptr),
       gridDragScroll(nullptr),
-      filmstripDragScroll(nullptr),
       thumbnailGrid(nullptr),
       photoView(nullptr),
       videoList(nullptr),
@@ -234,20 +252,27 @@ void MainWindow::buildUi()
     headerLayout->addWidget(touchSlideLabel);
     detailLayout->addWidget(header);
 
+    infoPanel = new QLabel(detailPage);
+    infoPanel->setObjectName(QStringLiteral("infoPanel"));
+    infoPanel->setWordWrap(true);
+    infoPanel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
+    infoPanel->setVisible(false);
+    detailLayout->addWidget(infoPanel);
+
     photoView = new PhotoView(detailPage);
     connect(photoView, SIGNAL(previousRequested()), this, SLOT(showPrevious()));
     connect(photoView, SIGNAL(nextRequested()), this, SLOT(showNext()));
-    connect(photoView, SIGNAL(filmstripRequested(bool)),
-            this, SLOT(setFilmstripVisible(bool)));
+    connect(photoView, SIGNAL(verticalSwipeRequested(bool)),
+            this, SLOT(onVerticalSwipe(bool)));
     connect(photoView, SIGNAL(touchDebugChanged(int,bool,qreal)),
             this, SLOT(updateTouchDebug(int,bool,qreal)));
     detailLayout->addWidget(photoView, 1);
 
-    buildFilmstrip(detailPage);
     footerBar = new QWidget(detailPage);
     footerBar->setObjectName(QStringLiteral("footerBar"));
     footerBar->setMinimumHeight(0);
     footerBar->setMaximumHeight(45);
+    footerBar->setVisible(false);
     QHBoxLayout *footerLayout = new QHBoxLayout(footerBar);
     footerLayout->setContentsMargins(0, 0, 0, 0);
     footerLayout->setSpacing(5);
@@ -284,18 +309,19 @@ void MainWindow::buildUi()
     detailLayout->addWidget(footerBar);
     setCentralWidget(central);
     setStyleSheet(QStringLiteral(
-        "QWidget#root{background:#0b0b0f;} QLabel{color:#f5f5f7;}"
+        "QWidget{background:#0b0b0f;} QLabel{background:transparent;color:#f5f5f7;}"
         "QLabel#title{font-size:18px;font-weight:700;} QLabel#status,QLabel#videoTime{color:#a1a1aa;}"
         "QLabel#homeTime{font-size:52px;font-weight:200;color:#ffffff;margin-top:14px;}"
         "QLabel#appName{font-size:14px;font-weight:600;color:#ffffff;}"
         "QPushButton#appIcon{background:transparent;border:0;border-radius:20px;}"
         "QLabel#touchCount,QLabel#touchSlide{color:#30d158;font-weight:700;}"
+        "QLabel#infoPanel{background:rgba(0,0,0,0.68);color:#f5f5f7;border-radius:6px;padding:6px;}"
         "QPushButton{color:#f5f5f7;background:rgba(255,255,255,0.12);"
         "border:0;border-radius:8px;padding:0 8px;}"
         "QPushButton:pressed{background:rgba(255,255,255,0.26);}"
         "QPushButton#primaryButton{background:#0a84ff;}"
         "QPushButton#dangerButton{background:#ff453a;}"
-        "QPushButton#thumbButton{padding:0;border-radius:4px;}"
+        "ThumbnailButton#thumbButton{border:0;}"
         "QScrollArea{border:0;background:transparent;}"
         "QScrollBar:vertical{background:rgba(255,255,255,0.06);width:22px;margin:0;}"
         "QScrollBar::handle:vertical{background:rgba(255,255,255,0.35);"
@@ -310,23 +336,8 @@ void MainWindow::buildUi()
         "QSlider::sub-page:horizontal{background:#0a84ff;border-radius:4px;}"
         "QSlider::handle:horizontal{width:32px;height:32px;margin:-12px 0;"
         "border-radius:16px;background:#0a84ff;border:2px solid rgba(255,255,255,0.6);}"));
-    filmstripAnimation = new QPropertyAnimation(filmstripContainer, "maximumHeight", this);
-    filmstripAnimation->setDuration(220);
-    filmstripAnimation->setEasingCurve(QEasingCurve::OutCubic);
-    connect(filmstripAnimation, &QPropertyAnimation::finished, this, [this]() {
-        if (!filmstripVisible)
-            filmstripContainer->setVisible(false);
-    });
-    footerAnimation = new QPropertyAnimation(footerBar, "maximumHeight", this);
-    footerAnimation->setDuration(220);
-    footerAnimation->setEasingCurve(QEasingCurve::OutCubic);
-    connect(footerAnimation, &QPropertyAnimation::finished, this, [this]() {
-        if (filmstripVisible)
-            footerBar->setVisible(false);
-    });
     loadWatcher = new QFutureWatcher<QImage>(this);
     connect(loadWatcher, SIGNAL(finished()), this, SLOT(onImageLoaded()));
-    setFilmstripVisible(false);
     showHomePage();
 }
 
@@ -671,50 +682,39 @@ void MainWindow::buildThumbnailPage(QWidget *page)
     QWidget *content = new QWidget(scroll);
     thumbnailGrid = new QGridLayout(content);
     thumbnailGrid->setContentsMargins(0, 0, 0, 0);
-    thumbnailGrid->setSpacing(0);
+    thumbnailGrid->setSpacing(2);
     scroll->setWidget(content);
     layout->addWidget(scroll, 1);
     gridDragScroll = new ThumbDragScroll(scroll, this);
     gridDragScroll->attach(content);
 }
 
-void MainWindow::buildFilmstrip(QWidget *parent)
+void MainWindow::onVerticalSwipe(bool upward)
 {
-    filmstripContainer = new QWidget(parent);
-    filmstripContainer->setObjectName(QStringLiteral("filmstrip"));
-    QHBoxLayout *layout = new QHBoxLayout(filmstripContainer);
-    layout->setContentsMargins(0, 0, 0, 0);
-    filmstripScrollArea = new QScrollArea(filmstripContainer);
-    filmstripScrollArea->setWidgetResizable(true);
-    filmstripScrollArea->setFixedHeight(80);
-    filmstripScrollArea->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOn);
-    filmstripScrollArea->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
-    layout->addWidget(filmstripScrollArea);
-    filmstripContainer->setMinimumHeight(0);
-    filmstripContainer->setMaximumHeight(0);
-    filmstripContainer->setVisible(false);
-    static_cast<QVBoxLayout *>(parent->layout())->addWidget(filmstripContainer);
-    filmstripDragScroll = new ThumbDragScroll(filmstripScrollArea, this);
-}
-
-void MainWindow::setFilmstripVisible(bool visible)
-{
-    if (filmstripVisible == visible)
+    if (photoView->viewMode() == PhotoView::CropMode)
         return;
-    filmstripVisible = visible;
-    filmstripAnimation->stop();
-    filmstripAnimation->setStartValue(filmstripContainer->maximumHeight());
-    filmstripAnimation->setEndValue(visible ? 80 : 0);
-    if (visible)
-        filmstripContainer->setVisible(true);
-    filmstripAnimation->start();
-
-    footerAnimation->stop();
-    footerAnimation->setStartValue(footerBar->maximumHeight());
-    footerAnimation->setEndValue(visible ? 0 : 45);
-    if (!visible)
-        footerBar->setVisible(true);
-    footerAnimation->start();
+    if (upward) {
+        if (infoPanel->isVisible()) {
+            infoPanel->setVisible(false);
+            return;
+        }
+        const QString path = photoPaths.value(currentIndex);
+        if (path.startsWith(QStringLiteral("demo://"))) {
+            infoPanel->setText(tr("演示图 %1").arg(currentIndex + 1));
+        } else {
+            const QFileInfo info(path);
+            const QSize size = photoView->imageSize();
+            infoPanel->setText(tr("文件：%1\n尺寸：%2×%3\n修改时间：%4")
+                .arg(info.fileName())
+                .arg(size.width()).arg(size.height())
+                .arg(info.lastModified().toString(QStringLiteral("yyyy-MM-dd hh:mm:ss"))));
+        }
+        infoPanel->setVisible(true);
+        footerBar->setVisible(false);
+    } else {
+        infoPanel->setVisible(false);
+        footerBar->setVisible(!footerBar->isVisible());
+    }
 }
 
 void MainWindow::rebuildThumbnailGrid()
@@ -725,22 +725,22 @@ void MainWindow::rebuildThumbnailGrid()
         delete item->widget(); delete item;
     }
     QWidget *content = thumbnailGrid->parentWidget();
-    int cellW = 89;
+    int cellW = (width() - 32) / 5;
     if (QScrollArea *scroll = qobject_cast<QScrollArea *>(content->parentWidget())) {
         const int viewport = scroll->viewport()->width();
         if (viewport >= 100)
             cellW = viewport / 5;
     }
-    const QSize cell(cellW, 76);
+    if (cellW < 60)
+        cellW = 89;
+    const QSize cell(cellW, cellW * 3 / 4);
     for (int index = 0; index < photoPaths.size(); ++index) {
-        QPushButton *button = new QPushButton(content);
+        ThumbnailButton *button = new ThumbnailButton(content);
         button->setObjectName(QStringLiteral("thumbButton"));
         button->setFixedSize(cell);
-        button->setIcon(QIcon(QPixmap::fromImage(
-            thumbnailForPath(photoPaths.at(index), cell))));
-        button->setIconSize(cell);
+        button->setThumbnail(thumbnailForPath(photoPaths.at(index), cell));
         button->setProperty("photoIndex", QVariant(index));
-        connect(button, SIGNAL(clicked()), this, SLOT(selectFilmstripPhoto()));
+        connect(button, &ThumbnailButton::clicked, this, [this, index]() { showDetailPage(index); });
         if (gridDragScroll)
             gridDragScroll->attach(button);
         thumbnailGrid->addWidget(button, index / 5, index % 5);
@@ -758,32 +758,7 @@ void MainWindow::showDetailPage(int index)
 {
     currentIndex = index;
     showPhoto();
-    buildFilmstripContent();
     static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(detailPage);
-}
-
-void MainWindow::buildFilmstripContent()
-{
-    delete filmstripScrollArea->takeWidget();
-    QWidget *content = new QWidget(filmstripScrollArea);
-    if (filmstripDragScroll)
-        filmstripDragScroll->attach(content);
-    QHBoxLayout *layout = new QHBoxLayout(content);
-    layout->setContentsMargins(4, 2, 4, 2);
-    for (int itemIndex = 0; itemIndex < photoPaths.size(); ++itemIndex) {
-        QPushButton *button = new QPushButton(content);
-        button->setObjectName(QStringLiteral("thumbButton"));
-        button->setIcon(QIcon(QPixmap::fromImage(
-            thumbnailForPath(photoPaths.at(itemIndex), QSize(70, 45)))));
-        button->setIconSize(QSize(70, 45)); button->setFixedSize(76, 50);
-        button->setProperty("photoIndex", QVariant(itemIndex));
-        connect(button, SIGNAL(clicked()), this, SLOT(selectFilmstripPhoto()));
-        if (filmstripDragScroll)
-            filmstripDragScroll->attach(button);
-        layout->addWidget(button);
-    }
-    layout->addStretch();
-    filmstripScrollArea->setWidget(content);
 }
 
 void MainWindow::buildVideoListPage(QWidget *page)
@@ -1132,19 +1107,6 @@ QStringList MainWindow::findStreams() const
     return streams;
 }
 
-void MainWindow::selectFilmstripPhoto()
-{
-    QPushButton *button = qobject_cast<QPushButton *>(sender());
-    if (!button) return;
-    const int index = button->property("photoIndex").toInt();
-    if (static_cast<QStackedWidget *>(stackedWidget)->currentWidget() == thumbnailPage)
-        showDetailPage(index);
-    else {
-        currentIndex = index;
-        showPhoto();
-    }
-}
-
 /**
  * @brief 更新接触点数量和滑动状态显示。
  * @param contactCount 当前活动接触点数量。
@@ -1201,6 +1163,7 @@ void MainWindow::loadPhotos(const QString &directory)
  */
 void MainWindow::showPhoto()
 {
+    infoPanel->setVisible(false);
     if (photoPaths.isEmpty()) {
         photoView->setImage(QImage());
         updateStatus();
@@ -1462,7 +1425,6 @@ void MainWindow::deletePhoto()
         currentIndex = qMin(currentIndex, photoPaths.size() - 1);
     }
     showPhoto();
-    buildFilmstripContent();
 }
 
 void MainWindow::savePhoto()
@@ -1489,7 +1451,6 @@ void MainWindow::savePhoto()
         currentIndex = photoPaths.size() - 1;
         cacheImage(fileName, image);
         photoView->setImage(image);
-        buildFilmstripContent();
         updateStatus();
     }
 }

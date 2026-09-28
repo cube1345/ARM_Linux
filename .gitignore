@@ -59,6 +59,9 @@ libtool
 
 # Editor caches and local executables
 .vscode/ipch/
+
+# Cross-compile SDK (NXP Yocto toolchain)
+/sdk/
 apps/Camera/jpegsrc.v10.tar.gz
 apps/Camera/jpeg-10/build-arm/
 apps/Camera/jpeg-10/install-arm/

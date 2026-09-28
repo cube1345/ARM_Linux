@@ -194,17 +194,51 @@ void PhotoView::handleTouchEvent(QTouchEvent *event)
         }
     }
 
+    const qreal duplicateDistance = 30.0;
     for (int index = 0; index < points.size(); ++index) {
         const QTouchEvent::TouchPoint &point = points.at(index);
         if (point.state() == Qt::TouchPointReleased) {
             lastTouchPosition = point.pos();
-            activeTouches.remove(point.id());
-            touchStartPositions.remove(point.id());
+            int nearestKey = -1;
+            qreal nearestDist = duplicateDistance;
+            QHash<int, QPointF>::const_iterator it = activeTouches.constBegin();
+            for (; it != activeTouches.constEnd(); ++it) {
+                const qreal d = QLineF(it.value(), point.pos()).length();
+                if (d < nearestDist) {
+                    nearestDist = d;
+                    nearestKey = it.key();
+                }
+            }
+            if (nearestKey >= 0) {
+                activeTouches.remove(nearestKey);
+                touchStartPositions.remove(nearestKey);
+            } else {
+                activeTouches.remove(point.id());
+                touchStartPositions.remove(point.id());
+            }
         } else {
-            if (!touchStartPositions.contains(point.id()))
+            int existingKey = -1;
+            qreal existingDist = duplicateDistance;
+            QHash<int, QPointF>::const_iterator it = activeTouches.constBegin();
+            for (; it != activeTouches.constEnd(); ++it) {
+                const qreal d = QLineF(it.value(), point.pos()).length();
+                if (d < existingDist) {
+                    existingDist = d;
+                    existingKey = it.key();
+                }
+            }
+            if (existingKey >= 0) {
+                activeTouches.insert(existingKey, point.pos());
+            } else {
+                activeTouches.insert(point.id(), point.pos());
                 touchStartPositions.insert(point.id(), point.pos());
-            activeTouches.insert(point.id(), point.pos());
+            }
         }
+    }
+
+    if (event->type() == QEvent::TouchEnd) {
+        activeTouches.clear();
+        touchStartPositions.clear();
     }
 
     qreal maximumMovement = 0.0;
@@ -218,6 +252,12 @@ void PhotoView::handleTouchEvent(QTouchEvent *event)
     }
     emit touchDebugChanged(activeTouches.size(), maximumMovement >= 4.0,
                            maximumMovement);
+    if (touchDebug) {
+        qDebug() << "PhotoAlbum activeTouches.size()=" << activeTouches.size();
+        QHash<int, QPointF>::const_iterator dbg = activeTouches.constBegin();
+        for (; dbg != activeTouches.constEnd(); ++dbg)
+            qDebug() << "  active id" << dbg.key() << "pos" << dbg.value();
+    }
 
     if (activeTouches.isEmpty()) {
         if (selecting) {
@@ -241,7 +281,7 @@ void PhotoView::handleTouchEvent(QTouchEvent *event)
                 else
                     emit previousRequested();
             } else if (qAbs(deltaY) >= 60 && qAbs(deltaY) > qAbs(deltaX) * 1.5) {
-                emit filmstripRequested(deltaY < 0);
+                emit verticalSwipeRequested(deltaY < 0);
             }
         }
 
@@ -263,10 +303,15 @@ void PhotoView::handleTouchEvent(QTouchEvent *event)
         return;
     }
 
-    if (activeTouches.size() >= 2) {
-        const QList<QPointF> positions = activeTouches.values();
-        const QPointF first = positions.at(0);
-        const QPointF second = positions.at(1);
+    QList<QPointF> activePositions;
+    for (int i = 0; i < points.size(); ++i) {
+        if (points.at(i).state() != Qt::TouchPointReleased)
+            activePositions.append(points.at(i).pos());
+    }
+
+    if (activePositions.size() >= 2) {
+        const QPointF first = activePositions.at(0);
+        const QPointF second = activePositions.at(1);
         const qreal distance = QLineF(first, second).length();
         const QPointF center((first.x() + second.x()) / 2.0,
                              (first.y() + second.y()) / 2.0);
@@ -278,9 +323,13 @@ void PhotoView::handleTouchEvent(QTouchEvent *event)
         selecting = false;
 
         const qreal previousDistance = pinchDistance;
-        if (mode == BrowseMode && pinchDistance > 0.0 && distance > 0.0)
+        if (mode == BrowseMode && pinchDistance > 0.0 && distance > 0.0) {
             applyPinch(center, distance / pinchDistance);
+            offset += center - pinchCenter;
+            clampOffset();
+        }
         pinchDistance = distance;
+        pinchCenter = center;
         if (touchDebug)
             qDebug() << "PhotoAlbum pinch:" << "distance" << distance
                      << "previous" << previousDistance << "scale" << scale;
@@ -329,6 +378,7 @@ void PhotoView::resetTouchState()
     touchOffsetAtStart = QPointF();
     touchTimer.invalidate();
     pinchDistance = 0.0;
+    pinchCenter = QPointF();
     pinchActive = false;
     pinchOccurred = false;
     singleTouchActive = false;
@@ -445,7 +495,7 @@ void PhotoView::mouseReleaseEvent(QMouseEvent *event)
                 else
                     emit previousRequested();
             } else if (qAbs(deltaY) >= 60 && qAbs(deltaY) > qAbs(deltaX) * 1.5) {
-                emit filmstripRequested(deltaY < 0);
+                emit verticalSwipeRequested(deltaY < 0);
             }
         }
     }

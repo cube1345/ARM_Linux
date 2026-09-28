@@ -2,13 +2,13 @@
 set -Ee
 set -o pipefail
 
-PROJECT_DIR="/home/cube/WorkSpace/iMX6Ull/ARM_Linux/apps/PhotoAlbum/qt"
+PROJECT_DIR="/home/cube/WorkSpace/ARM_Linux/apps/PhotoAlbum/qt"
 PROJECT_FILE="${PROJECT_DIR}/photo_album.pro"
 BUILD_DIR="/tmp/photoalbum-arm-build"
 OUTPUT_FILE="${BUILD_DIR}/photo-album"
 DIST_DIR="${PROJECT_DIR}/.dist"
 DIST_FILE="${DIST_DIR}/photo-album"
-SDK_ENV="/opt/fsl-imx-x11/4.1.15-2.1.0/environment-setup-cortexa7hf-neon-poky-linux-gnueabi"
+SDK_ENV="/home/cube/WorkSpace/ARM_Linux/sdk/fsl-imx-x11/4.1.15-2.1.0/environment-setup-cortexa7hf-neon-poky-linux-gnueabi"
 
 if [[ ! -f "${SDK_ENV}" ]]; then
     echo "错误：找不到 ARM Qt SDK 环境文件：${SDK_ENV}" >&2

@@ -46,9 +46,8 @@ private slots:
     void deletePhoto();
     void showThumbnailPage();
     void showDetailPage(int index);
-    void selectFilmstripPhoto();
-    /** @brief 根据上滑/下滑展开或收起底部横向缩略图列表。 */
-    void setFilmstripVisible(bool visible);
+    /** @brief 单指垂直滑动：上滑展示拍摄信息，下滑展示操作栏。 */
+    void onVerticalSwipe(bool upward);
     /** @brief 显示桌面首页。 */
     void showHomePage();
     /** @brief 显示监控九宫格。 */
@@ -90,8 +89,6 @@ private slots:
 private:
     void buildUi();
     void buildThumbnailPage(QWidget *page);
-    void buildFilmstrip(QWidget *parent);
-void buildFilmstripContent();
     void buildHomePage(QWidget *page);
     void buildMonitorPage(QWidget *page);
     void rebuildThumbnailGrid();
@@ -132,14 +129,9 @@ void buildFilmstripContent();
     QList<QNetworkReply *> monitorReplies;
     QList<QNetworkReply *> monitorMjpegReplies;
     QList<QByteArray> monitorMjpegBuffers;
-    QWidget *filmstripContainer;
-    QScrollArea *filmstripScrollArea;
-    QPropertyAnimation *filmstripAnimation;
-    bool filmstripVisible;
     QWidget *footerBar;
-    QPropertyAnimation *footerAnimation;
+    QLabel *infoPanel;
     ThumbDragScroll *gridDragScroll;
-    ThumbDragScroll *filmstripDragScroll;
     QGridLayout *thumbnailGrid;
     PhotoView *photoView;
     QListWidget *videoList;
