@@ -13,10 +13,15 @@ extern "C" {
 #if LIBAVCODEC_VERSION_MAJOR >= 58
 #define USE_NEW_DECODE_API 1
 #define USE_OLD_DECODE_API 0
-#define AUDIO_CHANNELS(ctx) ((ctx)->ch_layout.nb_channels > 0 ? (ctx)->ch_layout.nb_channels : 2)
 #else
 #define USE_NEW_DECODE_API 0
 #define USE_OLD_DECODE_API 1
+#endif
+
+// ch_layout 自 FFmpeg 5.1 (libavcodec 59.37) 起取代 channels
+#if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(59, 37, 100)
+#define AUDIO_CHANNELS(ctx) ((ctx)->ch_layout.nb_channels > 0 ? (ctx)->ch_layout.nb_channels : 2)
+#else
 #define AUDIO_CHANNELS(ctx) ((ctx)->channels)
 #endif
 

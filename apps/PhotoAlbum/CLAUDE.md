@@ -27,29 +27,40 @@ i.MX6ULL 板端 Qt Widgets 触摸相册 + 监控客户端，配套一套**在 Wi
 
 ## 构建
 
+构建系统：**CMake**（`qt/CMakeLists.txt`）。`.pro` 文件保留作参考但不再使用。
+
 ### 主机仿真（x86，快速验证逻辑）
 
 ```sh
-mkdir -p /tmp/photoalbum-host-build && cd /tmp/photoalbum-host-build
-qmake <repo>/apps/PhotoAlbum/qt/photo_album.pro
+mkdir -p /tmp/pa-host && cd /tmp/pa-host
+cmake <repo>/apps/PhotoAlbum/qt -DCMAKE_BUILD_TYPE=Release
 make -j2
 QT_QPA_PLATFORM=offscreen ./photo-album    # 无 GUI 环境的冒烟测试
 ```
 
-主机产物**不能上板**。`main.cpp` 用 `#ifdef __arm__` 区分：板端 `showFullScreen()`，主机 `resize(480,272)`。
+主机产物**不能上板**。`main.cpp` 用 `#ifdef __arm__` 区分：板端 `showFullScreen()`，主机 `resize(...)`。
+
+> 本机 linuxbrew 的 `ld` 会干扰系统 Qt 链接（ICU/pcre2 符号找不到），主机构建需干净 PATH：`export PATH=/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin`。
+
+### 单元测试
+
+```sh
+cd /tmp/pa-host && ./tests/tests      # 或 ctest
+```
+
+测试为纯逻辑（2048/俄罗斯方块，`game2048_logic` / `tetris_logic`），**主机运行，不依赖板卡**。
 
 ### ARM 交叉编译
 
 ```sh
-. /home/cube/WorkSpace/ARM_Linux/sdk/fsl-imx-x11/4.1.15-2.1.0/environment-setup-cortexa7hf-neon-poky-linux-gnueabi
-qmake -v      # 必须显示 Using Qt version 5.12.9
+bash <repo>/apps/PhotoAlbum/qt/build.sh
 ```
 
-推荐直接跑 `qt/build.sh`：source SDK → shadow build → `file` 断言产物含 "ARM"（不满足即失败退出）→ 复制到 `qt/.dist/photo-album` → 打印 md5。
+`build.sh` 用 `cmake/toolchain-arm.cmake` → shadow build → `file` 断言产物含 "ARM" → 复制到 `qt/.dist/photo-album` → 打印 md5。
 
-> `build.sh` 里 `PROJECT_DIR` 和 `SDK_ENV` 都是**硬编码的本机绝对路径**（仓库目录 `/home/cube/WorkSpace/ARM_Linux/...`、SDK 装在 `<repo>/sdk/fsl-imx-x11/4.1.15-2.1.0/`）。换机器/目录需同步改这两个变量。
+> `cmake/toolchain-arm.cmake` 里 `SDK_ROOT` 硬编码本机 SDK 路径（`<repo>/sdk/fsl-imx-x11/4.1.15-2.1.0/`），换机器需改。工具链文件必须提供 `OE_QMAKE_PATH_EXTERNAL_HOST_BINS`（Yocto SDK 的 `Qt5Config.cmake` 靠它定位宿主 moc/uic/rcc）；架构 flag 需同时 `add_compile_options` **和** `add_link_options`，否则产物变软浮点（`ld-linux.so.3` 而非 `ld-linux-armhf.so.3`）。
 
-`qt/photo_album.pro` 关键行：`QT += widgets concurrent network`，`LIBS += -lavformat -lavcodec -lavutil -lswscale -lasound`。**新增 `.cpp/.h` 必须同步更新 SOURCES/HEADERS**。
+**新增 `.cpp/.h` 必须加进 `CMakeLists.txt` 的 `add_executable(photo-album ...)` 列表**（头文件也要列，AUTOMOC 才能扫到 `Q_OBJECT`）。
 
 ### 部署与运行
 
