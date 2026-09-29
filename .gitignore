@@ -70,3 +70,25 @@ apps/Camera/jpeg-10/djpeg
 apps/Camera/jpeg-10/jpegtran
 apps/Camera/jpeg-10/rdjpgcom
 apps/Camera/jpeg-10/wrjpgcom
+
+# ===== 大文件 / 媒体 / 缓存：不入库（2026-09-29 整理）=====
+# 参考资料（正点原子教程 PDF 等）
+*.pdf
+# 图片素材 / 测试图（BMP/PPM 体积大）
+*.bmp
+*.ppm
+# 视频
+*.mp4
+*.avi
+*.mkv
+*.mov
+*.wmv
+# Windows 可执行文件 / 动态库
+*.exe
+*.dll
+# VS Code 智能感知缓存（二进制、频繁变动）
+*.ipch
+.vscode/ipch/
+# Python 字节码缓存
+__pycache__/
+*.pyc
