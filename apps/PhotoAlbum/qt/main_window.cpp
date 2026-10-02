@@ -1815,6 +1815,25 @@ void MainWindow::buildMusicPage(QWidget *page)
     controls->addStretch();
     layout->addLayout(controls);
 
+    // 音量调节
+    QHBoxLayout *volRow = new QHBoxLayout();
+    QLabel *volLabel = new QLabel(tr("音量"), page);
+    volLabel->setObjectName(QStringLiteral("homeInfo"));
+    QSlider *vol = new QSlider(Qt::Horizontal, page);
+    vol->setRange(0, 100);
+    vol->setValue(70);
+    vol->setFixedWidth(160);
+    volRow->addStretch();
+    volRow->addWidget(volLabel);
+    volRow->addSpacing(10);
+    volRow->addWidget(vol);
+    volRow->addStretch();
+    layout->addLayout(volRow);
+    connect(vol, &QSlider::valueChanged, this, [this](int v) {
+        if (musicPlayer)
+            musicPlayer->setVolume(v);
+    });
+
     connect(prev, &QPushButton::clicked, this, [this]() { musicPlayer->prev(); });
     connect(play, &QPushButton::clicked, this, [this]() { musicPlayer->togglePlay(); });
     connect(next, &QPushButton::clicked, this, [this]() { musicPlayer->next(); });

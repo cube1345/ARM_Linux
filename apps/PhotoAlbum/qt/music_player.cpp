@@ -43,14 +43,14 @@ static bool openAlsaOutput(snd_pcm_t **pcm, int rate, int channels)
 }
 
 AudioDecodeThread::AudioDecodeThread(QObject *parent)
-    : QThread(parent), m_running(0), m_paused(0)
+    : QThread(parent), m_running(0), m_paused(0), m_volume(70)
 {
 }
 
 AudioDecodeThread::~AudioDecodeThread()
 {
     stop();
-    wait();
+    wait(800);
 }
 
 void AudioDecodeThread::play(const QString &path)
@@ -67,6 +67,11 @@ void AudioDecodeThread::stop()
 void AudioDecodeThread::setPaused(bool paused)
 {
     m_paused.storeRelease(paused ? 1 : 0);
+}
+
+void AudioDecodeThread::setVolume(int volume)
+{
+    m_volume.storeRelease(qBound(0, volume, 100));
 }
 
 void AudioDecodeThread::run()
@@ -144,7 +149,17 @@ void AudioDecodeThread::run()
                 } else {
                     continue;
                 }
-                snd_pcm_writei(pcm, dst, samples);
+                const qreal gain = m_volume.loadAcquire() / 100.0;
+                if (gain < 0.9995 && gain > 0.0005) {
+                    const int n = samples * ch;
+                    for (int i = 0; i < n; ++i)
+                        dst[i] = static_cast<int16_t>(dst[i] * gain);
+                }
+                const snd_pcm_sframes_t written = snd_pcm_writei(pcm, dst, samples);
+                if (written < 0) {
+                    if (snd_pcm_recover(pcm, written, 0) < 0)
+                        break;              // 下溢无法恢复才退出，避免卡死
+                }
             }
         }
         av_packet_unref(&packet);
@@ -200,9 +215,14 @@ void MusicPlayer::start()
 void MusicPlayer::stopAll()
 {
     m_thread->stop();
-    m_thread->wait();
+    m_thread->wait(600);
     m_playing = false;
     update();
+}
+
+void MusicPlayer::setVolume(int volume)
+{
+    m_thread->setVolume(volume);
 }
 
 void MusicPlayer::playCurrent()
@@ -210,7 +230,7 @@ void MusicPlayer::playCurrent()
     if (m_current < 0 || m_current >= m_songs.size())
         return;
     m_thread->stop();
-    m_thread->wait();
+    m_thread->wait(600);
     m_thread->play(m_songs.at(m_current));
     m_playing = true;
     emit songChanged(QFileInfo(m_songs.at(m_current)).fileName());

@@ -16,6 +16,7 @@ public:
     void play(const QString &path);
     void stop();
     void setPaused(bool paused);
+    void setVolume(int volume);
 
 signals:
     void playbackFinished();
@@ -27,6 +28,7 @@ private:
     QString m_path;
     QAtomicInt m_running;
     QAtomicInt m_paused;
+    QAtomicInt m_volume;
 };
 
 class MusicPlayer : public QWidget
@@ -41,6 +43,7 @@ public:
     void togglePlay();
     void next();
     void prev();
+    void setVolume(int volume);
     bool isPlaying() const { return m_playing; }
 
 signals:
