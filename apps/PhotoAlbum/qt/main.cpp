@@ -67,10 +67,10 @@ protected:
         // cover：等比放大到完全覆盖窗口，超出部分裁切
         const qreal scale = qMax(qreal(width()) / pm.width(),
                                  qreal(height()) / pm.height());
-        const QSize scaled = pm.size() * scale;
-        const QRect target((width() - scaled.width()) / 2,
-                           (height() - scaled.height()) / 2,
-                           scaled.width(), scaled.height());
+        // QSize 的 operator* 只接受 int，qreal 会截断；用 qRound 做整数 cover
+        const int sw = qRound(pm.width() * scale);
+        const int sh = qRound(pm.height() * scale);
+        const QRect target((width() - sw) / 2, (height() - sh) / 2, sw, sh);
         painter.drawPixmap(target, pm);
     }
 private:
