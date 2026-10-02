@@ -225,6 +225,14 @@ void MusicPlayer::setVolume(int volume)
     m_thread->setVolume(volume);
 }
 
+void MusicPlayer::playAt(int index)
+{
+    if (index < 0 || index >= m_songs.size())
+        return;
+    m_current = index;
+    playCurrent();
+}
+
 void MusicPlayer::playCurrent()
 {
     if (m_current < 0 || m_current >= m_songs.size())

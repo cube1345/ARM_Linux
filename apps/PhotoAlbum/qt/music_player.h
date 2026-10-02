@@ -2,6 +2,7 @@
 #define MUSIC_PLAYER_H
 
 #include <QAtomicInt>
+#include <QFileInfo>
 #include <QString>
 #include <QStringList>
 #include <QThread>
@@ -44,6 +45,10 @@ public:
     void next();
     void prev();
     void setVolume(int volume);
+    void playAt(int index);
+    int songCount() const { return m_songs.size(); }
+    QString songFileName(int i) const
+    { return (i >= 0 && i < m_songs.size()) ? QFileInfo(m_songs.at(i)).fileName() : QString(); }
     bool isPlaying() const { return m_playing; }
 
 signals:

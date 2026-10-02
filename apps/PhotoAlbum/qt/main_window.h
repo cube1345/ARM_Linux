@@ -184,6 +184,7 @@ private:
     QWidget *brickPage;
     QWidget *game2048Page;
     QWidget *musicPage;
+    QListWidget *musicList = nullptr;
     QWidget *settingsPage;
     QWidget *debugPage;
     DebugPage *debugWidget;

@@ -1797,43 +1797,79 @@ void MainWindow::buildMusicPage(QWidget *page)
     connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
 
     musicPlayer = new MusicPlayer(page);
-    layout->addWidget(musicPlayer, 1);
 
-    QHBoxLayout *controls = new QHBoxLayout();
-    controls->addStretch();
+    QHBoxLayout *mid = new QHBoxLayout();
+    mid->setSpacing(8);
+    mid->addWidget(musicPlayer, 3);
+
+    // 歌曲列表（右侧，与播放器同行）
+    musicList = new QListWidget(page);
+    musicList->setFrameShape(QFrame::NoFrame);
+    musicList->setStyleSheet(
+        QStringLiteral("QListWidget{background:rgba(255,255,255,0.05);border:0;"
+                       "border-radius:12px;padding:6px;color:#e5e5ea;font-size:15px;}"
+                       "QListWidget::item{padding:8px 10px;border-radius:8px;}"
+                       "QListWidget::item:hover{background:rgba(255,255,255,0.1);}"
+                       "QListWidget::item:selected{background:rgba(10,132,255,0.65);color:#fff;}"));
+    QDir musicDir(Config::kMusicDir);
+    const QStringList filters = QStringList() << QStringLiteral("*.mp3")
+                                              << QStringLiteral("*.wav")
+                                              << QStringLiteral("*.flac")
+                                              << QStringLiteral("*.ogg");
+    const QFileInfoList files = musicDir.entryInfoList(filters, QDir::Files, QDir::Name);
+    for (const QFileInfo &info : files)
+        musicList->addItem(info.fileName());
+    mid->addWidget(musicList, 2);
+    layout->addLayout(mid, 1);
+
+    // 底部一行：控制按钮 + 音量（同一高度）
+    QHBoxLayout *row = new QHBoxLayout();
     QPushButton *prev = new QPushButton(tr("上一首"), page);
     QPushButton *play = new QPushButton(tr("播放/暂停"), page);
     QPushButton *next = new QPushButton(tr("下一首"), page);
-    prev->setMinimumSize(64, 48);
-    play->setMinimumSize(80, 48);
-    next->setMinimumSize(64, 48);
-    controls->addWidget(prev);
-    controls->addSpacing(16);
-    controls->addWidget(play);
-    controls->addSpacing(16);
-    controls->addWidget(next);
-    controls->addStretch();
-    layout->addLayout(controls);
-
-    // 音量调节
-    QHBoxLayout *volRow = new QHBoxLayout();
+    prev->setMinimumSize(64, 44);
+    play->setMinimumSize(84, 44);
+    next->setMinimumSize(64, 44);
+    row->addStretch();
+    row->addWidget(prev);
+    row->addSpacing(12);
+    row->addWidget(play);
+    row->addSpacing(12);
+    row->addWidget(next);
+    row->addSpacing(28);
     QLabel *volLabel = new QLabel(tr("音量"), page);
     volLabel->setObjectName(QStringLiteral("homeInfo"));
     QSlider *vol = new QSlider(Qt::Horizontal, page);
     vol->setRange(0, 100);
     vol->setValue(70);
-    vol->setFixedWidth(160);
-    volRow->addStretch();
-    volRow->addWidget(volLabel);
-    volRow->addSpacing(10);
-    volRow->addWidget(vol);
-    volRow->addStretch();
-    layout->addLayout(volRow);
+    vol->setFixedWidth(150);
+    row->addWidget(volLabel);
+    row->addSpacing(8);
+    row->addWidget(vol);
+    row->addStretch();
+    layout->addLayout(row);
+
+    // 列表点击播放
+    connect(musicList, &QListWidget::currentRowChanged, this, [this](int r) {
+        if (musicPlayer && r >= 0)
+            musicPlayer->playAt(r);
+    });
+    // 播放切换时高亮列表当前歌曲
+    connect(musicPlayer, &MusicPlayer::songChanged, this, [this](const QString &name) {
+        if (!musicList)
+            return;
+        for (int i = 0; i < musicList->count(); ++i) {
+            if (musicList->item(i)->text() == name) {
+                if (musicList->currentRow() != i)
+                    musicList->setCurrentRow(i);
+                break;
+            }
+        }
+    });
     connect(vol, &QSlider::valueChanged, this, [this](int v) {
         if (musicPlayer)
             musicPlayer->setVolume(v);
     });
-
     connect(prev, &QPushButton::clicked, this, [this]() { musicPlayer->prev(); });
     connect(play, &QPushButton::clicked, this, [this]() { musicPlayer->togglePlay(); });
     connect(next, &QPushButton::clicked, this, [this]() { musicPlayer->next(); });
