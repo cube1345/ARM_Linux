@@ -118,3 +118,27 @@ compile_commands.json
 /apps/PhotoAlbum/snap/
 /apps/PhotoAlbum/*.err
 /apps/PhotoAlbum/out.m3u8
+
+# 各应用交叉编译的可执行产物（源码为 *.c/*.cpp，可执行不带后缀，不入库）
+/apps/Browser/image_browser
+/apps/Camera/djpeg
+/apps/Camera/cjpeg
+/apps/Camera/jpegtran
+/apps/Camera/rdjpgcom
+/apps/Camera/wrjpgcom
+/apps/FB/fb_info
+/apps/FB/fb_draw
+/apps/FB/fb_bmp
+/apps/IIC/iic_basic
+/apps/IIC/iic_dump
+/apps/IIC/iic_update_bits
+/apps/input/input_read
+/apps/input/input_keyboard
+/apps/input/dir_scan
+/apps/SPI/spi_info
+/apps/SPI/spi_xfer
+/apps/SPI/spi_wr_rd
+/apps/UART/uart_basic
+/apps/UART/uart_loop
+/apps/UART/uart_select
+/apps/update_agent/update_agent
