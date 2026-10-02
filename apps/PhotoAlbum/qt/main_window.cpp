@@ -952,6 +952,8 @@ QColor desktopTint(const QString &appId)
 // 定位 SVG 图标（程序目录/icons/ 或 demo_media/icons/），找不到返回空
 QString locateSvg(const QString &rel)
 {
+    if (rel.isEmpty())
+        return QString();   // 空 = 无 SVG，走程序绘制兜底；否则目录本身会被误判为存在
     const QDir appDir(QCoreApplication::applicationDirPath());
     for (const QString &cand : {appDir.filePath(rel),
                                 appDir.filePath(QStringLiteral("demo_media/") + rel)}) {
