@@ -398,20 +398,6 @@ void MainWindow::installGlobalGestures()
     // 桌面接受原始触摸：多指可识别（不影响相册 photo_view 自身已内置的双指处理）
     if (homePage)
         homePage->setAttribute(Qt::WA_AcceptTouchEvents);
-
-    // 触摸调试：顶部实时显示触点坐标（观察滑动/识别）
-    if (qEnvironmentVariableIsSet("PHOTO_ALBUM_TOUCH_DEBUG")) {
-        m_touchDebug = new QLabel(this);
-        m_touchDebug->setText(QStringLiteral("触点 --"));
-        m_touchDebug->setAlignment(Qt::AlignCenter);
-        m_touchDebug->setStyleSheet(
-            QStringLiteral("color:#30d158;font-weight:800;font-size:18px;"
-                           "background:rgba(0,0,0,0.55);padding:2px 12px;border-radius:8px;"));
-        m_touchDebug->resize(260, 32);
-        m_touchDebug->move((width() - 260) / 2, 4);
-        m_touchDebug->raise();
-        m_touchDebug->show();
-    }
 }
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
@@ -424,15 +410,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             m_gestureX = me->pos().x();
             m_gestureY = me->pos().y();
             m_gestureTracking = true;
-            showTouchDbg(1, m_gestureX, m_gestureY);
             qInfo() << "[Gx] press" << me->pos().x() << me->pos().y();
-        }
-        break;
-    }
-    case QEvent::MouseMove: {
-        if (m_touchDebug) {
-            const QMouseEvent *me = static_cast<QMouseEvent *>(event);
-            showTouchDbg(1, me->pos().x(), me->pos().y());
         }
         break;
     }
@@ -458,18 +436,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             m_gestureX = int(pts.first().pos().x());
             m_gestureY = int(pts.first().pos().y());
             m_gestureTracking = true;
-            showTouchDbg(pts.count(), m_gestureX, m_gestureY);
             qInfo() << "[Gx] tBegin" << m_gestureX << m_gestureY;
-        }
-        break;
-    }
-    case QEvent::TouchUpdate: {
-        if (m_touchDebug) {
-            const QTouchEvent *te = static_cast<QTouchEvent *>(event);
-            const auto pts = te->touchPoints();
-            if (!pts.isEmpty())
-                showTouchDbg(pts.count(), int(pts.first().pos().x()),
-                             int(pts.first().pos().y()));
         }
         break;
     }
@@ -494,15 +461,6 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
         break;
     }
     return QMainWindow::eventFilter(obj, event);
-}
-
-void MainWindow::showTouchDbg(int n, int x, int y)
-{
-    if (!m_touchDebug)
-        return;
-    m_touchDebug->setText(QStringLiteral("触点%1 %2,%3 Δ%4,%5")
-                              .arg(n).arg(x).arg(y)
-                              .arg(x - m_gestureX).arg(y - m_gestureY));
 }
 
 void MainWindow::handleGameSwipe(int dx, int dy)
