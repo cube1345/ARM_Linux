@@ -4,7 +4,10 @@
 #include <QAtomicInt>
 #include <QElapsedTimer>
 #include <QFileInfo>
+#include <QPair>
 #include <QString>
+#include <QTimer>
+#include <QVector>
 #include <QStringList>
 #include <QThread>
 #include <QWidget>
@@ -65,9 +68,14 @@ private:
     AudioDecodeThread *m_thread;
     QElapsedTimer m_songTimer;   // 当前曲开始计时（检测秒退）
     int m_quickStops = 0;        // 连续秒退计数，防坏曲自动 next 死循环
+    QVector<QPair<QString, qint64>> m_lyrics;   // (歌词行, 时间ms)
+    int m_lrcLine = -1;
+    QTimer *m_lrcTimer;
 
     void loadSongs();
     void playCurrent();
+    void loadLyrics(const QString &songPath);   // 读取同名 .lrc 解析
+    void updateLyricLine();                     // 按播放进度找当前歌词行
 };
 
 #endif

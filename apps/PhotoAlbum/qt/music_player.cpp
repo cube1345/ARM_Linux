@@ -2,8 +2,11 @@
 #include "config.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QPainter>
+#include <QRegularExpression>
+#include <QTextStream>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -185,10 +188,13 @@ MusicPlayer::MusicPlayer(QWidget *parent)
     : QWidget(parent),
       m_current(0),
       m_playing(false),
-      m_thread(new AudioDecodeThread(this))
+      m_thread(new AudioDecodeThread(this)),
+      m_lrcTimer(new QTimer(this))
 {
     setMinimumSize(400, 300);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
+    m_lrcTimer->setInterval(200);
+    connect(m_lrcTimer, &QTimer::timeout, this, [this]() { updateLyricLine(); });
     connect(m_thread, &AudioDecodeThread::playbackFinished, this, [this]() {
         if (!m_playing)
             return;
@@ -270,8 +276,54 @@ void MusicPlayer::playCurrent()
     m_thread->play(m_songs.at(m_current));
     m_playing = true;
     m_songTimer.start();
+    loadLyrics(m_songs.at(m_current));
+    if (m_lrcTimer)
+        m_lrcTimer->start();
     emit songChanged(QFileInfo(m_songs.at(m_current)).fileName());
     update();
+}
+
+void MusicPlayer::loadLyrics(const QString &songPath)
+{
+    m_lyrics.clear();
+    m_lrcLine = -1;
+    const QFileInfo fi(songPath);
+    QFile f(fi.absolutePath() + QLatin1Char('/') + fi.completeBaseName()
+            + QStringLiteral(".lrc"));
+    if (!f.open(QIODevice::ReadOnly | QIODevice::Text))
+        return;
+    QTextStream in(&f);
+    in.setCodec("UTF-8");
+    const QRegularExpression re(QStringLiteral("\\[(\\d+):(\\d+(?:\\.\\d+)?)\\](?:\\s?)(.*)"));
+    QVector<QPair<QString, qint64>> lines;
+    while (!in.atEnd()) {
+        const QString line = in.readLine().trimmed();
+        const QRegularExpressionMatch m = re.match(line);
+        if (m.hasMatch()) {
+            const qint64 ms = m.captured(1).toLongLong() * 60000
+                            + qint64(m.captured(2).toDouble() * 1000.0);
+            lines.append({m.captured(3).trimmed(), ms});
+        }
+    }
+    m_lyrics = lines;
+}
+
+void MusicPlayer::updateLyricLine()
+{
+    if (m_lyrics.isEmpty())
+        return;
+    const qint64 ms = m_songTimer.elapsed();
+    int idx = -1;
+    for (int i = 0; i < m_lyrics.size(); ++i) {
+        if (m_lyrics.at(i).second <= ms)
+            idx = i;
+        else
+            break;
+    }
+    if (idx != m_lrcLine) {
+        m_lrcLine = idx;
+        update();
+    }
 }
 
 void MusicPlayer::togglePlay()
@@ -334,4 +386,17 @@ void MusicPlayer::paintEvent(QPaintEvent *)
     if (m_current < m_songs.size())
         name = QFileInfo(m_songs.at(m_current)).fileName();
     p.drawText(rect().adjusted(0, coverRect.bottom() + 20, 0, 0), Qt::AlignHCenter | Qt::AlignTop, name);
+
+    // 动态歌词：跟着播放进度显示当前行
+    if (m_lrcLine >= 0 && m_lrcLine < m_lyrics.size()) {
+        const QString lrc = m_lyrics.at(m_lrcLine).first;
+        if (!lrc.isEmpty()) {
+            p.setPen(QColor(0xff, 0xff, 0xff));
+            QFont lf = p.font();
+            lf.setPixelSize(18);
+            p.setFont(lf);
+            p.drawText(rect().adjusted(10, coverRect.bottom() + 64, -10, -10),
+                       Qt::AlignHCenter | Qt::AlignTop | Qt::TextWordWrap, lrc);
+        }
+    }
 }
