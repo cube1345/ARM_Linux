@@ -120,6 +120,12 @@ private slots:
     void updateTouchDebug(int contactCount, bool sliding, qreal movement);
 
 private:
+    bool eventFilter(QObject *obj, QEvent *event) override;
+    void installGlobalGestures();             // 给堆叠页递归装过滤器，实现全屏滑动
+    void handleGameSwipe(int dx, int dy);     // 当前页为小游戏时按方向分发
+    int m_gestureX;
+    int m_gestureY;
+    bool m_gestureTracking = false;
     void buildUi();
     void buildThumbnailPage(QWidget *page);
     void buildHomePage(QWidget *page);

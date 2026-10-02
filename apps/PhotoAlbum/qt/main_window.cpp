@@ -10,6 +10,9 @@
 #include <QHBoxLayout>
 #include <QGridLayout>
 #include <QMouseEvent>
+#include <QTouchEvent>
+#include <QTimer>
+#include <functional>
 #include <QPropertyAnimation>
 #include <QScrollArea>
 #include <QScrollBar>
@@ -259,6 +262,7 @@ MainWindow::MainWindow(const QString &photoDirectory, QWidget *parent)
       currentIndex(0)
 {
     buildUi();
+    installGlobalGestures();
     loadPhotos(photoDirectory);
 
     m_imuTimer = new QTimer(this);
@@ -372,6 +376,112 @@ void MainWindow::applyOrientation(int orient)
 /**
  * @brief 创建缩略图页、详情页和固定底部操作栏。
  */
+// ---- 全局单指滑动手势：任意位置滑动即可驱动当前小游戏的方向 ----
+void MainWindow::installGlobalGestures()
+{
+    QWidget *root = static_cast<QStackedWidget *>(stackedWidget);
+    std::function<void(QWidget *)> rec = [this, &rec](QWidget *w) {
+        w->installEventFilter(this);
+        const auto kids = w->children();
+        for (QObject *c : kids)
+            if (QWidget *cw = qobject_cast<QWidget *>(c))
+                rec(cw);
+    };
+    rec(root);
+}
+
+bool MainWindow::eventFilter(QObject *obj, QEvent *event)
+{
+    (void)obj;
+    switch (event->type()) {
+    case QEvent::MouseButtonPress: {
+        const QMouseEvent *me = static_cast<QMouseEvent *>(event);
+        if (me->button() == Qt::LeftButton) {
+            m_gestureX = me->pos().x();
+            m_gestureY = me->pos().y();
+            m_gestureTracking = true;
+        }
+        break;
+    }
+    case QEvent::MouseButtonRelease: {
+        if (m_gestureTracking) {
+            m_gestureTracking = false;
+            const QMouseEvent *me = static_cast<QMouseEvent *>(event);
+            const int dx = me->pos().x() - m_gestureX;
+            const int dy = me->pos().y() - m_gestureY;
+            if (qMax(qAbs(dx), qAbs(dy)) >= 42) {
+                handleGameSwipe(dx, dy);
+                return true;             // 吞掉滑动，避免误触方向按钮
+            }
+        }
+        break;
+    }
+    case QEvent::TouchBegin: {
+        const QTouchEvent *te = static_cast<QTouchEvent *>(event);
+        const auto pts = te->touchPoints();
+        if (!pts.isEmpty()) {
+            m_gestureX = int(pts.first().pos().x());
+            m_gestureY = int(pts.first().pos().y());
+            m_gestureTracking = true;
+        }
+        break;
+    }
+    case QEvent::TouchEnd: {
+        if (m_gestureTracking) {
+            m_gestureTracking = false;
+            const QTouchEvent *te = static_cast<QTouchEvent *>(event);
+            const auto pts = te->touchPoints();
+            if (!pts.isEmpty()) {
+                const int dx = int(pts.last().pos().x()) - m_gestureX;
+                const int dy = int(pts.last().pos().y()) - m_gestureY;
+                if (qMax(qAbs(dx), qAbs(dy)) >= 42) {
+                    handleGameSwipe(dx, dy);
+                    return true;
+                }
+            }
+        }
+        break;
+    }
+    default:
+        break;
+    }
+    return QMainWindow::eventFilter(obj, event);
+}
+
+void MainWindow::handleGameSwipe(int dx, int dy)
+{
+    QWidget *cur = static_cast<QStackedWidget *>(stackedWidget)->currentWidget();
+    if (cur == game2048Page) {
+        if (qAbs(dx) > qAbs(dy))
+            game2048->move(dx > 0 ? Game2048::DirRight : Game2048::DirLeft);
+        else
+            game2048->move(dy > 0 ? Game2048::DirDown : Game2048::DirUp);
+    } else if (cur == snakePage) {
+        if (qAbs(dx) > qAbs(dy))
+            snakeGame->setDirection(dx > 0 ? SnakeGame::DirRight : SnakeGame::DirLeft);
+        else
+            snakeGame->setDirection(dy > 0 ? SnakeGame::DirDown : SnakeGame::DirUp);
+    } else if (cur == tetrisPage) {
+        if (qAbs(dx) > qAbs(dy)) {
+            if (dx > 0)
+                tetrisGame->moveRight();
+            else
+                tetrisGame->moveLeft();
+        } else {
+            if (dy < 0)
+                tetrisGame->rotate();
+            else
+                tetrisGame->softDrop();
+        }
+    } else if (cur == brickPage) {
+        if (qAbs(dx) > qAbs(dy)) {
+            brickGame->setPaddleDir(dx > 0 ? 1 : -1);
+            QTimer::singleShot(320, this, [this]() { brickGame->setPaddleDir(0); });
+        }
+    }
+    // 桌面/相册/监控/视频等页面各有自己的手势，此处不吞
+}
+
 void MainWindow::buildUi()
 {
     setWindowTitle(tr("Photo Album"));
