@@ -531,7 +531,7 @@ void MainWindow::buildUi()
         "QWidget{background:#0b0b0f;} QLabel{background:transparent;color:#f5f5f7;}"
         "QLabel#title{font-size:18px;font-weight:700;} QLabel#status,QLabel#videoTime{color:#a1a1aa;}"
         "QLabel#homeTime{font-size:52px;font-weight:200;color:#ffffff;margin-top:14px;}"
-        "QLabel#appName{font-size:14px;font-weight:600;color:#ffffff;}"
+        "QLabel#appName{font-size:15px;font-weight:700;color:#ffffff;}"
         "QLabel#homeInfo{font-size:18px;font-weight:600;color:#ffffff;}"
         "QPushButton#appIcon{background:transparent;border:0;border-radius:20px;}"
         "QLabel#touchCount,QLabel#touchSlide{color:#30d158;font-weight:700;}"
@@ -775,17 +775,27 @@ void MainWindow::openMonitorChannel(int index)
 
 void MainWindow::buildHomePage(QWidget *page)
 {
+    // 背景：cover 等比放大填满 + 居中裁切，避免拉伸变形
     QLabel *bg = new QLabel(page);
     QPixmap wp(Config::kWallpaper);
+    const QSize screenSize(1024, 600);
     if (!wp.isNull()) {
-        bg->setPixmap(wp);
-        bg->setScaledContents(true);
+        const qreal scale = qMax(qreal(screenSize.width()) / wp.width(),
+                                 qreal(screenSize.height()) / wp.height());
+        QPixmap cover = wp.scaled(qRound(wp.width() * scale), qRound(wp.height() * scale),
+                                  Qt::KeepAspectRatio, Qt::SmoothTransformation);
+        cover = cover.copy((cover.width() - screenSize.width()) / 2,
+                           (cover.height() - screenSize.height()) / 2,
+                           screenSize.width(), screenSize.height());
+        bg->setPixmap(cover);
+        bg->setScaledContents(false);
     }
-    bg->setGeometry(0, 0, 1024, 600);
+    bg->setGeometry(0, 0, screenSize.width(), screenSize.height());
+    bg->setAttribute(Qt::WA_TransparentForMouseEvents);
     bg->lower();
 
     QVBoxLayout *layout = new QVBoxLayout(page);
-    layout->setContentsMargins(16, 12, 16, 16);
+    layout->setContentsMargins(16, 8, 16, 16);
 
     QLabel *timeLabel = new QLabel(page);
     timeLabel->setObjectName(QStringLiteral("homeTime"));
@@ -814,7 +824,8 @@ void MainWindow::buildHomePage(QWidget *page)
     layout->addLayout(infoRow);
 
     QGridLayout *grid = new QGridLayout();
-    grid->setSpacing(24);
+    grid->setSpacing(32);
+    grid->setVerticalSpacing(20);
     grid->addWidget(makeAppCell(tr("相册"), QStringLiteral("album"), IconFactory::album(), SLOT(showThumbnailPage())), 0, 0);
     grid->addWidget(makeAppCell(tr("监控"), QStringLiteral("monitor"), IconFactory::monitor(), SLOT(showMonitorPage())), 0, 1);
     grid->addWidget(makeAppCell(tr("视频"), QStringLiteral("video"), IconFactory::video(), SLOT(showVideoListPage())), 0, 2);
@@ -828,8 +839,9 @@ void MainWindow::buildHomePage(QWidget *page)
     grid->addWidget(makeAppCell(tr("画板"), QStringLiteral("draw"), IconFactory::draw(), SLOT(showDrawPage())), 2, 2);
     grid->addWidget(makeAppCell(tr("设置"), QStringLiteral("settings"), IconFactory::settings(), SLOT(showSettingsPage())), 2, 3);
     grid->addWidget(makeAppCell(tr("调试"), QStringLiteral("debug"), IconFactory::debug(), SLOT(showDebugPage())), 3, 0);
+    layout->addStretch(1);
     layout->addLayout(grid);
-    layout->addStretch();
+    layout->addStretch(1);
 }
 
 QWidget *MainWindow::makeAppCell(const QString &name, const QString &appId,
@@ -839,10 +851,10 @@ QWidget *MainWindow::makeAppCell(const QString &name, const QString &appId,
     cell->setStyleSheet(QStringLiteral("background:transparent;"));
     QVBoxLayout *v = new QVBoxLayout(cell);
     v->setContentsMargins(0, 0, 0, 0);
-    v->setSpacing(4);
+    v->setSpacing(6);
     QPushButton *button = new QPushButton(cell);
     button->setProperty("app", appId);
-    const QSize iconSize(76, 76);
+    const QSize iconSize(92, 92);
     button->setIcon(QIcon(icon));
     button->setIconSize(iconSize);
     button->setFixedSize(iconSize);
