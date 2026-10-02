@@ -66,7 +66,7 @@ bash <repo>/apps/PhotoAlbum/qt/build.sh
 
 ```sh
 scp qt/.dist/photo-album qt/qt_env.sh root@<板卡IP>:/home/root/
-scp <图片> root@<板卡IP>:/root/photos/
+scp <图片> root@<板卡IP>:/home/root/photos/
 ```
 
 板端：
@@ -74,7 +74,7 @@ scp <图片> root@<板卡IP>:/root/photos/
 ```sh
 cd /home/root && chmod +x photo-album qt_env.sh
 . ./qt_env.sh
-./photo-album /root/photos
+./photo-album /home/root/photos
 ```
 
 **LinuxFB 没有窗口合成器**：`psplash` / `systemui` 等任何在写 `/dev/fb0` 的进程会和本程序互相覆盖画面并同时抢触摸。启动前必须查杀：

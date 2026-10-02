@@ -382,6 +382,9 @@ void MainWindow::installGlobalGestures()
     // 关键：鼠标/触摸事件的第一站在 QGraphicsView::viewport，
     // 之前在页面子树递归过滤时，move 事件被 QGraphicsScene 拦截丢失
     // （press 到了、move 不到 → 计算不出滑动距离）。改在 viewport 层统一捕获。
+    // 接受原始触摸：多指（>1）不再被 linuxfb 合成成单点鼠标事件
+    m_view->viewport()->setAttribute(Qt::WA_AcceptTouchEvents);
+
     m_view->viewport()->installEventFilter(this);
     m_view->installEventFilter(this);
 

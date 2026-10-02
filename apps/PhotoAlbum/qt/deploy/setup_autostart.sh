@@ -17,7 +17,7 @@ done
 dd if=/dev/zero of=/dev/fb0 bs=4096 count=300 2>/dev/null
 cd /home/root
 . ./qt_env.sh >/dev/null 2>&1
-./photo-album /root/photos >/home/root/run.log 2>&1 &
+./photo-album /home/root/photos >/home/root/run.log 2>&1 &
 exit 0
 SCRIPT
 chmod +x /etc/rcS.d/S20photoalbum.sh
