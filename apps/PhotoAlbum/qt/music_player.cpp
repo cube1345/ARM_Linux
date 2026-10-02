@@ -113,6 +113,8 @@ void AudioDecodeThread::run()
     av_init_packet(&packet);
     AVFrame *frame = av_frame_alloc();
     QByteArray audioBuf;
+    // 实际增益：跨帧平滑渐变，避免音量突变爆音
+    qreal gain = m_volume.loadAcquire() / 100.0;
 
     while (m_running.loadAcquire()) {
         if (m_paused.loadAcquire()) {
@@ -149,9 +151,15 @@ void AudioDecodeThread::run()
                 } else {
                     continue;
                 }
-                const qreal gain = m_volume.loadAcquire() / 100.0;
-                if (gain < 0.9995 && gain > 0.0005) {
-                    const int n = samples * ch;
+                const qreal targetGain = m_volume.loadAcquire() / 100.0;
+                if (gain < targetGain)
+                    gain = qMin(gain + 0.02, targetGain);
+                else if (gain > targetGain)
+                    gain = qMax(gain - 0.02, targetGain);
+                const int n = samples * ch;
+                if (gain < 0.0005) {
+                    memset(dst, 0, size_t(n) * 2);   // 音量 0 → 静音
+                } else if (qAbs(gain - 1.0) > 0.02) {
                     for (int i = 0; i < n; ++i)
                         dst[i] = static_cast<int16_t>(dst[i] * gain);
                 }

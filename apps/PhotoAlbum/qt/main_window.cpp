@@ -1839,6 +1839,8 @@ void MainWindow::buildMusicPage(QWidget *page)
     row->addSpacing(28);
     QLabel *volLabel = new QLabel(tr("音量"), page);
     volLabel->setObjectName(QStringLiteral("homeInfo"));
+    QLabel *volVal = new QLabel(tr("70%"), page);
+    volVal->setObjectName(QStringLiteral("homeInfo"));
     QSlider *vol = new QSlider(Qt::Horizontal, page);
     vol->setRange(0, 100);
     vol->setValue(70);
@@ -1846,6 +1848,8 @@ void MainWindow::buildMusicPage(QWidget *page)
     row->addWidget(volLabel);
     row->addSpacing(8);
     row->addWidget(vol);
+    row->addSpacing(8);
+    row->addWidget(volVal);
     row->addStretch();
     layout->addLayout(row);
 
@@ -1866,7 +1870,8 @@ void MainWindow::buildMusicPage(QWidget *page)
             }
         }
     });
-    connect(vol, &QSlider::valueChanged, this, [this](int v) {
+    connect(vol, &QSlider::valueChanged, this, [this, volVal](int v) {
+        volVal->setText(QStringLiteral("%1%").arg(v));
         if (musicPlayer)
             musicPlayer->setVolume(v);
     });
