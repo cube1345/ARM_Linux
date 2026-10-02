@@ -15,6 +15,7 @@ public:
 
     void addPage(QWidget *page);              // 追加一页到末尾
     int pageCount() const { return m_pages->count(); }
+    int currentIndex() const { return m_current; }
     void setPage(int index);                  // 直接切到指定页（不带动画）
 
 protected:

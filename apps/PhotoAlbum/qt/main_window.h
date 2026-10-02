@@ -11,6 +11,7 @@
 #include "ap3216c.h"
 
 class QColor;
+class HomePageView;
 class QGraphicsProxyWidget;
 class QGraphicsScene;
 class QGraphicsView;
@@ -168,6 +169,7 @@ private:
 
     QWidget *stackedWidget;
     QWidget *homePage;
+    HomePageView *homeView = nullptr;
     QWidget *monitorPage;
     QWidget *thumbnailPage;
     QWidget *detailPage;

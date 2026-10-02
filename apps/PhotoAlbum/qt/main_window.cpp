@@ -451,6 +451,16 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 void MainWindow::handleGameSwipe(int dx, int dy)
 {
     QWidget *cur = static_cast<QStackedWidget *>(stackedWidget)->currentWidget();
+    // 桌面：整屏任意位置左右滑动都切页（HomePageView 内部已自处理，此处覆盖外围空白）
+    if (cur == homePage) {
+        if (qAbs(dx) > qAbs(dy) && homeView) {
+            const int delta = dx > 0 ? -1 : 1;
+            const int target = homeView->currentIndex() + delta;
+            if (target >= 0 && target < homeView->pageCount())
+                homeView->setPage(target);
+        }
+        return;
+    }
     if (cur == game2048Page) {
         if (qAbs(dx) > qAbs(dy))
             game2048->move(dx > 0 ? Game2048::DirRight : Game2048::DirLeft);
@@ -1009,7 +1019,7 @@ void MainWindow::buildHomePage(QWidget *page)
     infoRow->addStretch();
     layout->addLayout(infoRow);
 
-    HomePageView *view = new HomePageView(page);
+    homeView = new HomePageView(page);
 
     // 页1：相册/监控/视频 · 坦克大战/贪吃蛇/俄罗斯方块
     QWidget *page1 = new QWidget;
@@ -1024,7 +1034,7 @@ void MainWindow::buildHomePage(QWidget *page)
         g->addWidget(makeAppCell(tr("坦克大战"), QStringLiteral("game"), desktopTint("game"), desktopSvgName("game"), IconFactory::game(), SLOT(showLevelSelectPage())), 1, 0);
         g->addWidget(makeAppCell(tr("贪吃蛇"), QStringLiteral("snake"), desktopTint("snake"), desktopSvgName("snake"), IconFactory::snake(), SLOT(showSnakePage())), 1, 1);
         g->addWidget(makeAppCell(tr("俄罗斯方块"), QStringLiteral("tetris"), desktopTint("tetris"), desktopSvgName("tetris"), IconFactory::tetris(), SLOT(showTetrisPage())), 1, 2);
-        view->addPage(page1);
+        homeView->addPage(page1);
     }
 
     // 页2：打砖块/2048/音乐 · 计算器/画板/设置
@@ -1040,7 +1050,7 @@ void MainWindow::buildHomePage(QWidget *page)
         g->addWidget(makeAppCell(tr("计算器"), QStringLiteral("calc"), desktopTint("calc"), desktopSvgName("calc"), IconFactory::calculator(), SLOT(showCalculatorPage())), 1, 0);
         g->addWidget(makeAppCell(tr("画板"), QStringLiteral("draw"), desktopTint("draw"), desktopSvgName("draw"), IconFactory::draw(), SLOT(showDrawPage())), 1, 1);
         g->addWidget(makeAppCell(tr("设置"), QStringLiteral("settings"), desktopTint("settings"), desktopSvgName("settings"), IconFactory::settings(), SLOT(showSettingsPage())), 1, 2);
-        view->addPage(page2);
+        homeView->addPage(page2);
     }
 
     // 页3：调试（单格居中）
@@ -1049,11 +1059,11 @@ void MainWindow::buildHomePage(QWidget *page)
         QGridLayout *g = new QGridLayout(page3);
         g->setContentsMargins(0, 0, 0, 0);
         g->addWidget(makeAppCell(tr("调试"), QStringLiteral("debug"), desktopTint("debug"), desktopSvgName("debug"), IconFactory::debug(), SLOT(showDebugPage())), 0, 1);
-        view->addPage(page3);
+        homeView->addPage(page3);
     }
 
     layout->addStretch(1);
-    layout->addWidget(view, 1);
+    layout->addWidget(homeView, 1);
     layout->addStretch(1);
 }
 
