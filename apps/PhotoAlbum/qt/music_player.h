@@ -2,6 +2,7 @@
 #define MUSIC_PLAYER_H
 
 #include <QAtomicInt>
+#include <QElapsedTimer>
 #include <QFileInfo>
 #include <QString>
 #include <QStringList>
@@ -62,6 +63,8 @@ private:
     int m_current;
     bool m_playing;
     AudioDecodeThread *m_thread;
+    QElapsedTimer m_songTimer;   // 当前曲开始计时（检测秒退）
+    int m_quickStops = 0;        // 连续秒退计数，防坏曲自动 next 死循环
 
     void loadSongs();
     void playCurrent();

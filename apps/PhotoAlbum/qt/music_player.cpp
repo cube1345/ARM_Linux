@@ -182,8 +182,19 @@ MusicPlayer::MusicPlayer(QWidget *parent)
     setMinimumSize(400, 300);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     connect(m_thread, &AudioDecodeThread::playbackFinished, this, [this]() {
-        if (m_playing)
-            next();
+        if (!m_playing)
+            return;
+        // 连续 3 首秒退（<2s）视为坏曲/解码异常，停止自动轮播防死循环跳歌
+        if (m_songTimer.isValid() && m_songTimer.elapsed() < 2000) {
+            if (++m_quickStops >= 3) {
+                m_quickStops = 0;
+                stopAll();
+                return;
+            }
+        } else {
+            m_quickStops = 0;
+        }
+        next();
     });
     loadSongs();
 }
@@ -208,6 +219,9 @@ void MusicPlayer::loadSongs()
 void MusicPlayer::start()
 {
     if (m_songs.isEmpty())
+        return;
+    // 已在播放中则不再重复切歌（避免对运行中线程重复 start 造成错乱/卡死）
+    if (m_playing && m_thread->isRunning())
         return;
     playCurrent();
 }
@@ -238,9 +252,16 @@ void MusicPlayer::playCurrent()
     if (m_current < 0 || m_current >= m_songs.size())
         return;
     m_thread->stop();
-    m_thread->wait(600);
+    m_thread->wait(400);
+    if (m_thread->isRunning()) {
+        // 旧曲未能在 400ms 内停止：本次切歌忽略，避免对运行中线程强行 start 造成错乱
+        m_playing = true;
+        update();
+        return;
+    }
     m_thread->play(m_songs.at(m_current));
     m_playing = true;
+    m_songTimer.start();
     emit songChanged(QFileInfo(m_songs.at(m_current)).fileName());
     update();
 }
