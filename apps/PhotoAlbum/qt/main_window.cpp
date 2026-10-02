@@ -967,25 +967,44 @@ QString locateSvg(const QString &rel)
     return QString();
 }
 
-// iOS 风格应用图标：彩色渐变圆角底 + 白色线条 SVG
+// iOS 风格应用图标：拟物质感（阴影/高光/反射）+ 白色线条 SVG
 QPixmap makeDesktopIcon(const QString &svgAbs, const QColor &tint)
 {
     QPixmap pm(132, 132);
     pm.fill(Qt::transparent);
     QPainter p(&pm);
     p.setRenderHint(QPainter::Antialiasing);
-    QLinearGradient grad(0, 0, 0, 132);
-    grad.setColorAt(0, tint.lighter(165));
-    grad.setColorAt(0.55, tint.lighter(120));
-    grad.setColorAt(1, tint.darker(135));
+
+    // 底部投影
     p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0, 0, 0, 56));
+    p.drawRoundedRect(QRectF(4, 8, 124, 124), 30, 30);
+
+    // 彩色渐变底（三段明暗，更柔滑）
+    QLinearGradient grad(0, 0, 0, 132);
+    grad.setColorAt(0.0, tint.lighter(178));
+    grad.setColorAt(0.45, tint.lighter(126));
+    grad.setColorAt(1.0, tint.darker(150));
     p.setBrush(grad);
     p.drawRoundedRect(QRectF(2, 2, 128, 128), 30, 30);
-    p.setBrush(QColor(255, 255, 255, 42));   // 顶缘高光
-    p.drawRoundedRect(QRectF(6, 4, 120, 52), 24, 24);
+
+    // 顶缘弧形高光（模拟玻璃反光）
+    p.setBrush(QColor(255, 255, 255, 70));
+    p.drawRoundedRect(QRectF(8, 5, 112, 52), 22, 22);
+
+    // 底部弧面反光（浅色镜面）
+    p.setBrush(QColor(255, 255, 255, 24));
+    p.drawRoundedRect(QRectF(12, 96, 108, 26), 13, 13);
+
+    // 边缘高光细描边
+    p.setBrush(Qt::NoBrush);
+    p.setPen(QPen(QColor(255, 255, 255, 64), 1.4));
+    p.drawRoundedRect(QRectF(2.7, 2.7, 124.6, 124.6), 28.5, 28.5);
+
+    // 白色线条图标（居中稍大）
     const QIcon ico(svgAbs);
     if (!ico.isNull())
-        p.drawPixmap((132 - 92) / 2, (132 - 92) / 2, ico.pixmap(92, 92));
+        p.drawPixmap((132 - 94) / 2, (132 - 94) / 2, ico.pixmap(94, 94));
     p.end();
     return pm;
 }
