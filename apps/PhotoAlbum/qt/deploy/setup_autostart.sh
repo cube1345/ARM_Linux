@@ -6,12 +6,13 @@ set -u
 # 1. S99 自启脚本（rcS 遍历 /etc/rcS.d；本系统不调用 /etc/rc.local）
 cat > /etc/rcS.d/S99photoalbum.sh <<'SCRIPT'
 #!/bin/sh
+pkill -9 psplash 2>/dev/null
 sleep 2
 for p in /proc/[0-9]*; do
   [ "$p" = "/proc/$$" ] && continue
   ls $p/fd 2>/dev/null | grep -q /dev/fb0 && kill -9 ${p##*/} 2>/dev/null
 done
-# 清屏，抹掉 psplash 残留 logo / 进度条
+# 清屏，抹掉残留 logo / 进度条
 dd if=/dev/zero of=/dev/fb0 bs=4096 count=300 2>/dev/null
 cd /home/root
 . ./qt_env.sh >/dev/null 2>&1
@@ -21,10 +22,10 @@ SCRIPT
 chmod +x /etc/rcS.d/S99photoalbum.sh
 
 # 2. 禁用 psplash（reset 后不显示正点原子 logo，直接进原神开屏）
-if [ -e /etc/rcS.d/S00psplash.sh ]; then
-  mv /etc/rcS.d/S00psplash.sh /etc/rcS.d/S00psplash.sh.bak 2>/dev/null
-  echo "psplash 已禁用（备份为 S00psplash.sh.bak）"
-fi
+#    注意：rc 脚本用 for i in /etc/rcS.d/S* 遍历 —— mv 成 .bak 仍会被执行！
+#    必须删除软链 / 或改成不以 S 开头的名字
+rm -f /etc/rcS.d/S00psplash.sh /etc/rcS.d/S00psplash.sh.bak 2>/dev/null
+[ -e /etc/init.d/psplash.sh ] && echo "psplash 已禁用（init.d/psplash.sh 本体保留，可 ln 恢复）"
 
 echo "开机自启已配置：photo-album（含 cover 开屏动画）+ psplash 禁用"
 echo "注意：部署文件须在 /home/root（photo-album/qt_env.sh/opening.gif）"
