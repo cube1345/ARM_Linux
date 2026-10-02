@@ -23,11 +23,8 @@ SCRIPT
 chmod +x /etc/rcS.d/S20photoalbum.sh
 rm -f /etc/rcS.d/S99photoalbum.sh 2>/dev/null
 
-# 2. 禁用 psplash（reset 后不显示正点原子 logo，直接进原神开屏）
-#    注意：rc 脚本用 for i in /etc/rcS.d/S* 遍历 —— mv 成 .bak 仍会被执行！
-#    必须删除软链 / 或改成不以 S 开头的名字
-rm -f /etc/rcS.d/S00psplash.sh /etc/rcS.d/S00psplash.sh.bak 2>/dev/null
-[ -e /etc/init.d/psplash.sh ] && echo "psplash 已禁用（init.d/psplash.sh 本体保留，可 ln 恢复）"
+# 2. 保留系统 psplash（正点原子 logo + 进度条正常显示），不侵入 boot
+echo "psplash 保留：boot 照常显示正点原子 logo（S00psplash.sh）"
 
 echo "开机自启已配置：photo-album（含 cover 开屏动画）+ psplash 禁用"
 echo "注意：部署文件须在 /home/root（photo-album/qt_env.sh/opening.gif）"
