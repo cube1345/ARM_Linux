@@ -2,7 +2,7 @@
 set -Ee
 set -o pipefail
 
-PROJECT_DIR="/home/cube/WorkSpace/ARM_Linux/apps/PhotoAlbum/qt"
+PROJECT_DIR="/home/cube/WorkSpace/Linux/ARM_Linux_WS/apps/PhotoAlbum/qt"
 TOOLCHAIN="${PROJECT_DIR}/cmake/toolchain-arm.cmake"
 BUILD_DIR="/tmp/photoalbum-arm-build"
 OUTPUT_FILE="${BUILD_DIR}/photo-album"

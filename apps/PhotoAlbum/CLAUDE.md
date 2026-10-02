@@ -65,14 +65,14 @@ bash <repo>/apps/PhotoAlbum/qt/build.sh
 ### 部署与运行
 
 ```sh
-scp qt/.dist/photo-album qt/qt_env.sh root@<板卡IP>:/root/
+scp qt/.dist/photo-album qt/qt_env.sh root@<板卡IP>:/home/root/
 scp <图片> root@<板卡IP>:/root/photos/
 ```
 
 板端：
 
 ```sh
-cd /root && chmod +x photo-album qt_env.sh
+cd /home/root && chmod +x photo-album qt_env.sh
 . ./qt_env.sh
 ./photo-album /root/photos
 ```

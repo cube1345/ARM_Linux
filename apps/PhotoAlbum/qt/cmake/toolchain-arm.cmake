@@ -4,7 +4,7 @@
 set(CMAKE_SYSTEM_NAME Linux)
 set(CMAKE_SYSTEM_PROCESSOR arm)
 
-set(SDK_ROOT "/home/cube/WorkSpace/ARM_Linux/sdk/fsl-imx-x11/4.1.15-2.1.0")
+set(SDK_ROOT "/home/cube/WorkSpace/Linux/ARM_Linux_WS/sdk/fsl-imx-x11/4.1.15-2.1.0")
 set(TARGET_SYSROOT "${SDK_ROOT}/sysroots/cortexa7hf-neon-poky-linux-gnueabi")
 set(TOOLCHAIN_BIN "${SDK_ROOT}/sysroots/x86_64-pokysdk-linux/usr/bin/arm-poky-linux-gnueabi")
 

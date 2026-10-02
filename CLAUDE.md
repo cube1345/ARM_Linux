@@ -46,5 +46,5 @@ make -C apps/<name>
 - 以太网直连，IP 通常 `10.42.0.91`（NetworkManager 共享分配，扫 `10.42.0.0/24` 确定）；`root` 无密码。
 - ssh/scp 必须带兼容参数（板端 dropbear 只提供 ssh-rsa）：
   `-o HostKeyAlgorithms=+ssh-rsa -o PubkeyAcceptedAlgorithms=+ssh-rsa`
-- 部署：`scp apps/PhotoAlbum/qt/.dist/photo-album apps/PhotoAlbum/qt/qt_env.sh root@<ip>:/root/`，板端 `. ./qt_env.sh && ./photo-album /root/photos`。
+- 部署：`scp apps/PhotoAlbum/qt/.dist/photo-album apps/PhotoAlbum/qt/qt_env.sh root@<ip>:/home/root/`，板端 `cd /home/root && . ./qt_env.sh && ./photo-album /root/photos`。
 - 启动前必须杀 psplash 等占用 `/dev/fb0` 的进程（linuxfb 无合成器，会抢画面/触摸）。
