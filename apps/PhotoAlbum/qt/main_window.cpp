@@ -1360,13 +1360,19 @@ void MainWindow::buildGamePage(QWidget *page)
     QProgressBar *healthBar = new QProgressBar(page);
     healthBar->setRange(0, 100);
     healthBar->setValue(100);
-    healthBar->setFixedSize(130, 16);
+    healthBar->setFixedSize(160, 18);
     healthBar->setTextVisible(false);
+    healthBar->setStyleSheet(
+        QStringLiteral("QProgressBar{background:rgba(0,0,0,0.35);border-radius:9px;}"
+                       "QProgressBar::chunk{background:#ff453a;border-radius:9px;}"));
     QProgressBar *manaBar = new QProgressBar(page);
     manaBar->setRange(0, 100);
     manaBar->setValue(100);
-    manaBar->setFixedSize(130, 16);
+    manaBar->setFixedSize(160, 18);
     manaBar->setTextVisible(false);
+    manaBar->setStyleSheet(
+        QStringLiteral("QProgressBar{background:rgba(0,0,0,0.35);border-radius:9px;}"
+                       "QProgressBar::chunk{background:#0a84ff;border-radius:9px;}"));
     QVBoxLayout *topLeft = new QVBoxLayout();
     topLeft->setSpacing(3);
     topLeft->addWidget(healthBar);
@@ -1382,8 +1388,14 @@ void MainWindow::buildGamePage(QWidget *page)
     QPushButton *right = new QPushButton(tr("右"), page);
     QList<QPushButton *> dpadBtns;
     dpadBtns << up << down << left << right;
-    foreach (QPushButton *b, dpadBtns)
-        b->setFixedSize(64, 48);
+    foreach (QPushButton *b, dpadBtns) {
+        b->setFixedSize(56, 56);
+        b->setStyleSheet(
+            QStringLiteral("QPushButton{background:rgba(255,255,255,0.14);"
+                           "border-radius:28px;border:1px solid rgba(255,255,255,0.28);"
+                           "font-size:19px;font-weight:700;}"
+                           "QPushButton:pressed{background:rgba(255,255,255,0.34);}"));
+    }
     dpad->addWidget(up, 0, 1);
     dpad->addWidget(left, 1, 0);
     dpad->addWidget(right, 1, 2);
@@ -1400,8 +1412,20 @@ void MainWindow::buildGamePage(QWidget *page)
     skill2->setObjectName(QStringLiteral("primaryButton"));
     QList<QPushButton *> actBtns;
     actBtns << fire << skill1 << skill2;
-    foreach (QPushButton *b, actBtns)
-        b->setFixedSize(64, 48);
+    fire->setFixedSize(78, 78);
+    fire->setStyleSheet(
+        QStringLiteral("QPushButton{background:#ff453a;border-radius:39px;font-size:22px;"
+                       "font-weight:800;color:#fff;border:none;}"
+                       "QPushButton:pressed{background:#ff6961;}"));
+    foreach (QPushButton *b, actBtns) {
+        if (b == fire)
+            continue;
+        b->setFixedSize(60, 60);
+        b->setStyleSheet(
+            QStringLiteral("QPushButton{background:#0a84ff;border-radius:30px;font-size:17px;"
+                           "font-weight:700;color:#fff;border:none;}"
+                           "QPushButton:pressed{background:#2f9bff;}"));
+    }
     QVBoxLayout *bottomRight = new QVBoxLayout();
     bottomRight->setSpacing(6);
     bottomRight->addStretch();
