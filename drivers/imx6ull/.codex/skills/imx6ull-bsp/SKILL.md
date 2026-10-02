@@ -1,6 +1,6 @@
 ---
 name: imx6ull-bsp
-description: Use this skill whenever work targets the i.MX6ULL Linux BSP in ARM_Linux/IMX6ll, including cross-compilation, kernel or module builds, Device Tree/DTB selection, rootfs installation, USB/SD/NAND/eMMC deployment, board bring-up, or diagnosing version and toolchain mismatches. Treat the repository-specific facts below as the source of truth and verify the live board before changing them.
+description: Use this skill whenever work targets the i.MX6ULL Linux BSP in drivers/imx6ull, including cross-compilation, kernel or module builds, Device Tree/DTB selection, rootfs installation, USB/SD/NAND/eMMC deployment, board bring-up, or diagnosing version and toolchain mismatches. Treat the repository-specific facts below as the source of truth and verify the live board before changing them.
 compatibility: Bash, GNU Make, Linux 4.1.15 source tree, ARMv7-A cross toolchain, and a serial console or USB transport for board verification.
 ---
 
@@ -14,7 +14,7 @@ Use this as the shared foundation for the application and driver skills. The two
 - Kernel line: 4.1.15; the repository's `linux/build.sh` expects the NXP/ALIENTEK Yocto SDK at `/opt/fsl-imx-x11/4.1.15-2.1.0/` and its `environment-setup-cortexa7hf-neon-poky-linux-gnueabi` file (GCC 5.3-era toolchain).
 - The vendor build script uses `make imx_v7_defconfig`, then builds `zImage`, DTBs, and `modules`. Do not invent a new `.config` for a board already running a vendor image.
 - `ARCH=arm`; the target is Cortex-A7/ARMv7-A, little-endian, normally hard-float userspace (`cortexa7hf-neon`).
-- `ARM_Linux/IMX6ll/` contains teaching examples. `02_led` produces `led.ko` from `led.c` and a user program from `ledapp.c`.
+- `drivers/imx6ull/` contains teaching examples. `02_led` produces `led.ko` from `led.c` and a user program from `ledapp.c`.
 
 Before compiling an external module, collect the exact target identity:
 

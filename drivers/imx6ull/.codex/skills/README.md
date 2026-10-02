@@ -1,6 +1,6 @@
 # i.MX6ULL project skills
 
-These local skills are scoped to `ARM_Linux/IMX6ll` and distilled from the two ALIENTEK guides plus verified facts in this repository.
+These local skills are scoped to `drivers/imx6ull` and distilled from the two ALIENTEK guides plus verified facts in this repository.
 
 | Skill | Use it for |
 | --- | --- |

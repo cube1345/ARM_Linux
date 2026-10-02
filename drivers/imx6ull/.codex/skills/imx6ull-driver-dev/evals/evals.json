@@ -3,9 +3,9 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "修复 ARM_Linux/IMX6ll/02_led 的外部模块构建并说明为什么只做 modules_prepare 不能保证模块可加载。",
+      "prompt": "修复 drivers/imx6ull/02_led 的外部模块构建并说明为什么只做 modules_prepare 不能保证模块可加载。",
       "expected_output": "使用匹配内核输出、ARCH/CROSS_COMPILE 和 Module.symvers，修复 obj-m/源码错误并解释 vermagic/modversions。",
-      "files": ["ARM_Linux/IMX6ll/02_led/Makefile", "ARM_Linux/IMX6ll/02_led/led.c"]
+      "files": ["drivers/imx6ull/02_led/Makefile", "drivers/imx6ull/02_led/led.c"]
     },
     {
       "id": 2,

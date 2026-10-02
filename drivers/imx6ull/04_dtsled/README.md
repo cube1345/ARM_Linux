@@ -1,4 +1,4 @@
-# 02_dtsled：Device Tree GPIO LED 驱动
+# 04_dtsled：Device Tree GPIO LED 驱动
 
 本例保留 `02_led` 寄存器版驱动，新增 `platform_driver + of_match_table + GPIO API` 实现。驱动从 DTS 的 `gpios` 属性取得 GPIO，并动态分配设备号，成功后由 `device_create()` 创建 `/dev/dtsled`。
 
@@ -9,7 +9,7 @@
 ## 编译
 
 ```sh
-cd /home/cube/WorkSpace/iMX6Ull/ARM_Linux/IMX6ll/02_dtsled
+cd drivers/imx6ull/04_dtsled
 make
 file build/dtsled.ko
 modinfo build/dtsled.ko

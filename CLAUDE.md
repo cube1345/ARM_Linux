@@ -13,11 +13,11 @@
 | 链 | 目标 | 工具链位置 | 覆盖项目 |
 |---|---|---|---|
 | AArch64 | QEMU 虚拟机 / RK3506 | `~/WorkSpace/Linux/ARM_Linux/host/bin/`（buildroot，仓库外） | Browser、FB/IIC/input/SPI/UART、update_agent |
-| ARMv7hf | i.MX6ULL 真机 | `sdk/fsl-imx-x11/4.1.15-2.1.0/` 内 arm-poky，或内核 Kbuild | PhotoAlbum、Camera、IMX6ll、drivers |
+| ARMv7hf | i.MX6ULL 真机 | `sdk/fsl-imx-x11/4.1.15-2.1.0/` 内 arm-poky，或内核 Kbuild | PhotoAlbum、Camera、drivers/imx6ull、drivers |
 
 注意：
 - `apps/PhotoAlbum` 权威源码在 `qt/`；构建 `bash apps/PhotoAlbum/qt/build.sh`（CMake），部署与排查见 `apps/PhotoAlbum/CLAUDE.md`。
-- 内核驱动（`IMX6ll/*`）的 Makefile 残留教程作者路径 `KERNELDIR=/home/zuozhongkai/...`，编译前需改成本机 i.MX6ULL 内核源码路径。
+- 内核驱动（`drivers/imx6ull/*`）的 Makefile 残留教程作者路径 `KERNELDIR=/home/zuozhongkai/...`，编译前需改成本机 i.MX6ULL 内核源码路径。
 - 摄像头/监控涉及 Windows 侧服务链（ffmpeg/mediamtx），只在 Windows 上联调，板卡只拉流软解。
 
 ## Git 纪律

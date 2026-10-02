@@ -1,7 +1,7 @@
 ---
 name: imx6ull-app-dev
 description: Use this skill whenever the user asks to create, port, build, debug, or deploy a user-space C application for the i.MX6ULL Linux project, especially programs using /dev, sysfs, GPIO, LED, input, framebuffer, serial, watchdog, I2C, SPI, CAN, socket, ALSA, or CMake. Keep hardware policy in the kernel interface and make the application portable across the board's rootfs.
-compatibility: Bash, ARMv7-A cross compiler from the matching BSP/Buildroot SDK, target rootfs headers and libraries, and the project path ARM_Linux/IMX6ll.
+compatibility: Bash, ARMv7-A cross compiler from the matching BSP/Buildroot SDK, target rootfs headers and libraries, and the project path drivers/imx6ull.
 ---
 
 # i.MX6ULL Linux application development

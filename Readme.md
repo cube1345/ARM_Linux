@@ -12,7 +12,7 @@
 | `apps/Camera` | 交叉编译实验 | 自带 libjpeg 源码 | jpeg-10 autotools | `djpeg` 等 |
 | `apps/FB` / `IIC` / `input` / `SPI` / `UART` | QEMU AArch64 | aarch64-buildroot | `make` | 直接运行 |
 | `apps/update_agent` | QEMU AArch64 | aarch64-buildroot | `make` | `update_agent` |
-| `IMX6ll/` `drivers/` | i.MX6ULL | 内核 Kbuild | `make build` | `insmod / rmmod` |
+| `drivers/imx6ull/` `drivers/` | i.MX6ULL | 内核 Kbuild | `make build` | `insmod / rmmod` |
 
 > **两条工具链条并行**：
 > - **AArch64 线**（QEMU 虚拟机 / RK3506）：`~/WorkSpace/Linux/ARM_Linux/host/bin/`（buildroot 输出，在仓库外）
@@ -25,7 +25,8 @@
 | 目录 | 职责 |
 |---|---|
 | `apps/` | 用户态应用，每应用一个子目录（自治骨架：README + 单一构建入口） |
-| `IMX6ll/` `drivers/` | 内核驱动实验（历史分两处命名，规划归一） |
+| `drivers/imx6ull/` | i.MX6ULL 板级驱动实验序列（01~06，原 IMX6ll 目录） |
+| `drivers/` | 通用驱动概念（File / GPIO / hello_char） |
 | `docx/` | 学习手册（正点原子教程 + 自写笔记） |
 | `sdk/` | NXP fsl-imx-x11 交叉工具链（gitignored） |
 | `MC632X/` | 外设固件镜像（gitignored） |
@@ -39,7 +40,7 @@
 | Camera | libjpeg 源码内嵌 + JPEG 解码工具 | `apps/Camera/README.md` |
 | FB / IIC / input / SPI / UART | AArch64 虚拟机外设验证 demo | — |
 | update_agent | AArch64 OTA 升级客户端 | — |
-| IMX6ll / drivers | i.MX6ULL 驱动实验（字符设备 → LED → DTS → 蜂鸣器） | `docx/` 笔记 |
+| drivers/imx6ull / drivers | i.MX6ULL 驱动实验（字符设备 → LED → DTS → 蜂鸣器） | `docx/` 笔记 |
 
 ## 仓库级公约
 

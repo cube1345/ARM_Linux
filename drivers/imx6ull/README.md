@@ -1,4 +1,4 @@
-# IMX6ll — i.MX6ULL 内核驱动实验
+# imx6ull — i.MX6ULL 内核驱动实验
 
 | 元信息 | 值 |
 |---|---|
