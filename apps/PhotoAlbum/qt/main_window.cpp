@@ -12,6 +12,7 @@
 #include <QMouseEvent>
 #include <QTouchEvent>
 #include <QTimer>
+#include <QPen>
 #include <functional>
 #include <QPropertyAnimation>
 #include <QScrollArea>
@@ -912,6 +913,92 @@ void MainWindow::openMonitorChannel(int index)
 }
 
 namespace {
+// 虚拟摇杆：按住并朝某一方向拖动 → 输出方向（0上 1下 2左 3右，-1中心/松开）
+class VirtualJoystick : public QWidget
+{
+public:
+    using DirFn = std::function<void(int)>;
+    explicit VirtualJoystick(DirFn fn, QWidget *parent = nullptr)
+        : QWidget(parent), m_dir(fn), m_radius(58), m_thumb(QPointF()), m_down(false)
+    {
+        setFixedSize(160, 160);
+    }
+
+    void setDirectionHandler(DirFn fn) { m_dir = fn; }
+
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        const QPointF c = rect().center();
+        // 底座圆盘
+        p.setPen(QPen(QColor(255, 255, 255, 80), 2));
+        p.setBrush(QColor(255, 255, 255, 26));
+        p.drawEllipse(rect().adjusted(6, 6, -6, -6));
+        // 方位刻度（十字四点）
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(255, 255, 255, 95));
+        p.drawEllipse(QPointF(c.x(), c.y() - m_radius), 3, 3);
+        p.drawEllipse(QPointF(c.x(), c.y() + m_radius), 3, 3);
+        p.drawEllipse(QPointF(c.x() - m_radius, c.y()), 3, 3);
+        p.drawEllipse(QPointF(c.x() + m_radius, c.y()), 3, 3);
+        // 摇杆头（实心 + 内圈）
+        const QPointF t = c + m_thumb;
+        p.setBrush(QColor(255, 255, 255, 150));
+        p.drawEllipse(t, 30, 30);
+        p.setBrush(QColor(255, 255, 255, 60));
+        p.drawEllipse(t, 17, 17);
+    }
+
+    void mousePressEvent(QMouseEvent *e) override
+    {
+        m_down = true;
+        moveThumb(e->pos());
+    }
+    void mouseMoveEvent(QMouseEvent *e) override
+    {
+        if (m_down)
+            moveThumb(e->pos());
+    }
+    void mouseReleaseEvent(QMouseEvent *) override
+    {
+        m_down = false;
+        m_thumb = QPointF();
+        update();
+        if (m_dir)
+            m_dir(-1);
+    }
+
+private:
+    void moveThumb(const QPoint &pos)
+    {
+        const QPointF c = rect().center();
+        QPointF d = QPointF(pos) - c;
+        const qreal len = qSqrt(d.x() * d.x() + d.y() * d.y());
+        if (len > m_radius)
+            d = d * (m_radius / len);
+        m_thumb = d;
+        update();
+        if (m_dir) {
+            const qreal dead = 16;
+            int dir = -1;
+            if (len > dead) {
+                if (qAbs(d.x()) > qAbs(d.y()))
+                    dir = d.x() > 0 ? 3 : 2;   // 右 / 左
+                else
+                    dir = d.y() > 0 ? 1 : 0;   // 下 / 上
+            }
+            m_dir(dir);
+        }
+    }
+
+    DirFn m_dir;
+    qreal m_radius;
+    QPointF m_thumb;
+    bool m_down;
+};
+
 // 有网络 SVG 的应用返回相对路径，无则返回空（走程序绘制兜底）
 QString desktopSvgName(const QString &appId)
 {
@@ -1380,27 +1467,8 @@ void MainWindow::buildGamePage(QWidget *page)
     topLeft->addStretch();
     mainArea->addLayout(topLeft, 0, 0, Qt::AlignTop);
 
-    QGridLayout *dpad = new QGridLayout();
-    dpad->setSpacing(4);
-    QPushButton *up = new QPushButton(tr("上"), page);
-    QPushButton *down = new QPushButton(tr("下"), page);
-    QPushButton *left = new QPushButton(tr("左"), page);
-    QPushButton *right = new QPushButton(tr("右"), page);
-    QList<QPushButton *> dpadBtns;
-    dpadBtns << up << down << left << right;
-    foreach (QPushButton *b, dpadBtns) {
-        b->setFixedSize(56, 56);
-        b->setStyleSheet(
-            QStringLiteral("QPushButton{background:rgba(255,255,255,0.14);"
-                           "border-radius:28px;border:1px solid rgba(255,255,255,0.28);"
-                           "font-size:19px;font-weight:700;}"
-                           "QPushButton:pressed{background:rgba(255,255,255,0.34);}"));
-    }
-    dpad->addWidget(up, 0, 1);
-    dpad->addWidget(left, 1, 0);
-    dpad->addWidget(right, 1, 2);
-    dpad->addWidget(down, 2, 1);
-    mainArea->addLayout(dpad, 1, 0, Qt::AlignLeft | Qt::AlignBottom);
+    VirtualJoystick *stick = new VirtualJoystick(nullptr, page);
+    mainArea->addWidget(stick, 1, 0, Qt::AlignLeft | Qt::AlignCenter);
 
     mainArea->addWidget(tankGame, 0, 1, 2, 1);
 
@@ -1428,11 +1496,11 @@ void MainWindow::buildGamePage(QWidget *page)
     }
     QVBoxLayout *bottomRight = new QVBoxLayout();
     bottomRight->setSpacing(6);
-    bottomRight->addStretch();
     bottomRight->addWidget(fire);
     bottomRight->addWidget(skill1);
     bottomRight->addWidget(skill2);
-    mainArea->addLayout(bottomRight, 1, 2, Qt::AlignRight | Qt::AlignBottom);
+    bottomRight->addStretch();     // 底部弹性，让攻击/技能组向上抬
+    mainArea->addLayout(bottomRight, 1, 2, Qt::AlignRight | Qt::AlignCenter);
 
     mainArea->setColumnStretch(0, 0);
     mainArea->setColumnStretch(1, 1);
@@ -1440,14 +1508,15 @@ void MainWindow::buildGamePage(QWidget *page)
 
     layout->addLayout(mainArea, 1);
 
-    connect(up, &QPushButton::pressed, this, [this]() { tankGame->setMoveDir(TankGame::DirUp); });
-    connect(down, &QPushButton::pressed, this, [this]() { tankGame->setMoveDir(TankGame::DirDown); });
-    connect(left, &QPushButton::pressed, this, [this]() { tankGame->setMoveDir(TankGame::DirLeft); });
-    connect(right, &QPushButton::pressed, this, [this]() { tankGame->setMoveDir(TankGame::DirRight); });
-    connect(up, &QPushButton::released, this, [this]() { tankGame->setMoveDir(TankGame::DirNone); });
-    connect(down, &QPushButton::released, this, [this]() { tankGame->setMoveDir(TankGame::DirNone); });
-    connect(left, &QPushButton::released, this, [this]() { tankGame->setMoveDir(TankGame::DirNone); });
-    connect(right, &QPushButton::released, this, [this]() { tankGame->setMoveDir(TankGame::DirNone); });
+    stick->setDirectionHandler([this](int dir) {
+        switch (dir) {
+        case 0: tankGame->setMoveDir(TankGame::DirUp); break;
+        case 1: tankGame->setMoveDir(TankGame::DirDown); break;
+        case 2: tankGame->setMoveDir(TankGame::DirLeft); break;
+        case 3: tankGame->setMoveDir(TankGame::DirRight); break;
+        default: tankGame->setMoveDir(TankGame::DirNone); break;
+        }
+    });
     connect(fire, &QPushButton::clicked, this, [this]() { tankGame->fire(); });
     connect(skill1, &QPushButton::clicked, this, [this]() { tankGame->skillLaser(); });
     connect(skill2, &QPushButton::clicked, this, [this]() { tankGame->skillBomb(); });
