@@ -8,7 +8,6 @@
 
 namespace {
 const int kSwipeThreshold = 42;   // px：超过即判定为横向滑动切页
-const int kDotRadius = 5;         // 圆点半宽
 }
 
 HomePageView::HomePageView(QWidget *parent)
@@ -25,15 +24,6 @@ HomePageView::HomePageView(QWidget *parent)
     m_pages->setStyleSheet(QStringLiteral("background:transparent;"));
     m_pages->installEventFilter(this);
     lay->addWidget(m_pages, 1);
-
-    m_dotBar = new QWidget(this);
-    QHBoxLayout *dotLay = new QHBoxLayout(m_dotBar);
-    dotLay->setContentsMargins(0, 0, 0, 0);
-    dotLay->setSpacing(10);
-    dotLay->addStretch();
-    // 圆点由 addPage() 动态添加
-    m_dotBar->setLayout(dotLay);
-    lay->addWidget(m_dotBar);
 }
 
 void HomePageView::addPage(QWidget *page)
@@ -43,15 +33,6 @@ void HomePageView::addPage(QWidget *page)
     // 关键：Qt 的子部件事件不会自动冒泡到父级 eventFilter，
     // 递归给页面内所有子部件装 filter，滑动检测才能收到 press/move/release
     installSwipeFilter(page);
-
-    QLabel *dot = new QLabel(m_dotBar);
-    dot->setFixedSize(2 * kDotRadius, 2 * kDotRadius);
-    dot->setStyleSheet(QStringLiteral("border-radius:%1px;background:rgba(255,255,255,0.35);")
-                           .arg(kDotRadius));
-    static_cast<QHBoxLayout *>(m_dotBar->layout())->insertWidget(
-        static_cast<QHBoxLayout *>(m_dotBar->layout())->count() - 1, dot);
-    m_dots.append(dot);
-    updateDots();
 }
 
 void HomePageView::installSwipeFilter(QWidget *w)
@@ -70,7 +51,6 @@ void HomePageView::setPage(int index)
         return;
     m_pages->setCurrentIndex(index);
     m_current = index;
-    updateDots();
 }
 
 void HomePageView::endSwipe(int deltaX)
@@ -79,17 +59,6 @@ void HomePageView::endSwipe(int deltaX)
     if (qAbs(deltaX) < kSwipeThreshold)
         return;                     // 未达阈值：视为点击，交给按钮
     setPage(m_current + (deltaX < 0 ? 1 : -1));
-}
-
-void HomePageView::updateDots()
-{
-    for (int i = 0; i < m_dots.size(); ++i) {
-        m_dots[i]->setStyleSheet(
-            QStringLiteral("border-radius:%1px;background:%2;")
-                .arg(kDotRadius)
-                .arg(i == m_current ? QStringLiteral("#ffffff")
-                                    : QStringLiteral("rgba(255,255,255,0.35)")));
-    }
 }
 
 bool HomePageView::eventFilter(QObject *obj, QEvent *ev)

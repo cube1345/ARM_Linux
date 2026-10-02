@@ -379,6 +379,12 @@ void MainWindow::applyOrientation(int orient)
 // ---- 全局单指滑动手势：任意位置滑动即可驱动当前小游戏的方向 ----
 void MainWindow::installGlobalGestures()
 {
+    // 关键：鼠标/触摸事件的第一站在 QGraphicsView::viewport，
+    // 之前在页面子树递归过滤时，move 事件被 QGraphicsScene 拦截丢失
+    // （press 到了、move 不到 → 计算不出滑动距离）。改在 viewport 层统一捕获。
+    m_view->viewport()->installEventFilter(this);
+    m_view->installEventFilter(this);
+
     QWidget *root = static_cast<QStackedWidget *>(stackedWidget);
     std::function<void(QWidget *)> rec = [this, &rec](QWidget *w) {
         w->installEventFilter(this);
@@ -388,6 +394,20 @@ void MainWindow::installGlobalGestures()
                 rec(cw);
     };
     rec(root);
+
+    // 触摸调试：顶部实时显示触点坐标（观察滑动/识别）
+    if (qEnvironmentVariableIsSet("PHOTO_ALBUM_TOUCH_DEBUG")) {
+        m_touchDebug = new QLabel(this);
+        m_touchDebug->setText(QStringLiteral("触点 --"));
+        m_touchDebug->setAlignment(Qt::AlignCenter);
+        m_touchDebug->setStyleSheet(
+            QStringLiteral("color:#30d158;font-weight:800;font-size:18px;"
+                           "background:rgba(0,0,0,0.55);padding:2px 12px;border-radius:8px;"));
+        m_touchDebug->resize(260, 32);
+        m_touchDebug->move((width() - 260) / 2, 4);
+        m_touchDebug->raise();
+        m_touchDebug->show();
+    }
 }
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
@@ -400,6 +420,15 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             m_gestureX = me->pos().x();
             m_gestureY = me->pos().y();
             m_gestureTracking = true;
+            showTouchDbg(1, m_gestureX, m_gestureY);
+            qInfo() << "[Gx] press" << me->pos().x() << me->pos().y();
+        }
+        break;
+    }
+    case QEvent::MouseMove: {
+        if (m_touchDebug) {
+            const QMouseEvent *me = static_cast<QMouseEvent *>(event);
+            showTouchDbg(1, me->pos().x(), me->pos().y());
         }
         break;
     }
@@ -409,6 +438,8 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             const QMouseEvent *me = static_cast<QMouseEvent *>(event);
             const int dx = me->pos().x() - m_gestureX;
             const int dy = me->pos().y() - m_gestureY;
+            qInfo() << "[Gx] release dx" << dx << "dy" << dy
+                    << "thr" << (qMax(qAbs(dx), qAbs(dy)) >= 42);
             if (qMax(qAbs(dx), qAbs(dy)) >= 42) {
                 handleGameSwipe(dx, dy);
                 return true;             // 吞掉滑动，避免误触方向按钮
@@ -423,6 +454,18 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             m_gestureX = int(pts.first().pos().x());
             m_gestureY = int(pts.first().pos().y());
             m_gestureTracking = true;
+            showTouchDbg(pts.count(), m_gestureX, m_gestureY);
+            qInfo() << "[Gx] tBegin" << m_gestureX << m_gestureY;
+        }
+        break;
+    }
+    case QEvent::TouchUpdate: {
+        if (m_touchDebug) {
+            const QTouchEvent *te = static_cast<QTouchEvent *>(event);
+            const auto pts = te->touchPoints();
+            if (!pts.isEmpty())
+                showTouchDbg(pts.count(), int(pts.first().pos().x()),
+                             int(pts.first().pos().y()));
         }
         break;
     }
@@ -434,6 +477,7 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             if (!pts.isEmpty()) {
                 const int dx = int(pts.last().pos().x()) - m_gestureX;
                 const int dy = int(pts.last().pos().y()) - m_gestureY;
+                qInfo() << "[Gx] tEnd dx" << dx << "dy" << dy;
                 if (qMax(qAbs(dx), qAbs(dy)) >= 42) {
                     handleGameSwipe(dx, dy);
                     return true;
@@ -448,9 +492,19 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
     return QMainWindow::eventFilter(obj, event);
 }
 
+void MainWindow::showTouchDbg(int n, int x, int y)
+{
+    if (!m_touchDebug)
+        return;
+    m_touchDebug->setText(QStringLiteral("触点%1 %2,%3 Δ%4,%5")
+                              .arg(n).arg(x).arg(y)
+                              .arg(x - m_gestureX).arg(y - m_gestureY));
+}
+
 void MainWindow::handleGameSwipe(int dx, int dy)
 {
     QWidget *cur = static_cast<QStackedWidget *>(stackedWidget)->currentWidget();
+    qInfo() << "[Gx] swipe dispatched dx" << dx << "dy" << dy;
     // 桌面：整屏任意位置左右滑动都切页（HomePageView 内部已自处理，此处覆盖外围空白）
     if (cur == homePage) {
         if (qAbs(dx) > qAbs(dy) && homeView) {

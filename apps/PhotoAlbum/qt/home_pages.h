@@ -24,11 +24,8 @@ protected:
 private:
     void installSwipeFilter(QWidget *w);      // 递归给页面及其子部件装事件过滤
     void endSwipe(int deltaX);                // 滑动结束：按方向切页
-    void updateDots();
 
     QStackedWidget *m_pages;
-    QWidget *m_dotBar;
-    QVector<QLabel *> m_dots;
     int m_current;
     int m_startX;
     bool m_tracking;                          // 手指已按下

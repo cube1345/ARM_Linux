@@ -124,6 +124,7 @@ private:
     bool eventFilter(QObject *obj, QEvent *event) override;
     void installGlobalGestures();             // 给堆叠页递归装过滤器，实现全屏滑动
     void handleGameSwipe(int dx, int dy);     // 当前页为小游戏时按方向分发
+    void showTouchDbg(int n, int x, int y);       // 顶部触点调试：数量/坐标/滑动Δ
     int m_gestureX;
     int m_gestureY;
     bool m_gestureTracking = false;
@@ -170,6 +171,7 @@ private:
     QWidget *stackedWidget;
     QWidget *homePage;
     HomePageView *homeView = nullptr;
+    QLabel *m_touchDebug = nullptr;   // PHOTO_ALBUM_TOUCH_DEBUG：顶部实时触点
     QWidget *monitorPage;
     QWidget *thumbnailPage;
     QWidget *detailPage;
