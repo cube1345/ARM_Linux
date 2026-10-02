@@ -11,6 +11,7 @@ find_package(Qt5 REQUIRED COMPONENTS Widgets Concurrent Network)
 add_executable(photo-album
     main.cpp
     main_window.cpp main_window.h
+    home_pages.cpp home_pages.h
     photo_view.cpp photo_view.h
     video_player.cpp video_player.h
     icm20608.cpp icm20608.h

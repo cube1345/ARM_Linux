@@ -55,6 +55,8 @@
 #include "weather.h"
 #include "calculator.h"
 #include "drawboard.h"
+#include <QColor>
+#include "home_pages.h"
 #include "icon_factory.h"
 #include "debug_page.h"
 #include "debug_overlay.h"
@@ -773,6 +775,80 @@ void MainWindow::openMonitorChannel(int index)
     static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(videoPage);
 }
 
+namespace {
+// 有网络 SVG 的应用返回相对路径，无则返回空（走程序绘制兜底）
+QString desktopSvgName(const QString &appId)
+{
+    static const QHash<QString, QString> table{
+        {QStringLiteral("album"), QStringLiteral("icons/album.svg")},
+        {QStringLiteral("monitor"), QStringLiteral("icons/monitor.svg")},
+        {QStringLiteral("video"), QStringLiteral("icons/video.svg")},
+        {QStringLiteral("game2048"), QStringLiteral("icons/game2048.svg")},
+        {QStringLiteral("music"), QStringLiteral("icons/music.svg")},
+        {QStringLiteral("calc"), QStringLiteral("icons/calc.svg")},
+        {QStringLiteral("draw"), QStringLiteral("icons/draw.svg")},
+        {QStringLiteral("settings"), QStringLiteral("icons/settings.svg")},
+        {QStringLiteral("debug"), QStringLiteral("icons/debug.svg")},
+    };
+    return table.value(appId);
+}
+
+QColor desktopTint(const QString &appId)
+{
+    static const QHash<QString, QColor> table{
+        {QStringLiteral("album"), QColor(0x0a, 0x84, 0xff)},
+        {QStringLiteral("monitor"), QColor(0x34, 0xc7, 0x59)},
+        {QStringLiteral("video"), QColor(0xff, 0x3b, 0x30)},
+        {QStringLiteral("game"), QColor(0xff, 0x95, 0x00)},
+        {QStringLiteral("snake"), QColor(0xaf, 0x52, 0xde)},
+        {QStringLiteral("tetris"), QColor(0xff, 0xcc, 0x00)},
+        {QStringLiteral("brick"), QColor(0xff, 0x2d, 0x55)},
+        {QStringLiteral("game2048"), QColor(0x5a, 0xc8, 0xfa)},
+        {QStringLiteral("music"), QColor(0xff, 0x37, 0x5f)},
+        {QStringLiteral("calc"), QColor(0x8e, 0x8e, 0x93)},
+        {QStringLiteral("draw"), QColor(0xff, 0x95, 0x00)},
+        {QStringLiteral("settings"), QColor(0x58, 0x56, 0xd6)},
+        {QStringLiteral("debug"), QColor(0x30, 0xd1, 0x58)},
+    };
+    return table.value(appId, QColor(0x0a, 0x84, 0xff));
+}
+
+// 定位 SVG 图标（程序目录/icons/ 或 demo_media/icons/），找不到返回空
+QString locateSvg(const QString &rel)
+{
+    const QDir appDir(QCoreApplication::applicationDirPath());
+    for (const QString &cand : {appDir.filePath(rel),
+                                appDir.filePath(QStringLiteral("demo_media/") + rel)}) {
+        if (QFile::exists(cand))
+            return cand;
+    }
+    return QString();
+}
+
+// iOS 风格应用图标：彩色渐变圆角底 + 白色线条 SVG
+QPixmap makeDesktopIcon(const QString &svgAbs, const QColor &tint)
+{
+    QPixmap pm(132, 132);
+    pm.fill(Qt::transparent);
+    QPainter p(&pm);
+    p.setRenderHint(QPainter::Antialiasing);
+    QLinearGradient grad(0, 0, 0, 132);
+    grad.setColorAt(0, tint.lighter(165));
+    grad.setColorAt(0.55, tint.lighter(120));
+    grad.setColorAt(1, tint.darker(135));
+    p.setPen(Qt::NoPen);
+    p.setBrush(grad);
+    p.drawRoundedRect(QRectF(2, 2, 128, 128), 30, 30);
+    p.setBrush(QColor(255, 255, 255, 42));   // 顶缘高光
+    p.drawRoundedRect(QRectF(6, 4, 120, 52), 24, 24);
+    const QIcon ico(svgAbs);
+    if (!ico.isNull())
+        p.drawPixmap((132 - 92) / 2, (132 - 92) / 2, ico.pixmap(92, 92));
+    p.end();
+    return pm;
+}
+} // namespace
+
 void MainWindow::buildHomePage(QWidget *page)
 {
     // 背景：cover 等比放大填满 + 居中裁切，避免拉伸变形
@@ -823,29 +899,57 @@ void MainWindow::buildHomePage(QWidget *page)
     infoRow->addStretch();
     layout->addLayout(infoRow);
 
-    QGridLayout *grid = new QGridLayout();
-    grid->setSpacing(32);
-    grid->setVerticalSpacing(20);
-    grid->addWidget(makeAppCell(tr("相册"), QStringLiteral("album"), IconFactory::album(), SLOT(showThumbnailPage())), 0, 0);
-    grid->addWidget(makeAppCell(tr("监控"), QStringLiteral("monitor"), IconFactory::monitor(), SLOT(showMonitorPage())), 0, 1);
-    grid->addWidget(makeAppCell(tr("视频"), QStringLiteral("video"), IconFactory::video(), SLOT(showVideoListPage())), 0, 2);
-    grid->addWidget(makeAppCell(tr("坦克大战"), QStringLiteral("game"), IconFactory::game(), SLOT(showLevelSelectPage())), 0, 3);
-    grid->addWidget(makeAppCell(tr("贪吃蛇"), QStringLiteral("snake"), IconFactory::snake(), SLOT(showSnakePage())), 1, 0);
-    grid->addWidget(makeAppCell(tr("俄罗斯方块"), QStringLiteral("tetris"), IconFactory::tetris(), SLOT(showTetrisPage())), 1, 1);
-    grid->addWidget(makeAppCell(tr("打砖块"), QStringLiteral("brick"), IconFactory::brick(), SLOT(showBrickPage())), 1, 2);
-    grid->addWidget(makeAppCell(tr("2048"), QStringLiteral("game2048"), IconFactory::game2048(), SLOT(showGame2048Page())), 1, 3);
-    grid->addWidget(makeAppCell(tr("音乐"), QStringLiteral("music"), IconFactory::music(), SLOT(showMusicPage())), 2, 0);
-    grid->addWidget(makeAppCell(tr("计算器"), QStringLiteral("calc"), IconFactory::calculator(), SLOT(showCalculatorPage())), 2, 1);
-    grid->addWidget(makeAppCell(tr("画板"), QStringLiteral("draw"), IconFactory::draw(), SLOT(showDrawPage())), 2, 2);
-    grid->addWidget(makeAppCell(tr("设置"), QStringLiteral("settings"), IconFactory::settings(), SLOT(showSettingsPage())), 2, 3);
-    grid->addWidget(makeAppCell(tr("调试"), QStringLiteral("debug"), IconFactory::debug(), SLOT(showDebugPage())), 3, 0);
+    HomePageView *view = new HomePageView(page);
+
+    // 页1：相册/监控/视频 · 坦克大战/贪吃蛇/俄罗斯方块
+    QWidget *page1 = new QWidget;
+    {
+        QGridLayout *g = new QGridLayout(page1);
+        g->setContentsMargins(0, 0, 0, 0);
+        g->setSpacing(30);
+        g->setVerticalSpacing(24);
+        g->addWidget(makeAppCell(tr("相册"), QStringLiteral("album"), desktopTint("album"), desktopSvgName("album"), IconFactory::album(), SLOT(showThumbnailPage())), 0, 0);
+        g->addWidget(makeAppCell(tr("监控"), QStringLiteral("monitor"), desktopTint("monitor"), desktopSvgName("monitor"), IconFactory::monitor(), SLOT(showMonitorPage())), 0, 1);
+        g->addWidget(makeAppCell(tr("视频"), QStringLiteral("video"), desktopTint("video"), desktopSvgName("video"), IconFactory::video(), SLOT(showVideoListPage())), 0, 2);
+        g->addWidget(makeAppCell(tr("坦克大战"), QStringLiteral("game"), desktopTint("game"), desktopSvgName("game"), IconFactory::game(), SLOT(showLevelSelectPage())), 1, 0);
+        g->addWidget(makeAppCell(tr("贪吃蛇"), QStringLiteral("snake"), desktopTint("snake"), desktopSvgName("snake"), IconFactory::snake(), SLOT(showSnakePage())), 1, 1);
+        g->addWidget(makeAppCell(tr("俄罗斯方块"), QStringLiteral("tetris"), desktopTint("tetris"), desktopSvgName("tetris"), IconFactory::tetris(), SLOT(showTetrisPage())), 1, 2);
+        view->addPage(page1);
+    }
+
+    // 页2：打砖块/2048/音乐 · 计算器/画板/设置
+    QWidget *page2 = new QWidget;
+    {
+        QGridLayout *g = new QGridLayout(page2);
+        g->setContentsMargins(0, 0, 0, 0);
+        g->setSpacing(30);
+        g->setVerticalSpacing(24);
+        g->addWidget(makeAppCell(tr("打砖块"), QStringLiteral("brick"), desktopTint("brick"), desktopSvgName("brick"), IconFactory::brick(), SLOT(showBrickPage())), 0, 0);
+        g->addWidget(makeAppCell(tr("2048"), QStringLiteral("game2048"), desktopTint("game2048"), desktopSvgName("game2048"), IconFactory::game2048(), SLOT(showGame2048Page())), 0, 1);
+        g->addWidget(makeAppCell(tr("音乐"), QStringLiteral("music"), desktopTint("music"), desktopSvgName("music"), IconFactory::music(), SLOT(showMusicPage())), 0, 2);
+        g->addWidget(makeAppCell(tr("计算器"), QStringLiteral("calc"), desktopTint("calc"), desktopSvgName("calc"), IconFactory::calculator(), SLOT(showCalculatorPage())), 1, 0);
+        g->addWidget(makeAppCell(tr("画板"), QStringLiteral("draw"), desktopTint("draw"), desktopSvgName("draw"), IconFactory::draw(), SLOT(showDrawPage())), 1, 1);
+        g->addWidget(makeAppCell(tr("设置"), QStringLiteral("settings"), desktopTint("settings"), desktopSvgName("settings"), IconFactory::settings(), SLOT(showSettingsPage())), 1, 2);
+        view->addPage(page2);
+    }
+
+    // 页3：调试（单格居中）
+    QWidget *page3 = new QWidget;
+    {
+        QGridLayout *g = new QGridLayout(page3);
+        g->setContentsMargins(0, 0, 0, 0);
+        g->addWidget(makeAppCell(tr("调试"), QStringLiteral("debug"), desktopTint("debug"), desktopSvgName("debug"), IconFactory::debug(), SLOT(showDebugPage())), 0, 1);
+        view->addPage(page3);
+    }
+
     layout->addStretch(1);
-    layout->addLayout(grid);
+    layout->addWidget(view, 1);
     layout->addStretch(1);
 }
 
 QWidget *MainWindow::makeAppCell(const QString &name, const QString &appId,
-                                 const QPixmap &icon, const char *slot)
+                                 const QColor &tint, const QString &svgRel,
+                                 const QPixmap &fallbackIcon, const char *slot)
 {
     QWidget *cell = new QWidget;
     cell->setStyleSheet(QStringLiteral("background:transparent;"));
@@ -854,7 +958,14 @@ QWidget *MainWindow::makeAppCell(const QString &name, const QString &appId,
     v->setSpacing(6);
     QPushButton *button = new QPushButton(cell);
     button->setProperty("app", appId);
-    const QSize iconSize(92, 92);
+    const QSize iconSize(110, 110);
+    QPixmap icon;
+    const QString svgAbs = locateSvg(svgRel);
+    if (!svgAbs.isEmpty()) {
+        icon = makeDesktopIcon(svgAbs, tint);   // iOS 彩色底 + 白色 SVG
+    } else {
+        icon = fallbackIcon.scaled(iconSize, Qt::KeepAspectRatio, Qt::SmoothTransformation);
+    }
     button->setIcon(QIcon(icon));
     button->setIconSize(iconSize);
     button->setFixedSize(iconSize);

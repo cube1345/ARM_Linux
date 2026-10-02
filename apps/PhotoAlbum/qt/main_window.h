@@ -10,6 +10,7 @@
 #include "icm20608.h"
 #include "ap3216c.h"
 
+class QColor;
 class QGraphicsProxyWidget;
 class QGraphicsScene;
 class QGraphicsView;
@@ -138,7 +139,8 @@ private:
     void buildCalculatorPage(QWidget *page);
     void buildDrawPage(QWidget *page);
     QWidget *makeAppCell(const QString &name, const QString &appId,
-                         const QPixmap &icon, const char *slot);
+                         const QColor &tint, const QString &svgFile,
+                         const QPixmap &fallbackIcon, const char *slot);
     QString monitorLiveBase() const;
     QString monitorServerBase() const;
     void loadPhotos(const QString &directory);
