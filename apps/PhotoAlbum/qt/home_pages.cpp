@@ -3,6 +3,7 @@
 #include <QEvent>
 #include <QHBoxLayout>
 #include <QMouseEvent>
+#include <QTouchEvent>
 #include <QVBoxLayout>
 
 namespace {
@@ -39,6 +40,10 @@ void HomePageView::addPage(QWidget *page)
 {
     m_pages->addWidget(page);
 
+    // 关键：Qt 的子部件事件不会自动冒泡到父级 eventFilter，
+    // 递归给页面内所有子部件装 filter，滑动检测才能收到 press/move/release
+    installSwipeFilter(page);
+
     QLabel *dot = new QLabel(m_dotBar);
     dot->setFixedSize(2 * kDotRadius, 2 * kDotRadius);
     dot->setStyleSheet(QStringLiteral("border-radius:%1px;background:rgba(255,255,255,0.35);")
@@ -47,6 +52,16 @@ void HomePageView::addPage(QWidget *page)
         static_cast<QHBoxLayout *>(m_dotBar->layout())->count() - 1, dot);
     m_dots.append(dot);
     updateDots();
+}
+
+void HomePageView::installSwipeFilter(QWidget *w)
+{
+    w->installEventFilter(this);
+    const auto children = w->children();
+    for (QObject *c : children) {
+        if (QWidget *cw = qobject_cast<QWidget *>(c))
+            installSwipeFilter(cw);
+    }
 }
 
 void HomePageView::setPage(int index)
@@ -108,6 +123,30 @@ bool HomePageView::eventFilter(QObject *obj, QEvent *ev)
                 endSwipe(int(me->pos().x()) - m_startX);
                 return true;
             }
+        }
+        break;
+    }
+    case QEvent::TouchBegin: {
+        const QTouchEvent *te = static_cast<QTouchEvent *>(ev);
+        const auto pts = te->touchPoints();
+        if (!pts.isEmpty()) {
+            m_startX = int(pts.first().pos().x());
+            m_tracking = true;
+        }
+        break;
+    }
+    case QEvent::TouchEnd: {
+        if (m_tracking) {
+            const QTouchEvent *te = static_cast<QTouchEvent *>(ev);
+            const auto pts = te->touchPoints();
+            if (!pts.isEmpty()) {
+                const int dx = int(pts.last().pos().x()) - m_startX;
+                if (qAbs(dx) >= kSwipeThreshold) {
+                    endSwipe(dx);
+                    return true;
+                }
+            }
+            m_tracking = false;
         }
         break;
     }

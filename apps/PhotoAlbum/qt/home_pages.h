@@ -21,6 +21,7 @@ protected:
     bool eventFilter(QObject *obj, QEvent *ev) override;
 
 private:
+    void installSwipeFilter(QWidget *w);      // 递归给页面及其子部件装事件过滤
     void endSwipe(int deltaX);                // 滑动结束：按方向切页
     void updateDots();
 
