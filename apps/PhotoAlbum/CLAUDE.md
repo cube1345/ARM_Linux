@@ -83,6 +83,15 @@ cd /home/root && chmod +x photo-album qt_env.sh
 for p in /proc/[0-9]*; do ls -l "$p/fd" 2>/dev/null | grep -q '/dev/fb0' && echo "${p##*/} $(tr '\0' ' ' < "$p/cmdline")"; done
 ```
 
+### 开机自启与开屏动画
+
+`qt/deploy/setup_autostart.sh` 一键配置（scp 到板卡后 `sh /home/root/setup_autostart.sh`）：
+
+- **自启**：写到 `/etc/rcS.d/S99photoalbum.sh`——注意本系统 boot 链是 `inittab → rcS → /etc/rcS.d/S*`，**不执行 `/etc/rc.local`**
+- **禁用 psplash**：把 `S00psplash.sh` 移出 rcS.d，reset 后无正点原子 logo，直接进原神 cover 开屏动画
+- S99 先杀占 fb0 进程 + `dd` 清屏，再起 photo-album，保证进度条不留残
+- root 家目录是 `/home/root`（非 `/root`），部署文件：`photo-album` + `qt_env.sh` + `demo_media/opening.gif`
+
 ## Windows 侧服务链
 
 `qt/windows/run_all.ps1` 是标准启动器（会先 `Stop-Process` 掉残留的 ffmpeg/mediamtx/python，避免旧进程占着 8888/1935 端口跑老配置），一次拉起五件事：
