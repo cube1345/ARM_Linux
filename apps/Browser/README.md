@@ -1,5 +1,12 @@
 # Embedded Linux Multimedia Browser
 
+| 元信息 | 值 |
+|---|---|
+| 目标板 / 环境 | QEMU AArch64 虚拟机；RK3506 移植进行中 |
+| 工具链 | aarch64-buildroot-linux-gnu（buildroot 输出） |
+| 构建 | `make`（TARGET=image_browser）；Qt 前端 `media-browser-qt.pro` |
+| 部署 / 运行 | `./scripts/start-qemu.sh --fb`；RK3506 部署见 `RK3506_PORTING.md` |
+
 基于 Linux Framebuffer、Input、FreeType、libjpeg、libpng、giflib、ALSA 和
 mpg123 和 FFmpeg 的用户态多媒体文件浏览器桌面。
 

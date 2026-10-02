@@ -1,4 +1,21 @@
-  # i.MX6ULL 触摸相册应用计划
+  # Camera — JPEG 解码工具与早期相册计划
+
+| 元信息 | 值 |
+|---|---|
+| 目标板 / 环境 | 交叉编译实验（原规划 i.MX6ULL） |
+| 工具链 | gcc 交叉工具链；自带 libjpeg 源码（`jpeg-10`） |
+| 构建 | `cd jpeg-10 && ./configure && make`（autotools） |
+| 部署 / 运行 | 产物 `djpeg` / `cjpeg` 用于 JPEG 解码 |
+
+## 现状
+
+- `jpeg-10/` — libjpeg JPEG 解码库源码（内嵌，可单独交叉编译出 `djpeg` / `cjpeg` / `jpegtran`）。
+- `djpeg` — JPEG 解码命令行工具（编译产物）。
+- 下方「触摸相册应用计划」为**早期规划**（基于 `/dev/fb0` + Input 的 C 版相册），该功能最终由 `apps/PhotoAlbum`（Qt 版）完整落地，此处仅作历史参考。
+
+---
+
+## 历史：i.MX6ULL 触摸相册应用计划
 
   ## Summary
 
