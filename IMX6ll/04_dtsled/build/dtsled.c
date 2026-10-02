@@ -1,1 +1,0 @@
-/home/cube/WorkSpace/iMX6Ull/ARM_Linux/IMX6ll/02_dtsled/dtsled.c

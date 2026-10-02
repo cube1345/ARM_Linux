@@ -92,3 +92,29 @@ apps/Camera/jpeg-10/wrjpgcom
 # Python 字节码缓存
 __pycache__/
 *.pyc
+
+# ===== 构建产物 / 板端运行文件：不入库（2026-10-02 整理）=====
+# 内核模块编译中间产物
+*.mod
+*.mod.c
+*.gch
+# dtb（由 DTS 源编译生成，源文件已入库）
+*.dtb
+# VSCode 编译数据库（本地 clangd 生成）
+compile_commands.json
+# 顶层 hello 可执行（hello.c 编译产物）
+/hello
+# MC632X 固件镜像
+/MC632X/
+
+# PhotoAlbum 板卡运行产物：权威源码在 qt/，根目录这些是部署/运行留物
+/apps/PhotoAlbum/photo-album
+/apps/PhotoAlbum/qt_env.sh
+/apps/PhotoAlbum/stream_server.py
+/apps/PhotoAlbum/streams.txt
+/apps/PhotoAlbum/windows/
+/apps/PhotoAlbum/mediamtx_v1.21.0_windows_amd64/
+/apps/PhotoAlbum/record/
+/apps/PhotoAlbum/snap/
+/apps/PhotoAlbum/*.err
+/apps/PhotoAlbum/out.m3u8
