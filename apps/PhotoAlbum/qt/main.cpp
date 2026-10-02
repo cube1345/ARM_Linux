@@ -10,6 +10,7 @@
 #include <QHBoxLayout>
 #include <QLabel>
 #include <QMovie>
+#include <QPainter>
 #include <QPushButton>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -41,6 +42,41 @@ static void logHandler(QtMsgType type, const QMessageLogContext &, const QString
 }
 
 namespace {
+// 全屏开屏动画绘制：黑底 + 等比放大铺满屏幕（cover），超出部分裁切，
+// 屏幕中心内容保证完整可见。
+class SplashWidget : public QWidget {
+public:
+    explicit SplashWidget(QMovie *m, QWidget *parent = nullptr)
+        : QWidget(parent), m_movie(m)
+    {
+        setAttribute(Qt::WA_OpaquePaintEvent);
+        connect(m_movie, &QMovie::frameChanged, this, [this]() { update(); });
+        connect(m_movie, &QMovie::destroyed, this, [this]() { m_movie = nullptr; });
+    }
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter painter(this);
+        painter.fillRect(rect(), Qt::black);
+        if (!m_movie)
+            return;
+        const QPixmap pm = m_movie->currentPixmap();
+        if (pm.isNull())
+            return;
+        painter.setRenderHint(QPainter::SmoothPixmapTransform);
+        // cover：等比放大到完全覆盖窗口，超出部分裁切
+        const qreal scale = qMax(qreal(width()) / pm.width(),
+                                 qreal(height()) / pm.height());
+        const QSize scaled = pm.size() * scale;
+        const QRect target((width() - scaled.width()) / 2,
+                           (height() - scaled.height()) / 2,
+                           scaled.width(), scaled.height());
+        painter.drawPixmap(target, pm);
+    }
+private:
+    QMovie *m_movie;
+};
+
 // 开屏动画跳过：触摸 / 鼠标按下任意处即退出
 class SplashSkipFilter : public QObject {
 public:
@@ -80,14 +116,12 @@ static void showOpeningSplash()
     qInfo() << "[SPLASH] playing:" << gifPath;
 
     QDialog splash(nullptr, Qt::FramelessWindowHint | Qt::WindowStaysOnTopHint);
-    splash.setStyleSheet(QStringLiteral("background:#000;"));
     QMovie *movie = new QMovie(gifPath, QByteArray(), &splash);
-    QLabel *label = new QLabel(&splash);
-    label->setAlignment(Qt::AlignCenter);
-    label->setMovie(movie);
-    label->setFixedSize(640, 360);
+    SplashWidget *widget = new SplashWidget(movie, &splash);
     QVBoxLayout *layout = new QVBoxLayout(&splash);
-    layout->addWidget(label, 0, Qt::AlignCenter);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(0);
+    layout->addWidget(widget);
 
 #ifdef __arm__
     splash.showFullScreen();
