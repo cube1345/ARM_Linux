@@ -87,7 +87,7 @@ for p in /proc/[0-9]*; do ls -l "$p/fd" 2>/dev/null | grep -q '/dev/fb0' && echo
 
 `qt/deploy/setup_autostart.sh` 一键配置（scp 到板卡后 `sh /home/root/setup_autostart.sh`）：
 
-- **自启**：写到 `/etc/rcS.d/S99photoalbum.sh`——注意本系统 boot 链是 `inittab → rcS → /etc/rcS.d/S*`，**不执行 `/etc/rc.local`**
+- **自启**：写到 `/etc/rcS.d/S20photoalbum.sh`（紧跟 udev，最早可用点）——注意本系统 boot 链是 `inittab → rcS → /etc/rcS.d/S*`，**不执行 `/etc/rc.local`**
 - **禁用 psplash**：`rm /etc/rcS.d/S00psplash.sh`（**不能 mv 成 `.bak`**——rc 用 `for i in /etc/rcS.d/S*` 遍历，`.bak` 也会被执行！），reset 后无正点原子 logo，直接进原神 cover 开屏动画
 - S99 先杀占 fb0 进程 + `dd` 清屏，再起 photo-album，保证进度条不留残
 - root 家目录是 `/home/root`（非 `/root`），部署文件：`photo-album` + `qt_env.sh` + `demo_media/opening.gif`
