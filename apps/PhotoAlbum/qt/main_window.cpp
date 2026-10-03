@@ -2061,10 +2061,10 @@ void MainWindow::buildLabyrinthPage(QWidget *page)
     QLabel *accLabel = new QLabel(tr("加速度"), page);
     accLabel->setObjectName(QStringLiteral("homeInfo"));
     QSlider *acc = new QSlider(Qt::Horizontal, page);
-    acc->setRange(2, 16);
-    acc->setValue(10);
+    acc->setRange(2, 24);
+    acc->setValue(14);
     acc->setFixedWidth(140);
-    QLabel *accVal = new QLabel(tr("10 m/s²"), page);
+    QLabel *accVal = new QLabel(tr("14 m/s²"), page);
     accVal->setObjectName(QStringLiteral("homeInfo"));
     accRow->addStretch();
     accRow->addWidget(accLabel);

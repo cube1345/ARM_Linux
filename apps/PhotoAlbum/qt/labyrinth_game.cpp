@@ -5,8 +5,8 @@
 
 namespace {
 const qreal kDt = 0.03f;            // 帧间隔(秒)
-const qreal kAccelMul = 60.0f;      // 加速度系数：px/s² 每 (m/s²) 重力分量
-const qreal kStaticFriction = 0.45f; // 静摩擦阈值(m/s²)：倾斜力小于此则球静止
+const qreal kAccelMul = 90.0f;      // 加速度系数：px/s² 每 (m/s²) 重力分量
+const qreal kStaticFriction = 0.35f; // 静摩擦阈值(m/s²)：倾斜力小于此则球静止
 const qreal kDamping = 0.98f;      // 每帧速度阻尼(动摩擦/空气)
 const qreal kStallV2 = 0.0005f;     // 速度平方阈值：低于视为静止
 }
