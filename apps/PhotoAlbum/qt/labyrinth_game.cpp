@@ -110,9 +110,18 @@ void LabyrinthGame::tick()
     }
     const QRectF plate = plateRect();
 
-    // 受力 = 板倾斜方向（球向低处滚，取 -加速度）
-    const QPointF ramp(-m_ax, -m_ay);
-    const qreal mag = qSqrt(ramp.x() * ramp.x() + ramp.y() * ramp.y());
+    // 依据 IMU 加速度推算倾角（忽略交叉耦合的近似）
+    const qreal mag = qSqrt(m_ax * m_ax + m_ay * m_ay);
+    const qreal gN = 9.81f;
+    m_pitch = qRadiansToDegrees(qAsin(qBound<qreal>(-1.0, m_ax / gN, 1.0)));
+    m_roll = qRadiansToDegrees(qAsin(qBound<qreal>(-1.0, m_ay / gN, 1.0)));
+
+    // 受力 = 设定加速度 × sin(倾角)，方向指向低处(-accel)
+    QPointF ramp(0, 0);
+    if (mag > 0.05 && mag < gN * 1.5f) {
+        const qreal sinA = qMin<qreal>(1.0, mag / gN);
+        ramp = QPointF(-m_ax / mag, -m_ay / mag) * (m_g * sinA);
+    }
     if (mag < kStaticFriction) {
         m_vel *= 0.86;
     } else {
@@ -195,6 +204,25 @@ void LabyrinthGame::paintEvent(QPaintEvent *)
     p.drawEllipse(m_ball, hr * 0.72, hr * 0.72);
     p.setBrush(QColor(255, 255, 255, 90));
     p.drawEllipse(m_ball - QPointF(hr * 0.22, hr * 0.22), hr * 0.2, hr * 0.2);
+
+    // 实时数据条：设定加速度 / 倾角 / 实时速度
+    {
+        const QRect dbgRect(10, 8, 340, 68);
+        p.save();
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(0, 0, 0, 130));
+        p.drawRoundedRect(dbgRect, 8, 8);
+        p.setPen(Qt::white);
+        QFont df = p.font();
+        df.setPixelSize(14);
+        p.setFont(df);
+        p.drawText(dbgRect.adjusted(8, 6, -6, -6),
+                    QStringLiteral("加速度设定 %1 m/s²\n倾角 x/y %2°  %3°\n实时速度 %4  %5 px/s")
+                        .arg(m_g, 0, 'f', 1)
+                        .arg(m_pitch, 0, 'f', 0).arg(m_roll, 0, 'f', 0)
+                        .arg(m_vel.x(), 0, 'f', 0).arg(m_vel.y(), 0, 'f', 0));
+        p.restore();
+    }
 
     // 状态
     if (m_state != 0) {

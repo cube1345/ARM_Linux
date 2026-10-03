@@ -2055,6 +2055,31 @@ void MainWindow::buildLabyrinthPage(QWidget *page)
     });
 
     labyrinthGame = new LabyrinthGame(page);
+
+    // 加速度设定滑杆（2~16 m/s²）
+    QHBoxLayout *accRow = new QHBoxLayout();
+    QLabel *accLabel = new QLabel(tr("加速度"), page);
+    accLabel->setObjectName(QStringLiteral("homeInfo"));
+    QSlider *acc = new QSlider(Qt::Horizontal, page);
+    acc->setRange(2, 16);
+    acc->setValue(10);
+    acc->setFixedWidth(140);
+    QLabel *accVal = new QLabel(tr("10 m/s²"), page);
+    accVal->setObjectName(QStringLiteral("homeInfo"));
+    accRow->addStretch();
+    accRow->addWidget(accLabel);
+    accRow->addSpacing(8);
+    accRow->addWidget(acc);
+    accRow->addSpacing(8);
+    accRow->addWidget(accVal);
+    accRow->addStretch();
+    layout->addLayout(accRow);
+    connect(acc, &QSlider::valueChanged, this, [this, accVal](int v) {
+        if (labyrinthGame)
+            labyrinthGame->setAcceleration(qreal(v));
+        accVal->setText(QStringLiteral("%1 m/s²").arg(v));
+    });
+
     layout->addWidget(labyrinthGame, 1);
 }
 

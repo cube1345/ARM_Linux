@@ -18,6 +18,7 @@ public:
 
     void startGame();
     void setAccel(qreal ax, qreal ay);   // IMU 加速度 (m/s²)
+    void setAcceleration(qreal g) { m_g = g; }   // 设定基准加速度 m/s²
 
 protected:
     void paintEvent(QPaintEvent *event) override;
@@ -34,6 +35,8 @@ private:
     QPointF m_ball;
     QPointF m_vel;
     qreal m_ax = 0.0, m_ay = 0.0;
+    qreal m_g = 9.8f;                  // 设定基准加速度(换算用)
+    qreal m_pitch = 0.0f, m_roll = 0.0f; // 推算倾角(度)
     int m_state = 0;            // 0 进行中 / 1 成功 / 2 失败
     QTimer *m_timer;
 };
