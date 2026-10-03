@@ -411,6 +411,12 @@ void MainWindow::installGlobalGestures()
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
     (void)obj;
+    // 仅对需要全局手势的页面拦截；相册详情/监控/视频等页完全放行，
+    // 否则吞掉 release / TouchEnd 会破坏控件自身的缩放/平移手势
+    QWidget *cur = static_cast<QStackedWidget *>(stackedWidget)->currentWidget();
+    if (cur != homePage && cur != game2048Page && cur != snakePage
+        && cur != tetrisPage && cur != brickPage)
+        return QMainWindow::eventFilter(obj, event);
     switch (event->type()) {
     case QEvent::MouseButtonPress: {
         const QMouseEvent *me = static_cast<QMouseEvent *>(event);
