@@ -218,6 +218,7 @@ private:
     QTimer *m_imuTimer;
     int m_orientation;
     bool m_orientationLocked;
+    bool m_savedOrientationLocked = false;   // 迷宫页临时锁定方向前的原状态
     qint64 m_lastShake;
     QGraphicsView *m_view;
     QGraphicsScene *m_scene;

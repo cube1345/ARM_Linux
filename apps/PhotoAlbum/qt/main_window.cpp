@@ -2049,7 +2049,10 @@ void MainWindow::buildLabyrinthPage(QWidget *page)
     header->addWidget(hint);
     header->addStretch();
     layout->addLayout(header);
-    connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
+    connect(back, &QPushButton::clicked, this, [this]() {
+        m_orientationLocked = m_savedOrientationLocked;   // 离开迷宫：恢复方向设定
+        showHomePage();
+    });
 
     labyrinthGame = new LabyrinthGame(page);
     layout->addWidget(labyrinthGame, 1);
@@ -2059,6 +2062,9 @@ void MainWindow::showLabyrinthPage()
 {
     stopVideo();
     monitorRefreshTimer->stop();
+    // 迷宫页用 IMU 倾斜控球：强制锁定屏幕方向，返回时恢复原设定
+    m_savedOrientationLocked = m_orientationLocked;
+    m_orientationLocked = true;
     if (labyrinthGame)
         labyrinthGame->startGame();
     static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(labyrinthPage);
