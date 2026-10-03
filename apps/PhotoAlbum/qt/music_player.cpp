@@ -275,15 +275,18 @@ MusicPlayer::MusicPlayer(QWidget *parent)
       m_current(0),
       m_playing(false),
       m_thread(new AudioDecodeThread(this)),
-      m_lrcTimer(new QTimer(this))
+      m_lrcTimer(new QTimer(this)),
+      m_waitTimer(new QTimer(this))
 {
     setMinimumSize(400, 300);
     setSizePolicy(QSizePolicy::Expanding, QSizePolicy::Expanding);
     m_lrcTimer->setInterval(200);
     connect(m_lrcTimer, &QTimer::timeout, this, [this]() { updateLyricLine(); });
+    m_waitTimer->setInterval(50);
+    connect(m_waitTimer, &QTimer::timeout, this, [this]() { checkPending(); });
     connect(m_thread, &AudioDecodeThread::playbackFinished, this, [this]() {
-        if (!m_playing)
-            return;
+        if (!m_playing || m_pending)
+            return;   // 有异步切歌在等待：不自动跳下一首
         // 连续 3 首秒退（<2s）视为坏曲/解码异常，停止自动轮播防死循环跳歌
         if (m_songTimer.isValid() && m_songTimer.elapsed() < 2000) {
             if (++m_quickStops >= 3) {
@@ -350,15 +353,25 @@ void MusicPlayer::playCurrent()
 {
     if (m_current < 0 || m_current >= m_songs.size())
         return;
-    m_thread->stop();
-    m_thread->wait(400);
     if (m_thread->isRunning()) {
-        // 旧曲未能在 400ms 内停止：本次切歌忽略，避免对运行中线程强行 start 造成错乱
-        m_playing = true;
-        update();
+        // 旧曲正在播放：请求停止并异步切歌，不阻塞 UI、不吞切歌
+        m_pending = 1;
+        m_thread->stop();
+        if (m_waitTimer)
+            m_waitTimer->start();
         return;
     }
-    const QString song = m_songs.at(m_current);
+    launch(m_current);
+}
+
+void MusicPlayer::launch(int index)
+{
+    if (index < 0 || index >= m_songs.size())
+        return;
+    m_pending = 0;
+    if (m_waitTimer && m_waitTimer->isActive())
+        m_waitTimer->stop();
+    const QString song = m_songs.at(index);
     QString playPath = song;
     const QFileInfo songInfo(song);
     const QString wavPath = songInfo.absolutePath() + QLatin1Char('/')
@@ -373,6 +386,18 @@ void MusicPlayer::playCurrent()
         m_lrcTimer->start();
     emit songChanged(songInfo.completeBaseName());
     update();
+}
+
+void MusicPlayer::checkPending()
+{
+    if (!m_pending)
+        return;
+    if (!m_thread->isRunning()) {
+        m_pending = 0;
+        if (m_waitTimer && m_waitTimer->isActive())
+            m_waitTimer->stop();
+        launch(m_current);
+    }
 }
 
 void MusicPlayer::loadLyrics(const QString &songPath)
