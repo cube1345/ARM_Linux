@@ -1,10 +1,13 @@
 #include "debug_page.h"
 
 #include <QCoreApplication>
+#include <QDir>
 #include <QFile>
 #include <QLabel>
 #include <QRegExp>
+#include <QStorageInfo>
 #include <QTimer>
+#include <QtMath>
 #include <QVBoxLayout>
 
 DebugPage::DebugPage(QWidget *parent)
@@ -29,6 +32,20 @@ DebugPage::DebugPage(QWidget *parent)
     connect(m_timer, &QTimer::timeout, this, &DebugPage::refresh);
     m_timer->start();
     refresh();
+}
+
+void DebugPage::setTouchInfo(int n, int x, int y)
+{
+    m_touchN = n;
+    m_touchX = x;
+    m_touchY = y;
+}
+
+void DebugPage::setImu(qreal ax, qreal ay, qreal az)
+{
+    m_ax = ax;
+    m_ay = ay;
+    m_az = az;
 }
 
 QString DebugPage::readFile(const QString &path)
@@ -144,6 +161,17 @@ QString DebugPage::selfMemText() const
     return QStringLiteral("本进程内存: N/A");
 }
 
+QString DebugPage::storageText() const
+{
+    const QStorageInfo s(QDir::rootPath());
+    if (!s.isValid() || s.bytesTotal() <= 0)
+        return QStringLiteral("存储: N/A");
+    const qint64 used = s.bytesTotal() - s.bytesAvailable();
+    return QStringLiteral("存储: %1 / %2 MB (%3%)")
+        .arg(used / 1048576).arg(s.bytesTotal() / 1048576)
+        .arg(int(used * 100 / s.bytesTotal()));
+}
+
 void DebugPage::refresh()
 {
     const int cpu = cpuUsagePercent();
@@ -156,5 +184,20 @@ void DebugPage::refresh()
     text += selfMemText() + QLatin1Char('\n');
     text += netText() + QLatin1Char('\n');
     text += tempText() + QLatin1Char('\n');
+    text += storageText() + QLatin1Char('\n');
+    // 触点（由 MainWindow 手势层实时喂入）
+    if (m_touchN >= 0)
+        text += QStringLiteral("触点: %1 (%2,%3)\n").arg(m_touchN).arg(m_touchX).arg(m_touchY);
+    // IMU 加速度 -> 姿态
+    text += QStringLiteral("IMU: %1 %2 %3 m/s²\n")
+        .arg(m_ax, 0, 'f', 1).arg(m_ay, 0, 'f', 1).arg(m_az, 0, 'f', 1);
+    const qreal g = qSqrt(qreal(m_ax * m_ax + m_ay * m_ay + m_az * m_az));
+    if (g > 0.1) {
+        const qreal roll = qRadiansToDegrees(qAtan2(m_ay, m_az));
+        const qreal pitch = qRadiansToDegrees(
+            qAtan2(-m_ax, qSqrt(qreal(m_ay * m_ay + m_az * m_az))));
+        text += QStringLiteral("姿态 俯仰/横滚: %1° / %2°\n")
+            .arg(pitch, 0, 'f', 1).arg(roll, 0, 'f', 1);
+    }
     m_textLabel->setText(text);
 }

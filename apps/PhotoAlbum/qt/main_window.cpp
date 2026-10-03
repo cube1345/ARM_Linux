@@ -325,6 +325,8 @@ void MainWindow::onImuTick()
     if (!m_imu.isOpen())
         return;
     const QVector3D a = m_imu.readAccel();
+    if (debugWidget)
+        debugWidget->setImu(a.x(), a.y(), a.z());
     const int orient = detectOrientation(a);
     if (orient != m_orientation) {
         m_orientation = orient;
@@ -411,6 +413,8 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             m_gestureX = me->pos().x();
             m_gestureY = me->pos().y();
             m_gestureTracking = true;
+            if (debugWidget)
+                debugWidget->setTouchInfo(1, m_gestureX, m_gestureY);
             qInfo() << "[Gx] press" << me->pos().x() << me->pos().y();
         }
         break;
@@ -437,6 +441,8 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
             m_gestureX = int(pts.first().pos().x());
             m_gestureY = int(pts.first().pos().y());
             m_gestureTracking = true;
+            if (debugWidget)
+                debugWidget->setTouchInfo(pts.count(), m_gestureX, m_gestureY);
             qInfo() << "[Gx] tBegin" << m_gestureX << m_gestureY;
         }
         break;
