@@ -360,23 +360,33 @@ void MusicPlayer::prev()
 
 void MusicPlayer::paintEvent(QPaintEvent *)
 {
-    QPainter p(this);
-    p.fillRect(rect(), QColor(0x0b, 0x0b, 0x0f));
+    // 背景 + 封面：仅尺寸变化时重建一次；播放中只重绘文字，降低 UI 负担
+    if (m_bgCache.isNull() || m_bgCache.size() != size()) {
+        m_bgCache = QPixmap(size());
+        m_bgCache.fill(Qt::transparent);
+        QPainter pb(&m_bgCache);
+        pb.fillRect(m_bgCache.rect(), QColor(0x0b, 0x0b, 0x0f));
+        const int c = qMin(width(), height()) / 2;
+        const QRect cr((width() - c) / 2, 40, c, c);
+        pb.setPen(Qt::NoPen);
+        pb.setBrush(QColor(0x30, 0x40, 0x60));
+        pb.drawRoundedRect(cr, 12, 12);
+        pb.setBrush(QColor(0x60, 0x80, 0xc0));
+        const int cx = cr.center().x();
+        const int cy = cr.center().y();
+        pb.drawEllipse(QPoint(cx, cy), c / 3, c / 3);
+        pb.setBrush(QColor(0x20, 0x20, 0x20));
+        pb.drawRect(cx - c / 12, cy - c / 4, c / 6, c / 2);
+        pb.end();
+    }
 
-    // 封面
+    QPainter p(this);
+    p.drawPixmap(0, 0, m_bgCache);
+
     const int cover = qMin(width(), height()) / 2;
     const QRect coverRect((width() - cover) / 2, 40, cover, cover);
-    p.setPen(Qt::NoPen);
-    p.setBrush(QColor(0x30, 0x40, 0x60));
-    p.drawRoundedRect(coverRect, 12, 12);
-    p.setBrush(QColor(0x60, 0x80, 0xc0));
-    const int cx = coverRect.center().x();
-    const int cy = coverRect.center().y();
-    p.drawEllipse(QPoint(cx, cy), cover / 3, cover / 3);
-    p.setBrush(QColor(0x20, 0x20, 0x20));
-    p.drawRect(cx - cover / 12, cy - cover / 4, cover / 6, cover / 2);
 
-    // 歌名
+    // 歌名（动态）
     p.setPen(QColor(0xff, 0xff, 0xff));
     QFont f = p.font();
     f.setPixelSize(24);
@@ -385,7 +395,8 @@ void MusicPlayer::paintEvent(QPaintEvent *)
     QString name = QStringLiteral("无音乐");
     if (m_current < m_songs.size())
         name = QFileInfo(m_songs.at(m_current)).fileName();
-    p.drawText(rect().adjusted(0, coverRect.bottom() + 20, 0, 0), Qt::AlignHCenter | Qt::AlignTop, name);
+    p.drawText(rect().adjusted(0, coverRect.bottom() + 20, 0, 0),
+               Qt::AlignHCenter | Qt::AlignTop, name);
 
     // 动态歌词：跟着播放进度显示当前行
     if (m_lrcLine >= 0 && m_lrcLine < m_lyrics.size()) {

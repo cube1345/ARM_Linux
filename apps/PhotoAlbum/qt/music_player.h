@@ -5,6 +5,7 @@
 #include <QElapsedTimer>
 #include <QFileInfo>
 #include <QPair>
+#include <QPixmap>
 #include <QString>
 #include <QTimer>
 #include <QVector>
@@ -71,6 +72,7 @@ private:
     QVector<QPair<QString, qint64>> m_lyrics;   // (歌词行, 时间ms)
     int m_lrcLine = -1;
     QTimer *m_lrcTimer;
+    QPixmap m_bgCache;   // 封面/背景缓存，播放中仅重绘文字降低 UI 负担
 
     void loadSongs();
     void playCurrent();
