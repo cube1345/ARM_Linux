@@ -33,6 +33,7 @@ class Calculator;
 class DrawBoard;
 class DebugPage;
 class DebugOverlay;
+class LabyrinthGame;
 class Weather;
 class SnakeGame;
 class TankGame;
@@ -95,6 +96,7 @@ private slots:
     void showMusicPage();
     void showSettingsPage();
     void showDebugPage();
+    void showLabyrinthPage();
     void showCalculatorPage();
     void showDrawPage();
     /** @brief 播放列表中的某一路视频。 */
@@ -140,6 +142,7 @@ private:
     void buildTetrisPage(QWidget *page);
     void buildBrickPage(QWidget *page);
     void buildGame2048Page(QWidget *page);
+    void buildLabyrinthPage(QWidget *page);
     void buildMusicPage(QWidget *page);
     void buildSettingsPage(QWidget *page);
     void buildDebugPage(QWidget *page);
@@ -188,6 +191,8 @@ private:
     QWidget *settingsPage;
     QWidget *debugPage;
     DebugPage *debugWidget;
+    QWidget *labyrinthPage;
+    LabyrinthGame *labyrinthGame;
     DebugOverlay *m_debugOverlay;
     SnakeGame *snakeGame;
     TetrisGame *tetrisGame;

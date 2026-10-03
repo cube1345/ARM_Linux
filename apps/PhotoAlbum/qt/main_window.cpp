@@ -62,6 +62,7 @@
 #include <QColor>
 #include "home_pages.h"
 #include "icon_factory.h"
+#include "labyrinth_game.h"
 #include "debug_page.h"
 #include "debug_overlay.h"
 #include "config.h"
@@ -210,6 +211,8 @@ MainWindow::MainWindow(const QString &photoDirectory, QWidget *parent)
       musicPage(nullptr),
       settingsPage(nullptr),
       debugPage(nullptr),
+      labyrinthPage(nullptr),
+      labyrinthGame(nullptr),
       debugWidget(nullptr),
       m_debugOverlay(nullptr),
       snakeGame(nullptr),
@@ -327,6 +330,8 @@ void MainWindow::onImuTick()
     const QVector3D a = m_imu.readAccel();
     if (debugWidget)
         debugWidget->setImu(a.x(), a.y(), a.z());
+    if (labyrinthGame)
+        labyrinthGame->setAccel(a.x(), a.y());
     const int orient = detectOrientation(a);
     if (orient != m_orientation) {
         m_orientation = orient;
@@ -545,6 +550,7 @@ void MainWindow::buildUi()
     drawPage = new QWidget(stack);
     settingsPage = new QWidget(stack);
     debugPage = new QWidget(stack);
+    labyrinthPage = new QWidget(stack);
     stack->addWidget(homePage);
     stack->addWidget(monitorPage);
     stack->addWidget(thumbnailPage);
@@ -562,6 +568,7 @@ void MainWindow::buildUi()
     stack->addWidget(drawPage);
     stack->addWidget(settingsPage);
     stack->addWidget(debugPage);
+    stack->addWidget(labyrinthPage);
     layout->addWidget(stack, 1);
 
     buildHomePage(homePage);
@@ -580,6 +587,7 @@ void MainWindow::buildUi()
     buildDrawPage(drawPage);
     buildSettingsPage(settingsPage);
     buildDebugPage(debugPage);
+    buildLabyrinthPage(labyrinthPage);
 
     QVBoxLayout *detailLayout = new QVBoxLayout(detailPage);
     detailLayout->setContentsMargins(0, 0, 0, 0);
@@ -1021,6 +1029,7 @@ QString desktopSvgName(const QString &appId)
         {QStringLiteral("calc"), QStringLiteral("icons/calc.svg")},
         {QStringLiteral("draw"), QStringLiteral("icons/draw.svg")},
         {QStringLiteral("settings"), QStringLiteral("icons/settings.svg")},
+        {QStringLiteral("labyrinth"), QStringLiteral("icons/labyrinth.svg")},
         {QStringLiteral("debug"), QStringLiteral("icons/debug.svg")},
     };
     return table.value(appId);
@@ -1041,6 +1050,7 @@ QColor desktopTint(const QString &appId)
         {QStringLiteral("calc"), QColor(0x8e, 0x8e, 0x93)},
         {QStringLiteral("draw"), QColor(0xff, 0x95, 0x00)},
         {QStringLiteral("settings"), QColor(0x58, 0x56, 0xd6)},
+        {QStringLiteral("labyrinth"), QColor(0x4a, 0x9d, 0xc8)},
         {QStringLiteral("debug"), QColor(0x30, 0xd1, 0x58)},
     };
     return table.value(appId, QColor(0x0a, 0x84, 0xff));
@@ -1192,6 +1202,7 @@ void MainWindow::buildHomePage(QWidget *page)
     {
         QGridLayout *g = new QGridLayout(page3);
         g->setContentsMargins(0, 0, 0, 0);
+        g->addWidget(makeAppCell(tr("迷宫"), QStringLiteral("labyrinth"), desktopTint("labyrinth"), desktopSvgName("labyrinth"), QPixmap(), SLOT(showLabyrinthPage())), 0, 0);
         g->addWidget(makeAppCell(tr("调试"), QStringLiteral("debug"), desktopTint("debug"), desktopSvgName("debug"), IconFactory::debug(), SLOT(showDebugPage())), 0, 1);
         homeView->addPage(page3);
     }
@@ -2017,6 +2028,40 @@ void MainWindow::buildDebugPage(QWidget *page)
 
     debugWidget = new DebugPage(page);
     layout->addWidget(debugWidget, 1);
+}
+
+void MainWindow::buildLabyrinthPage(QWidget *page)
+{
+    QVBoxLayout *layout = new QVBoxLayout(page);
+    layout->setContentsMargins(0, 0, 0, 0);
+    layout->setSpacing(4);
+    QHBoxLayout *header = new QHBoxLayout();
+    QPushButton *back = new QPushButton(tr("返回"), page);
+    back->setMinimumSize(48, 32);
+    QLabel *title = new QLabel(tr("迷宫滚球"), page);
+    title->setObjectName(QStringLiteral("title"));
+    QLabel *hint = new QLabel(tr("倾斜板卡引导小球进入中央孔，避开陷阱、勿滑出边界"), page);
+    hint->setObjectName(QStringLiteral("homeInfo"));
+    header->addWidget(back);
+    header->addSpacing(8);
+    header->addWidget(title);
+    header->addStretch();
+    header->addWidget(hint);
+    header->addStretch();
+    layout->addLayout(header);
+    connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
+
+    labyrinthGame = new LabyrinthGame(page);
+    layout->addWidget(labyrinthGame, 1);
+}
+
+void MainWindow::showLabyrinthPage()
+{
+    stopVideo();
+    monitorRefreshTimer->stop();
+    if (labyrinthGame)
+        labyrinthGame->startGame();
+    static_cast<QStackedWidget *>(stackedWidget)->setCurrentWidget(labyrinthPage);
 }
 
 void MainWindow::showDebugPage()

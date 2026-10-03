@@ -17,6 +17,7 @@ add_executable(photo-album
     icm20608.cpp icm20608.h
     tank_game.cpp tank_game.h
     snake_game.cpp snake_game.h
+    labyrinth_game.cpp labyrinth_game.h
     tetris_game.cpp tetris_game.h tetris_logic.cpp tetris_logic.h
     brick_game.cpp brick_game.h
     game2048.cpp game2048.h game2048_logic.cpp game2048_logic.h
