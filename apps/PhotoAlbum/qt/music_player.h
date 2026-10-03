@@ -31,6 +31,8 @@ protected:
     void run() override;
 
 private:
+    void runWav();   // 预解码 PCM(WAV) 直放：零实时解码
+
     QString m_path;
     QAtomicInt m_running;
     QAtomicInt m_paused;
@@ -53,7 +55,7 @@ public:
     void playAt(int index);
     int songCount() const { return m_songs.size(); }
     QString songFileName(int i) const
-    { return (i >= 0 && i < m_songs.size()) ? QFileInfo(m_songs.at(i)).fileName() : QString(); }
+    { return (i >= 0 && i < m_songs.size()) ? QFileInfo(m_songs.at(i)).completeBaseName() : QString(); }
     bool isPlaying() const { return m_playing; }
 
 signals:

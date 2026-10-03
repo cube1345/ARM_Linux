@@ -7,6 +7,8 @@
 #include <QPainter>
 #include <QRegularExpression>
 #include <QTextStream>
+#include <QtEndian>
+#include <cstring>
 
 extern "C" {
 #include <libavcodec/avcodec.h>
@@ -81,6 +83,13 @@ void AudioDecodeThread::run()
 {
     m_running.storeRelease(1);
     m_paused.storeRelease(0);
+
+    // 预解码 PCM(WAV) 直放：零实时解码，大幅降低单核 CPU 占用
+    if (m_path.endsWith(QStringLiteral(".wav"), Qt::CaseInsensitive)) {
+        runWav();
+        emit playbackFinished();
+        return;
+    }
 
     av_register_all();
     AVFormatContext *format = nullptr;
@@ -184,6 +193,77 @@ void AudioDecodeThread::run()
     emit playbackFinished();
 }
 
+// 预解码 PCM 直放：解析 WAV 头，读 data 段直接写 ALSA（零实时解码）
+void AudioDecodeThread::runWav()
+{
+    QFile f(m_path);
+    if (!f.open(QIODevice::ReadOnly))
+        return;
+    const QByteArray hdr = f.read(12);
+    if (hdr.size() < 12 || hdr.left(4) != "RIFF" || hdr.mid(8, 4) != "WAVE")
+        return;
+
+    int rate = 44100, channels = 2, bits = 16;
+    qint64 dataEnd = -1;
+    while (f.pos() + 8 <= f.size()) {
+        const QByteArray ch = f.read(8);
+        const QByteArray fid = ch.left(4);
+        const quint32 sz = qFromLittleEndian<quint32>(
+            reinterpret_cast<const uchar *>(ch.constData() + 4));
+        if (fid == "fmt ") {
+            const QByteArray fmt = f.read(int(qMin<quint32>(sz, 64)));
+            if (fmt.size() >= 16) {
+                channels = int(qFromLittleEndian<quint16>(
+                    reinterpret_cast<const uchar *>(fmt.constData() + 2)));
+                rate = int(qFromLittleEndian<quint32>(
+                    reinterpret_cast<const uchar *>(fmt.constData() + 4)));
+                bits = int(qFromLittleEndian<quint16>(
+                    reinterpret_cast<const uchar *>(fmt.constData() + 14)));
+            }
+            if (sz > quint32(fmt.size()))
+                f.seek(f.pos() + (sz - quint32(fmt.size())));
+        } else if (fid == "data") {
+            dataEnd = f.pos() + sz;
+            break;
+        } else {
+            f.seek(f.pos() + sz);
+        }
+    }
+    if (dataEnd < 0)
+        return;
+
+    snd_pcm_t *pcm = nullptr;
+    if (!openAlsaOutput(&pcm, rate, channels))
+        return;
+
+    const int stride = qMax(1, channels * (bits / 8));
+    QByteArray buf(16384, 0);
+    qreal gain = m_volume.loadAcquire() / 100.0;
+    while (m_running.loadAcquire() && f.pos() < dataEnd) {
+        if (m_paused.loadAcquire()) {
+            msleep(40);
+            continue;
+        }
+        const qint64 want = qMin<qint64>(buf.size(), dataEnd - f.pos());
+        const qint64 n = f.read(buf.data(), want);
+        if (n < stride)
+            break;
+        const int frames = int(n / stride);
+        int16_t *s = reinterpret_cast<int16_t *>(buf.data());
+        const int samples = frames * channels;
+        if (gain < 0.0005) {
+            memset(s, 0, size_t(samples) * 2);
+        } else if (qAbs(gain - 1.0) > 0.02) {
+            for (int i = 0; i < samples; ++i)
+                s[i] = static_cast<int16_t>(s[i] * gain);
+        }
+        const snd_pcm_sframes_t wr = snd_pcm_writei(pcm, buf.constData(), frames);
+        if (wr < 0 && snd_pcm_recover(pcm, wr, 0) < 0)
+            break;
+    }
+    snd_pcm_close(pcm);
+}
+
 MusicPlayer::MusicPlayer(QWidget *parent)
     : QWidget(parent),
       m_current(0),
@@ -222,8 +302,7 @@ void MusicPlayer::loadSongs()
 {
     m_songs.clear();
     QDir dir(Config::kMusicDir);
-    const QStringList filters = QStringList() << QStringLiteral("*.mp3") << QStringLiteral("*.wav")
-                                             << QStringLiteral("*.flac") << QStringLiteral("*.ogg");
+    const QStringList filters = QStringList() << QStringLiteral("*.wav");
     const QFileInfoList list = dir.entryInfoList(filters, QDir::Files, QDir::Name);
     foreach (const QFileInfo &info, list)
         m_songs.append(info.absoluteFilePath());
@@ -273,13 +352,20 @@ void MusicPlayer::playCurrent()
         update();
         return;
     }
-    m_thread->play(m_songs.at(m_current));
+    const QString song = m_songs.at(m_current);
+    QString playPath = song;
+    const QFileInfo songInfo(song);
+    const QString wavPath = songInfo.absolutePath() + QLatin1Char('/')
+                          + songInfo.completeBaseName() + QStringLiteral(".wav");
+    if (QFile::exists(wavPath))
+        playPath = wavPath;                 // 有预解码 PCM 则直放，零实时解码
+    m_thread->play(playPath);
     m_playing = true;
     m_songTimer.start();
-    loadLyrics(m_songs.at(m_current));
+    loadLyrics(song);
     if (m_lrcTimer)
         m_lrcTimer->start();
-    emit songChanged(QFileInfo(m_songs.at(m_current)).fileName());
+    emit songChanged(songInfo.completeBaseName());
     update();
 }
 

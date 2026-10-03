@@ -1812,13 +1812,10 @@ void MainWindow::buildMusicPage(QWidget *page)
                        "QListWidget::item:hover{background:rgba(255,255,255,0.1);}"
                        "QListWidget::item:selected{background:rgba(10,132,255,0.65);color:#fff;}"));
     QDir musicDir(Config::kMusicDir);
-    const QStringList filters = QStringList() << QStringLiteral("*.mp3")
-                                              << QStringLiteral("*.wav")
-                                              << QStringLiteral("*.flac")
-                                              << QStringLiteral("*.ogg");
+    const QStringList filters = QStringList() << QStringLiteral("*.wav");
     const QFileInfoList files = musicDir.entryInfoList(filters, QDir::Files, QDir::Name);
     for (const QFileInfo &info : files)
-        musicList->addItem(info.fileName());
+        musicList->addItem(info.completeBaseName());   // 不显示后缀
     mid->addWidget(musicList, 2);
     layout->addLayout(mid, 1);
 
