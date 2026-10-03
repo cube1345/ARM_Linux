@@ -114,7 +114,7 @@ void LabyrinthGame::tick()
     const qreal mag = qSqrt(m_ax * m_ax + m_ay * m_ay);
     const qreal gN = 9.81f;
     m_pitch = qRadiansToDegrees(qAsin(qBound<qreal>(-1.0, m_ax / gN, 1.0)));
-    m_roll = qRadiansToDegrees(qAsin(qBound<qreal>(-1.0, m_ay / gN, 1.0)));
+    m_roll = -qRadiansToDegrees(qAsin(qBound<qreal>(-1.0, m_ay / gN, 1.0)));
 
     // 受力 = 设定加速度 × sin(倾角)，方向指向低处(-accel)
     QPointF ramp(0, 0);
