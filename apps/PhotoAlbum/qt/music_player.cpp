@@ -244,6 +244,12 @@ void AudioDecodeThread::runWav()
             msleep(40);
             continue;
         }
+        // 音量实时响应：每次循环向目标 gain 平滑渐变
+        const qreal targetGain = m_volume.loadAcquire() / 100.0;
+        if (gain < targetGain)
+            gain = qMin(gain + 0.02, targetGain);
+        else if (gain > targetGain)
+            gain = qMax(gain - 0.02, targetGain);
         const qint64 want = qMin<qint64>(buf.size(), dataEnd - f.pos());
         const qint64 n = f.read(buf.data(), want);
         if (n < stride)
