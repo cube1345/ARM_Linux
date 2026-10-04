@@ -238,10 +238,8 @@ void PhotoView::handleTouchEvent(QTouchEvent *event)
         }
     }
 
-    if (event->type() == QEvent::TouchEnd) {
-        activeTouches.clear();
-        touchStartPositions.clear();
-    }
+    // 不再在 TouchEnd 一次性清空：本设备每指抬起各发一次 TouchEnd，
+    // 一抬就清会误删另一根仍在按的手指。逐点移除由上方 Released 分支完成。
 
     qreal maximumMovement = 0.0;
     QHash<int, QPointF>::const_iterator iterator = activeTouches.constBegin();
@@ -306,11 +304,9 @@ void PhotoView::handleTouchEvent(QTouchEvent *event)
         return;
     }
 
-    QList<QPointF> activePositions;
-    for (int i = 0; i < points.size(); ++i) {
-        if (points.at(i).state() != Qt::TouchPointReleased)
-            activePositions.append(points.at(i).pos());
-    }
+    // 注意：本触摸屏每事件只上报 1 个接触点（多指逐根到来），
+    // 不能靠「单事件 points 数」判双指，改用跨事件累积的 activeTouches。
+    QList<QPointF> activePositions = activeTouches.values();
 
     if (activePositions.size() >= 2) {
         const QPointF first = activePositions.at(0);

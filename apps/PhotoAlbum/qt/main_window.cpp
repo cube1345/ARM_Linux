@@ -266,6 +266,10 @@ MainWindow::MainWindow(const QString &photoDirectory, QWidget *parent)
       currentIndex(0)
 {
     buildUi();
+    if (!qEnvironmentVariableIsSet("PHOTO_ALBUM_LEGACY_TOUCH")) {
+        // 让主窗口接受触摸：Qt5 对未接受触摸的窗口会把触摸合成为单指鼠标
+        setAttribute(Qt::WA_AcceptTouchEvents);
+    }
     installGlobalGestures();
     loadPhotos(photoDirectory);
 
@@ -387,9 +391,16 @@ void MainWindow::applyOrientation(int orient)
 // ---- 全局单指滑动手势：任意位置滑动即可驱动当前小游戏的方向 ----
 void MainWindow::installGlobalGestures()
 {
+    // 对照实验（历史版本无此套全局触摸/accept）：设此环境变量则完全还原历史形态
+    if (qEnvironmentVariableIsSet("PHOTO_ALBUM_LEGACY_TOUCH"))
+        return;
     // 关键：鼠标/触摸事件的第一站在 QGraphicsView::viewport，
     // 之前在页面子树递归过滤时，move 事件被 QGraphicsScene 拦截丢失
     // （press 到了、move 不到 → 计算不出滑动距离）。改在 viewport 层统一捕获。
+    // 让 QGraphicsView 接受原始触摸：触摸才进入 scene，进而由 QGraphicsProxyWidget
+// 转发 QTouchEvent 给嵌入的 photo_view；否则触摸被合成为单点鼠标 → 无法双指
+    m_view->viewport()->setAttribute(Qt::WA_AcceptTouchEvents);
+    m_view->setAttribute(Qt::WA_AcceptTouchEvents);
     m_view->viewport()->installEventFilter(this);
     m_view->installEventFilter(this);
 
@@ -411,6 +422,12 @@ void MainWindow::installGlobalGestures()
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
     (void)obj;
+    if (event->type() == QEvent::TouchBegin) {
+        const QTouchEvent *te = static_cast<QTouchEvent *>(event);
+        qInfo() << "[GT] touchBegin obj="
+                << (obj ? obj->metaObject()->className() : "?")
+                << "pts=" << te->touchPoints().size();
+    }
     // 仅对需要全局手势的页面拦截；相册详情/监控/视频等页完全放行，
     // 否则吞掉 release / TouchEnd 会破坏控件自身的缩放/平移手势
     QWidget *cur = static_cast<QStackedWidget *>(stackedWidget)->currentWidget();
@@ -448,6 +465,9 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
     case QEvent::TouchBegin: {
         const QTouchEvent *te = static_cast<QTouchEvent *>(event);
         const auto pts = te->touchPoints();
+        qInfo() << "[GT] touchBegin obj="
+                << (obj ? obj->metaObject()->className() : "?")
+                << "pts=" << pts.size();
         if (!pts.isEmpty()) {
             m_gestureX = int(pts.first().pos().x());
             m_gestureY = int(pts.first().pos().y());
