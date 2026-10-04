@@ -421,8 +421,8 @@ void MainWindow::installGlobalGestures()
 
 bool MainWindow::eventFilter(QObject *obj, QEvent *event)
 {
-    (void)obj;
-    if (event->type() == QEvent::TouchBegin) {
+    const QEvent::Type et = event->type();
+    if (et == QEvent::TouchBegin) {
         const QTouchEvent *te = static_cast<QTouchEvent *>(event);
         qInfo() << "[GT] touchBegin obj="
                 << (obj ? obj->metaObject()->className() : "?")
@@ -431,6 +431,17 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
     // 仅对需要全局手势的页面拦截；相册详情/监控/视频等页完全放行，
     // 否则吞掉 release / TouchEnd 会破坏控件自身的缩放/平移手势
     QWidget *cur = static_cast<QStackedWidget *>(stackedWidget)->currentWidget();
+    // 只在【详情页】拦截并注入触摸给 photo_view：该页显示大图、双指捏合才需要。
+    // 缩略图网格页必须完全放行，否则点击缩略图进入详情的触摸被吞掉，进不去详情页。
+    if (cur == detailPage && photoView && m_view
+        && (et == QEvent::TouchBegin || et == QEvent::TouchUpdate
+            || et == QEvent::TouchEnd) && obj == m_view->viewport()) {
+        // UI 整体嵌在 QGraphicsView scene 里，Qt 会把 QTouchEvent 在 view 层
+        // 合成单点鼠标，photo_view 永远收不到多点触摸 → 双指捏合失效。
+        // 在 viewport 这一站拦截，把原始 QTouchEvent 坐标映射后直接转给 photo_view，
+        // 并 return true 阻断 Qt 默认的鼠标合成。
+        return forwardTouchToPhotoView(event);
+    }
     if (cur != homePage && cur != game2048Page && cur != snakePage
         && cur != tetrisPage && cur != brickPage)
         return QMainWindow::eventFilter(obj, event);
@@ -499,6 +510,36 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
         break;
     }
     return QMainWindow::eventFilter(obj, event);
+}
+
+bool MainWindow::forwardTouchToPhotoView(QEvent *event)
+{
+    if (!photoView || !m_view || !m_proxy)
+        return false;
+    const QTouchEvent *src = static_cast<QTouchEvent *>(event);
+    // 把 QGraphicsView viewport 坐标系映射到嵌入 scene 的 photo_view：
+    // viewport 坐标 -> scene 坐标 -> proxy 内嵌 widget(central) 坐标 -> photo_view 坐标
+    QList<QTouchEvent::TouchPoint> points;
+    const QList<QTouchEvent::TouchPoint> &raw = src->touchPoints();
+    for (int i = 0; i < raw.size(); ++i) {
+        QTouchEvent::TouchPoint tp = raw.at(i);
+        const QPointF scenePos = m_view->mapToScene(tp.pos().toPoint());
+        const QPointF centralPos = m_proxy->mapFromScene(scenePos);
+        const QPointF photoPos = photoView->mapFrom(m_proxy->widget(),
+                                                    centralPos.toPoint());
+        tp.setPos(photoPos);
+        tp.setScenePos(photoPos);
+        tp.setScreenPos(photoPos);
+        points.append(tp);
+    }
+    QTouchEvent injected(static_cast<QEvent::Type>(event->type()),
+                         src->device(), src->modifiers(),
+                         src->touchPointStates(), points);
+    injected.setTimestamp(src->timestamp());
+    QCoreApplication::sendEvent(photoView, &injected);
+    // 消费掉原触摸事件：阻止 Qt 在 QGraphicsView 层把它合成为单点鼠标，
+    // 否则 photo_view 会同时收到注入的 QTouchEvent 与合成鼠标，动作重复
+    return true;
 }
 
 void MainWindow::handleGameSwipe(int dx, int dy)
@@ -705,6 +746,10 @@ void MainWindow::buildUi()
     m_view->setVerticalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
     m_view->setBackgroundBrush(QColor(0x0b, 0x0b, 0x0f));
     m_proxy = m_scene->addWidget(central);
+    // QGraphicsProxyWidget 默认不接受触摸事件（触摸会被 QGraphicsView 合成为
+    // 鼠标/丢弃），相册 photo_view 的双指捏合依赖 QTouchEvent，必须显式打开。
+    // 否则整个 UI 嵌进 scene 后 photo_view 收不到 TouchBegin/Update/End。
+    m_proxy->setAcceptTouchEvents(true);
     setCentralWidget(m_view);
     central->setStyleSheet(QStringLiteral(
         "QWidget{background:#0b0b0f;} QLabel{background:transparent;color:#f5f5f7;}"

@@ -126,6 +126,7 @@ private:
     bool eventFilter(QObject *obj, QEvent *event) override;
     void installGlobalGestures();             // 给堆叠页递归装过滤器，实现全屏滑动
     void handleGameSwipe(int dx, int dy);     // 当前页为小游戏时按方向分发
+    bool forwardTouchToPhotoView(QEvent *event); // 相册页穿透 QGraphicsView：触摸直达 photo_view
     int m_gestureX;
     int m_gestureY;
     bool m_gestureTracking = false;
