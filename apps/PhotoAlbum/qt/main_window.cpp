@@ -2,8 +2,12 @@
 
 #include <QAbstractButton>
 #include <QCoreApplication>
+#include <QCoreApplication>
 #include <QDateTime>
 #include <QDir>
+#include <QInputDialog>
+#include <QMessageBox>
+#include <QProcess>
 #include <QFile>
 #include <QFileInfo>
 #include <QFutureWatcher>
@@ -265,6 +269,7 @@ MainWindow::MainWindow(const QString &photoDirectory, QWidget *parent)
       m_proxy(nullptr),
       currentIndex(0)
 {
+    m_appStartMs = QDateTime::currentMSecsSinceEpoch();
     buildUi();
     if (!qEnvironmentVariableIsSet("PHOTO_ALBUM_LEGACY_TOUCH")) {
         // 让主窗口接受触摸：Qt5 对未接受触摸的窗口会把触摸合成为单指鼠标
@@ -711,7 +716,8 @@ void MainWindow::buildUi()
 
     infoPanel = new QLabel(detailPage);
     infoPanel->setObjectName(QStringLiteral("infoPanel"));
-    infoPanel->setWordWrap(true);
+    infoPanel->setWordWrap(false);   // 信息列：单行
+    infoPanel->setMaximumHeight(34); // 信息列高度不要太高
     infoPanel->setAlignment(Qt::AlignLeft | Qt::AlignVCenter);
     infoPanel->setVisible(false);
     detailLayout->addWidget(infoPanel);
@@ -728,7 +734,7 @@ void MainWindow::buildUi()
     footerBar = new QWidget(detailPage);
     footerBar->setObjectName(QStringLiteral("footerBar"));
     footerBar->setMinimumHeight(0);
-    footerBar->setMaximumHeight(45);
+    footerBar->setMaximumHeight(128);   // 操作列完整显示（原 45 只露出大半）
     footerBar->setVisible(false);
     QHBoxLayout *footerLayout = new QHBoxLayout(footerBar);
     footerLayout->setContentsMargins(0, 0, 0, 0);
@@ -1347,15 +1353,17 @@ void MainWindow::buildThumbnailPage(QWidget *page)
     QVBoxLayout *layout = new QVBoxLayout(page);
     layout->setContentsMargins(0, 0, 0, 0);
     QHBoxLayout *titleRow = new QHBoxLayout();
+    // 与其他应用一致的左上角返回 + 标题"照片"；主页入口移除（返回即回桌面）
+    QPushButton *tbBack = new QPushButton(tr("返回"), page);
+    tbBack->setMinimumSize(48, 32);
+    titleRow->addWidget(tbBack);
+    titleRow->addSpacing(8);
     QLabel *label = new QLabel(tr("照片"), page);
     label->setObjectName(QStringLiteral("title"));
     titleRow->addWidget(label);
     titleRow->addStretch();
-    QPushButton *homeButton = new QPushButton(tr("主页"), page);
-    homeButton->setMinimumSize(48, 32);
-    connect(homeButton, SIGNAL(clicked()), this, SLOT(showHomePage()));
-    titleRow->addWidget(homeButton);
     layout->addLayout(titleRow);
+    connect(tbBack, SIGNAL(clicked()), this, SLOT(showHomePage()));
     QScrollArea *scroll = new QScrollArea(page);
     scroll->setWidgetResizable(true);
     scroll->setFrameShape(QFrame::NoFrame);
@@ -1375,28 +1383,31 @@ void MainWindow::onVerticalSwipe(bool upward)
 {
     if (photoView->viewMode() == PhotoView::CropMode)
         return;
+    // 需求：上滑(手指从下往上) → 呼出底部操作列；下滑 → 呼出顶部信息列。
+    // 两者互斥显示，且 2s 后自动隐藏。
     if (upward) {
-        if (infoPanel->isVisible()) {
-            infoPanel->setVisible(false);
-            return;
-        }
+        footerBar->setVisible(true);
+        infoPanel->setVisible(false);
+    } else {
+        // 信息列：写在一行，高度保持信息条（不高）
         const QString path = photoPaths.value(currentIndex);
         if (path.startsWith(QStringLiteral("demo://"))) {
             infoPanel->setText(tr("演示图 %1").arg(currentIndex + 1));
         } else {
             const QFileInfo info(path);
             const QSize size = photoView->imageSize();
-            infoPanel->setText(tr("文件：%1\n尺寸：%2×%3\n修改时间：%4")
+            infoPanel->setText(tr("%1 · %2×%3 · %4")
                 .arg(info.fileName())
                 .arg(size.width()).arg(size.height())
                 .arg(info.lastModified().toString(QStringLiteral("yyyy-MM-dd hh:mm:ss"))));
         }
         infoPanel->setVisible(true);
         footerBar->setVisible(false);
-    } else {
-        infoPanel->setVisible(false);
-        footerBar->setVisible(!footerBar->isVisible());
     }
+    QTimer::singleShot(2000, this, [this]() {
+        footerBar->setVisible(false);
+        infoPanel->setVisible(false);
+    });
 }
 
 void MainWindow::rebuildThumbnailGrid()
@@ -1707,29 +1718,34 @@ void MainWindow::buildSnakePage(QWidget *page)
     connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
 
     snakeGame = new SnakeGame(page);
-    layout->addWidget(snakeGame, 1);
 
-    QHBoxLayout *controls = new QHBoxLayout();
-    controls->addStretch();
-    QPushButton *up = new QPushButton(tr("上"), page);
-    QPushButton *down = new QPushButton(tr("下"), page);
-    QPushButton *left = new QPushButton(tr("左"), page);
-    QPushButton *right = new QPushButton(tr("右"), page);
-    QList<QPushButton *> btns;
-    btns << up << down << left << right;
+    // 左右分栏：左侧滑杆控方向，中央游戏区，右侧动作键
+    QGridLayout *mainArea = new QGridLayout();
+    mainArea->setContentsMargins(8, 0, 8, 4);
+    mainArea->setHorizontalSpacing(10);
+    VirtualJoystick *stick = new VirtualJoystick(
+        [this](int dir) {
+            if (dir >= 0)
+                snakeGame->setDirection(dir);   // 0上 1下 2左 3右 与枚举一致
+        }, page);
+    mainArea->addWidget(stick, 0, 0, Qt::AlignCenter);
+    mainArea->addWidget(snakeGame, 0, 1);
+    QWidget *actions = new QWidget(page);
+    QVBoxLayout *actLay = new QVBoxLayout(actions);
+    QPushButton *pause = new QPushButton(tr("暂停"), actions);
+    QPushButton *restart = new QPushButton(tr("重开"), actions);
+    QList<QPushButton *> btns; btns << pause << restart;
     foreach (QPushButton *b, btns)
-        b->setMinimumSize(64, 48);
-    controls->addWidget(up);
-    controls->addWidget(left);
-    controls->addWidget(down);
-    controls->addWidget(right);
-    controls->addStretch();
-    layout->addLayout(controls);
+        b->setMinimumSize(64, 40);
+    actLay->addStretch();
+    actLay->addWidget(pause);
+    actLay->addWidget(restart);
+    actLay->addStretch();
+    mainArea->addWidget(actions, 0, 2, Qt::AlignCenter);
+    layout->addLayout(mainArea, 1);
 
-    connect(up, &QPushButton::clicked, this, [this]() { snakeGame->setDirection(SnakeGame::DirUp); });
-    connect(down, &QPushButton::clicked, this, [this]() { snakeGame->setDirection(SnakeGame::DirDown); });
-    connect(left, &QPushButton::clicked, this, [this]() { snakeGame->setDirection(SnakeGame::DirLeft); });
-    connect(right, &QPushButton::clicked, this, [this]() { snakeGame->setDirection(SnakeGame::DirRight); });
+    connect(pause, &QPushButton::clicked, this, [this]() { snakeGame->stopGame(); });
+    connect(restart, &QPushButton::clicked, this, [this]() { snakeGame->startGame(); });
 }
 
 void MainWindow::showSnakePage()
@@ -1759,29 +1775,38 @@ void MainWindow::buildTetrisPage(QWidget *page)
     connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
 
     tetrisGame = new TetrisGame(page);
-    layout->addWidget(tetrisGame, 1);
 
-    QHBoxLayout *controls = new QHBoxLayout();
-    controls->addStretch();
-    QPushButton *left = new QPushButton(tr("左"), page);
-    QPushButton *right = new QPushButton(tr("右"), page);
-    QPushButton *rotate = new QPushButton(tr("旋转"), page);
-    QPushButton *drop = new QPushButton(tr("下"), page);
-    QList<QPushButton *> btns;
-    btns << left << right << rotate << drop;
+    QGridLayout *mainArea = new QGridLayout();
+    mainArea->setContentsMargins(8, 0, 8, 4);
+    mainArea->setHorizontalSpacing(10);
+    VirtualJoystick *stick = new VirtualJoystick(
+        [this](int dir) {
+            if (dir == 0) tetrisGame->rotate();       // 上=旋转
+            else if (dir == 1) tetrisGame->softDrop(); // 下=软落
+            else if (dir == 2) tetrisGame->moveLeft();
+            else if (dir == 3) tetrisGame->moveRight();
+        }, page);
+    mainArea->addWidget(stick, 0, 0, Qt::AlignCenter);
+    mainArea->addWidget(tetrisGame, 0, 1);
+    QWidget *actions = new QWidget(page);
+    QVBoxLayout *actLay = new QVBoxLayout(actions);
+    QPushButton *drop = new QPushButton(tr("硬落"), actions);
+    QPushButton *pause = new QPushButton(tr("暂停"), actions);
+    QPushButton *restart = new QPushButton(tr("重开"), actions);
+    QList<QPushButton *> btns; btns << drop << pause << restart;
     foreach (QPushButton *b, btns)
-        b->setMinimumSize(64, 48);
-    controls->addWidget(left);
-    controls->addWidget(rotate);
-    controls->addWidget(drop);
-    controls->addWidget(right);
-    controls->addStretch();
-    layout->addLayout(controls);
+        b->setMinimumSize(64, 40);
+    actLay->addStretch();
+    actLay->addWidget(drop);
+    actLay->addWidget(pause);
+    actLay->addWidget(restart);
+    actLay->addStretch();
+    mainArea->addWidget(actions, 0, 2, Qt::AlignCenter);
+    layout->addLayout(mainArea, 1);
 
-    connect(left, &QPushButton::clicked, this, [this]() { tetrisGame->moveLeft(); });
-    connect(right, &QPushButton::clicked, this, [this]() { tetrisGame->moveRight(); });
-    connect(rotate, &QPushButton::clicked, this, [this]() { tetrisGame->rotate(); });
-    connect(drop, &QPushButton::clicked, this, [this]() { tetrisGame->softDrop(); });
+    connect(drop, &QPushButton::clicked, this, [this]() { tetrisGame->hardDrop(); });
+    connect(pause, &QPushButton::clicked, this, [this]() { tetrisGame->stopGame(); });
+    connect(restart, &QPushButton::clicked, this, [this]() { tetrisGame->startGame(); });
 }
 
 void MainWindow::showTetrisPage()
@@ -1811,24 +1836,35 @@ void MainWindow::buildBrickPage(QWidget *page)
     connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
 
     brickGame = new BrickGame(page);
-    layout->addWidget(brickGame, 1);
 
-    QHBoxLayout *controls = new QHBoxLayout();
-    controls->addStretch();
-    QPushButton *left = new QPushButton(tr("左"), page);
-    QPushButton *right = new QPushButton(tr("右"), page);
-    left->setMinimumSize(64, 48);
-    right->setMinimumSize(64, 48);
-    controls->addWidget(left);
-    controls->addSpacing(20);
-    controls->addWidget(right);
-    controls->addStretch();
-    layout->addLayout(controls);
+    QGridLayout *mainArea = new QGridLayout();
+    mainArea->setContentsMargins(8, 0, 8, 4);
+    mainArea->setHorizontalSpacing(10);
+    VirtualJoystick *stick = new VirtualJoystick(
+        [this](int dir) {
+            // 打砖块仅用左右：左=挡板向左(2→-1)，右=挡板向右(3→1)，释放/中心→停
+            if (dir == 2) brickGame->setPaddleDir(-1);
+            else if (dir == 3) brickGame->setPaddleDir(1);
+            else brickGame->setPaddleDir(0);
+        }, page);
+    mainArea->addWidget(stick, 0, 0, Qt::AlignCenter);
+    mainArea->addWidget(brickGame, 0, 1);
+    QWidget *actions = new QWidget(page);
+    QVBoxLayout *actLay = new QVBoxLayout(actions);
+    QPushButton *pause = new QPushButton(tr("暂停"), actions);
+    QPushButton *restart = new QPushButton(tr("重开"), actions);
+    QList<QPushButton *> btns; btns << pause << restart;
+    foreach (QPushButton *b, btns)
+        b->setMinimumSize(64, 40);
+    actLay->addStretch();
+    actLay->addWidget(pause);
+    actLay->addWidget(restart);
+    actLay->addStretch();
+    mainArea->addWidget(actions, 0, 2, Qt::AlignCenter);
+    layout->addLayout(mainArea, 1);
 
-    connect(left, &QPushButton::pressed, this, [this]() { brickGame->setPaddleDir(-1); });
-    connect(left, &QPushButton::released, this, [this]() { brickGame->setPaddleDir(0); });
-    connect(right, &QPushButton::pressed, this, [this]() { brickGame->setPaddleDir(1); });
-    connect(right, &QPushButton::released, this, [this]() { brickGame->setPaddleDir(0); });
+    connect(pause, &QPushButton::clicked, this, [this]() { brickGame->stopGame(); });
+    connect(restart, &QPushButton::clicked, this, [this]() { brickGame->startGame(); });
 }
 
 void MainWindow::showBrickPage()
@@ -1858,29 +1894,28 @@ void MainWindow::buildGame2048Page(QWidget *page)
     connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
 
     game2048 = new Game2048(page);
-    layout->addWidget(game2048, 1);
 
-    QHBoxLayout *controls = new QHBoxLayout();
-    controls->addStretch();
-    QPushButton *up = new QPushButton(tr("上"), page);
-    QPushButton *down = new QPushButton(tr("下"), page);
-    QPushButton *left = new QPushButton(tr("左"), page);
-    QPushButton *right = new QPushButton(tr("右"), page);
-    QList<QPushButton *> btns;
-    btns << up << down << left << right;
-    foreach (QPushButton *b, btns)
-        b->setMinimumSize(64, 48);
-    controls->addWidget(up);
-    controls->addWidget(left);
-    controls->addWidget(down);
-    controls->addWidget(right);
-    controls->addStretch();
-    layout->addLayout(controls);
+    QGridLayout *mainArea = new QGridLayout();
+    mainArea->setContentsMargins(8, 0, 8, 4);
+    mainArea->setHorizontalSpacing(10);
+    VirtualJoystick *stick = new VirtualJoystick(
+        [this](int dir) {
+            if (dir >= 0)
+                game2048->move(dir);   // 0上 1下 2左 3右 与 2048 枚举一致
+        }, page);
+    mainArea->addWidget(stick, 0, 0, Qt::AlignCenter);
+    mainArea->addWidget(game2048, 0, 1);
+    QWidget *actions = new QWidget(page);
+    QVBoxLayout *actLay = new QVBoxLayout(actions);
+    QPushButton *restart = new QPushButton(tr("重开"), actions);
+    restart->setMinimumSize(64, 40);
+    actLay->addStretch();
+    actLay->addWidget(restart);
+    actLay->addStretch();
+    mainArea->addWidget(actions, 0, 2, Qt::AlignCenter);
+    layout->addLayout(mainArea, 1);
 
-    connect(up, &QPushButton::clicked, this, [this]() { game2048->move(Game2048::DirUp); });
-    connect(down, &QPushButton::clicked, this, [this]() { game2048->move(Game2048::DirDown); });
-    connect(left, &QPushButton::clicked, this, [this]() { game2048->move(Game2048::DirLeft); });
-    connect(right, &QPushButton::clicked, this, [this]() { game2048->move(Game2048::DirRight); });
+    connect(restart, &QPushButton::clicked, this, [this]() { game2048->startGame(); });
 }
 
 void MainWindow::showGame2048Page()
@@ -2082,18 +2117,147 @@ void MainWindow::buildSettingsPage(QWidget *page)
     layout->addLayout(header);
     connect(back, SIGNAL(clicked()), this, SLOT(showHomePage()));
 
-    QHBoxLayout *row = new QHBoxLayout();
-    QLabel *label = new QLabel(tr("屏幕方向锁定"), page);
-    label->setObjectName(QStringLiteral("appName"));
-    QCheckBox *lockCheck = new QCheckBox(page);
-    lockCheck->setChecked(m_orientationLocked);
-    connect(lockCheck, &QCheckBox::toggled, this, [this](bool checked) {
-        m_orientationLocked = checked;
-    });
-    row->addWidget(label);
-    row->addStretch();
-    row->addWidget(lockCheck);
-    layout->addLayout(row);
+    // ---- 1) 屏幕方向锁定：显示当前开关状态 ----
+    {
+        QHBoxLayout *row = new QHBoxLayout();
+        QLabel *label = new QLabel(tr("屏幕方向锁定"), page);
+        label->setObjectName(QStringLiteral("appName"));
+        QLabel *state = new QLabel(
+            m_orientationLocked ? tr("已开启") : tr("已关闭"), page);
+        state->setObjectName(QStringLiteral("homeInfo"));
+        QCheckBox *lockCheck = new QCheckBox(page);
+        lockCheck->setChecked(m_orientationLocked);
+        connect(lockCheck, &QCheckBox::toggled, this, [this, state](bool on) {
+            m_orientationLocked = on;
+            state->setText(on ? tr("已开启") : tr("已关闭"));
+        });
+        row->addWidget(label);
+        row->addStretch();
+        row->addWidget(state);
+        row->addWidget(lockCheck);
+        layout->addLayout(row);
+    }
+
+    // ---- 2) 时间校准：显示当前时间 + 手动校准 ----
+    {
+        QHBoxLayout *row = new QHBoxLayout();
+        QLabel *label = new QLabel(tr("时间校准"), page);
+        label->setObjectName(QStringLiteral("appName"));
+        QLabel *timeLabel = new QLabel(
+            QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd HH:mm:ss")), page);
+        timeLabel->setObjectName(QStringLiteral("status"));
+        QPushButton *calBtn = new QPushButton(tr("校准"), page);
+        calBtn->setMinimumSize(48, 32);
+        connect(calBtn, &QPushButton::clicked, this, [this, timeLabel]() {
+            bool ok = false;
+            const QString input = QInputDialog::getText(
+                this, tr("时间校准"),
+                tr("输入时间（格式 yyyy-MM-dd hh:mm:ss）"),
+                QLineEdit::Normal,
+                QDateTime::currentDateTime().toString(
+                    QStringLiteral("yyyy-MM-dd hh:mm:ss")), &ok);
+            if (ok && QDateTime::fromString(input, QStringLiteral("yyyy-MM-dd hh:mm:ss")).isValid()) {
+                QProcess::startDetached(QStringLiteral("date"), QStringList()
+                                        << QStringLiteral("-s") << input);
+                timeLabel->setText(input);
+            }
+        });
+        row->addWidget(label);
+        row->addStretch();
+        row->addWidget(timeLabel);
+        row->addSpacing(8);
+        row->addWidget(calBtn);
+        layout->addLayout(row);
+    }
+
+    // ---- 3) IMU 校准：显示当前读数 + 重新初始化 ----
+    {
+        QHBoxLayout *row = new QHBoxLayout();
+        QLabel *label = new QLabel(tr("IMU 校准"), page);
+        label->setObjectName(QStringLiteral("appName"));
+        QLabel *imuLabel = new QLabel(tr("—"), page);
+        imuLabel->setObjectName(QStringLiteral("status"));
+        QPushButton *calBtn = new QPushButton(tr("重新初始化"), page);
+        calBtn->setMinimumSize(56, 32);
+        auto refreshImu = [this, imuLabel]() {
+            if (m_imu.isOpen()) {
+                const QVector3D a = m_imu.readAccel();
+                imuLabel->setText(tr("x %1  y %2  z %3")
+                    .arg(a.x(), 0, 'f', 2).arg(a.y(), 0, 'f', 2).arg(a.z(), 0, 'f', 2));
+            } else {
+                imuLabel->setText(tr("不可用"));
+            }
+        };
+        refreshImu();
+        connect(calBtn, &QPushButton::clicked, this, [this, refreshImu]() {
+            m_imu.close();
+            m_imu.open();
+            m_imu.init();
+            refreshImu();
+        });
+        row->addWidget(label);
+        row->addStretch();
+        row->addWidget(imuLabel);
+        row->addSpacing(8);
+        row->addWidget(calBtn);
+        layout->addLayout(row);
+    }
+
+    // ---- 4) 格式化数据：清空相册缓存与临时录像/快照 ----
+    {
+        QHBoxLayout *row = new QHBoxLayout();
+        QLabel *label = new QLabel(tr("格式化数据"), page);
+        label->setObjectName(QStringLiteral("appName"));
+        QLabel *hint = new QLabel(tr("清空缓存与运行产物"), page);
+        hint->setObjectName(QStringLiteral("homeInfo"));
+        QPushButton *fmtBtn = new QPushButton(tr("执行"), page);
+        fmtBtn->setMinimumSize(48, 32);
+        fmtBtn->setObjectName(QStringLiteral("dangerButton"));
+        connect(fmtBtn, &QPushButton::clicked, this, [this, hint]() {
+            const auto ret = QMessageBox::question(
+                this, tr("格式化数据"),
+                tr("将清空相册缓存、临时录像与快照（不影响原始照片文件）。确定？"));
+            if (ret != QMessageBox::Yes)
+                return;
+            editedImages.clear();
+            thumbnailCache.clear();
+            imageCache.clear();
+            imageCacheOrder.clear();
+            QDir(QCoreApplication::applicationDirPath() + QStringLiteral("/record"))
+                .removeRecursively();
+            QDir(QCoreApplication::applicationDirPath() + QStringLiteral("/snap"))
+                .removeRecursively();
+            hint->setText(tr("已清空"));
+        });
+        row->addWidget(label);
+        row->addStretch();
+        row->addWidget(hint);
+        row->addSpacing(8);
+        row->addWidget(fmtBtn);
+        layout->addLayout(row);
+    }
+
+    // ---- 5) 应用使用时间 ----
+    {
+        QHBoxLayout *row = new QHBoxLayout();
+        QLabel *label = new QLabel(tr("应用使用时间"), page);
+        label->setObjectName(QStringLiteral("appName"));
+        QLabel *usageLabel = new QLabel(page);
+        usageLabel->setObjectName(QStringLiteral("status"));
+        auto tick = [this, usageLabel]() {
+            const qint64 runMs = QDateTime::currentMSecsSinceEpoch() - m_appStartMs;
+            const qint64 s = runMs / 1000;
+            usageLabel->setText(tr("%1分%2秒").arg(s / 60).arg(s % 60));
+        };
+        tick();
+        QTimer *t = new QTimer(page);
+        connect(t, &QTimer::timeout, this, tick);
+        t->start(1000);
+        row->addWidget(label);
+        row->addStretch();
+        row->addWidget(usageLabel);
+        layout->addLayout(row);
+    }
 
     layout->addStretch();
 }
@@ -2136,13 +2300,9 @@ void MainWindow::buildLabyrinthPage(QWidget *page)
     back->setMinimumSize(48, 32);
     QLabel *title = new QLabel(tr("迷宫滚球"), page);
     title->setObjectName(QStringLiteral("title"));
-    QLabel *hint = new QLabel(tr("倾斜板卡引导小球进入中央孔，避开陷阱、勿滑出边界"), page);
-    hint->setObjectName(QStringLiteral("homeInfo"));
     header->addWidget(back);
     header->addSpacing(8);
     header->addWidget(title);
-    header->addStretch();
-    header->addWidget(hint);
     header->addStretch();
     layout->addLayout(header);
     connect(back, &QPushButton::clicked, this, [this]() {
@@ -2152,13 +2312,13 @@ void MainWindow::buildLabyrinthPage(QWidget *page)
 
     labyrinthGame = new LabyrinthGame(page);
 
-    // 加速度设定滑杆（2~16 m/s²）
+    // 加速度设定滑杆（2~64 m/s²，上限提高以满足快速玩法需求）
     QHBoxLayout *accRow = new QHBoxLayout();
     QLabel *accLabel = new QLabel(tr("加速度"), page);
     accLabel->setObjectName(QStringLiteral("homeInfo"));
     QSlider *acc = new QSlider(Qt::Horizontal, page);
-    acc->setRange(2, 24);
-    acc->setValue(14);
+    acc->setRange(2, 64);
+    acc->setValue(20);
     acc->setFixedWidth(140);
     QLabel *accVal = new QLabel(tr("14 m/s²"), page);
     accVal->setObjectName(QStringLiteral("homeInfo"));

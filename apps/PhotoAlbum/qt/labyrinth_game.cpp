@@ -1,5 +1,6 @@
 #include "labyrinth_game.h"
 
+#include <QMouseEvent>
 #include <QPainter>
 #include <QtMath>
 
@@ -96,6 +97,17 @@ void LabyrinthGame::startGame()
     update();
 }
 
+void LabyrinthGame::mouseReleaseEvent(QMouseEvent *event)
+{
+    // 结束态（成功/失败）点击屏幕重新开始
+    if (m_state != 0) {
+        startGame();
+        event->accept();
+        return;
+    }
+    QWidget::mouseReleaseEvent(event);
+}
+
 void LabyrinthGame::setAccel(qreal ax, qreal ay)
 {
     m_ax = ax;
@@ -117,10 +129,11 @@ void LabyrinthGame::tick()
     m_roll = -qRadiansToDegrees(qAsin(qBound<qreal>(-1.0, m_ay / gN, 1.0)));
 
     // 受力 = 设定加速度 × sin(倾角)，方向指向低处(-accel)
+    // 注意：IMU 的 y 轴方向与屏幕 y 相反，故 y 分量取 +m_ay（否则运动方向与实际斜向相反）。
     QPointF ramp(0, 0);
     if (mag > 0.05 && mag < gN * 1.5f) {
         const qreal sinA = qMin<qreal>(1.0, mag / gN);
-        ramp = QPointF(-m_ax / mag, -m_ay / mag) * (m_g * sinA);
+        ramp = QPointF(-m_ax / mag, m_ay / mag) * (m_g * sinA);
     }
     if (mag < kStaticFriction) {
         m_vel *= 0.86;

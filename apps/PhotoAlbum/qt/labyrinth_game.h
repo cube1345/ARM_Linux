@@ -22,6 +22,7 @@ public:
 
 protected:
     void paintEvent(QPaintEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;  // 结束态点击重开
 
 private:
     void tick();

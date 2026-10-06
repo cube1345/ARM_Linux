@@ -263,6 +263,7 @@ private:
     QHash<QString, QImage> thumbnailCache;
     QHash<QString, QImage> imageCache;
     QStringList imageCacheOrder;
+    qint64 m_appStartMs = 0;   // 应用启动时刻（毫秒），用于「应用使用时间」统计
     QString photoDirectory;
     int currentIndex;
 };
