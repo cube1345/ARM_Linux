@@ -431,16 +431,29 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
     // 仅对需要全局手势的页面拦截；相册详情/监控/视频等页完全放行，
     // 否则吞掉 release / TouchEnd 会破坏控件自身的缩放/平移手势
     QWidget *cur = static_cast<QStackedWidget *>(stackedWidget)->currentWidget();
-    // 只在【详情页】拦截并注入触摸给 photo_view：该页显示大图、双指捏合才需要。
+    // 只在【详情页】拦截触摸注入 photo_view：该页显示大图、双指捏合才需要。
     // 缩略图网格页必须完全放行，否则点击缩略图进入详情的触摸被吞掉，进不去详情页。
-    if (cur == detailPage && photoView && m_view
+    if (cur == detailPage && photoView && m_view && obj == m_view->viewport()
         && (et == QEvent::TouchBegin || et == QEvent::TouchUpdate
-            || et == QEvent::TouchEnd) && obj == m_view->viewport()) {
+            || et == QEvent::TouchEnd || et == QEvent::TouchCancel)) {
         // UI 整体嵌在 QGraphicsView scene 里，Qt 会把 QTouchEvent 在 view 层
         // 合成单点鼠标，photo_view 永远收不到多点触摸 → 双指捏合失效。
         // 在 viewport 这一站拦截，把原始 QTouchEvent 坐标映射后直接转给 photo_view，
         // 并 return true 阻断 Qt 默认的鼠标合成。
-        return forwardTouchToPhotoView(event);
+        // 手势归属：TouchBegin 由一个锚点判定是否命中 photo_view；命中后整条手势
+        // (Update/End/Cancel) 持续注入，即使手指滑出 photo_view 边界——否则 TouchEnd
+        // 会被放行使 activeTouches 收不到 Released，触点累积残留。
+        if (et == QEvent::TouchBegin) {
+            const QPointF photoPos = mapToPhotoView(event);
+            photoTouchOwned = photoView->rect().contains(photoPos.toPoint());
+        }
+        if (photoTouchOwned) {
+            const bool r = forwardTouchToPhotoView(event);
+            if (et == QEvent::TouchEnd || et == QEvent::TouchCancel)
+                photoTouchOwned = false;
+            return r;
+        }
+        // 未归属（点在 header/返回按钮等区域）：放行 Qt 正常处理
     }
     if (cur != homePage && cur != game2048Page && cur != snakePage
         && cur != tetrisPage && cur != brickPage)
@@ -512,21 +525,33 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
     return QMainWindow::eventFilter(obj, event);
 }
 
+QPointF MainWindow::mapToPhotoView(QEvent *event)
+{
+    const QTouchEvent *src = static_cast<QTouchEvent *>(event);
+    const QList<QTouchEvent::TouchPoint> &raw = src->touchPoints();
+    if (raw.isEmpty())
+        return QPointF();
+    return mapTouchPointToPhotoView(raw.constFirst());
+}
+
+QPointF MainWindow::mapTouchPointToPhotoView(const QTouchEvent::TouchPoint &tp)
+{
+    // viewport 坐标 -> scene 坐标 -> proxy 内嵌 widget(central) 坐标 -> photo_view 坐标
+    const QPointF scenePos = m_view->mapToScene(tp.pos().toPoint());
+    const QPointF centralPos = m_proxy->mapFromScene(scenePos);
+    return photoView->mapFrom(m_proxy->widget(), centralPos.toPoint());
+}
+
 bool MainWindow::forwardTouchToPhotoView(QEvent *event)
 {
     if (!photoView || !m_view || !m_proxy)
         return false;
     const QTouchEvent *src = static_cast<QTouchEvent *>(event);
-    // 把 QGraphicsView viewport 坐标系映射到嵌入 scene 的 photo_view：
-    // viewport 坐标 -> scene 坐标 -> proxy 内嵌 widget(central) 坐标 -> photo_view 坐标
     QList<QTouchEvent::TouchPoint> points;
     const QList<QTouchEvent::TouchPoint> &raw = src->touchPoints();
     for (int i = 0; i < raw.size(); ++i) {
         QTouchEvent::TouchPoint tp = raw.at(i);
-        const QPointF scenePos = m_view->mapToScene(tp.pos().toPoint());
-        const QPointF centralPos = m_proxy->mapFromScene(scenePos);
-        const QPointF photoPos = photoView->mapFrom(m_proxy->widget(),
-                                                    centralPos.toPoint());
+        const QPointF photoPos = mapTouchPointToPhotoView(tp);
         tp.setPos(photoPos);
         tp.setScenePos(photoPos);
         tp.setScreenPos(photoPos);

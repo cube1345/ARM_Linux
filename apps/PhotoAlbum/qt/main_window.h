@@ -5,6 +5,7 @@
 #include <QHash>
 #include <QImage>
 #include <QMainWindow>
+#include <QTouchEvent>
 #include <QVector3D>
 
 #include "icm20608.h"
@@ -127,6 +128,9 @@ private:
     void installGlobalGestures();             // 给堆叠页递归装过滤器，实现全屏滑动
     void handleGameSwipe(int dx, int dy);     // 当前页为小游戏时按方向分发
     bool forwardTouchToPhotoView(QEvent *event); // 相册页穿透 QGraphicsView：触摸直达 photo_view
+    QPointF mapToPhotoView(QEvent *event);   // viewport 触摸坐标 -> photo_view 坐标（取首个触点）
+    QPointF mapTouchPointToPhotoView(const QTouchEvent::TouchPoint &tp);
+    bool photoTouchOwned = false;  // 手势归属：TouchBegin 命中 photo_view 后，后续 Update/End 持续注入
     int m_gestureX;
     int m_gestureY;
     bool m_gestureTracking = false;

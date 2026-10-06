@@ -7,6 +7,7 @@
 #include <QLinearGradient>
 #include <QMouseEvent>
 #include <QPainter>
+#include <QSet>
 #include <QTouchEvent>
 #include <QWheelEvent>
 
@@ -196,50 +197,56 @@ void PhotoView::handleTouchEvent(QTouchEvent *event)
         }
     }
 
-    const qreal duplicateDistance = 30.0;
+    // 触点追踪（跨事件维护 activeTouches）。
+    // 本屏 evdevtouch 对同一物理触点会**交替上报不同 id**（如 33554434 / 50331649），
+    // 且滑动时单帧位移可能 > 30px。旧逻辑「每个点各自找 30px 内最近的 key」在两者
+    // 叠加时会把同一根手指拆成两个 key → 单指滑动被误判为双指 → 误触发缩放。
+    // 改为**一对一配对**：每个旧 key 只允许被一个当前触点认领（取最近者），
+    // 单指无论移动多快都恒定对应 1 个 key；抬起的手指因无人认领而自动移除。
+    QVector<QPair<int, QPointF> > cur;   // 本帧未释放的触点 (raw id, pos)
     for (int index = 0; index < points.size(); ++index) {
         const QTouchEvent::TouchPoint &point = points.at(index);
-        if (point.state() == Qt::TouchPointReleased) {
+        if (point.state() == Qt::TouchPointReleased)
             lastTouchPosition = point.pos();
-            int nearestKey = -1;
-            qreal nearestDist = duplicateDistance;
-            QHash<int, QPointF>::const_iterator it = activeTouches.constBegin();
-            for (; it != activeTouches.constEnd(); ++it) {
-                const qreal d = QLineF(it.value(), point.pos()).length();
-                if (d < nearestDist) {
-                    nearestDist = d;
-                    nearestKey = it.key();
-                }
-            }
-            if (nearestKey >= 0) {
-                activeTouches.remove(nearestKey);
-                touchStartPositions.remove(nearestKey);
-            } else {
-                activeTouches.remove(point.id());
-                touchStartPositions.remove(point.id());
-            }
-        } else {
-            int existingKey = -1;
-            qreal existingDist = duplicateDistance;
-            QHash<int, QPointF>::const_iterator it = activeTouches.constBegin();
-            for (; it != activeTouches.constEnd(); ++it) {
-                const qreal d = QLineF(it.value(), point.pos()).length();
-                if (d < existingDist) {
-                    existingDist = d;
-                    existingKey = it.key();
-                }
-            }
-            if (existingKey >= 0) {
-                activeTouches.insert(existingKey, point.pos());
-            } else {
-                activeTouches.insert(point.id(), point.pos());
-                touchStartPositions.insert(point.id(), point.pos());
+        else
+            cur.append(qMakePair(point.id(), point.pos()));
+    }
+    QHash<int, QPointF> matched;
+    QSet<int> claimed;
+    for (int i = 0; i < cur.size(); ++i) {
+        const int rawId = cur.at(i).first;
+        const QPointF pos = cur.at(i).second;
+        int bestKey = -1;
+        qreal bestDist = 1e9;
+        QHash<int, QPointF>::const_iterator it = activeTouches.constBegin();
+        for (; it != activeTouches.constEnd(); ++it) {
+            if (claimed.contains(it.key()))
+                continue;
+            const qreal d = QLineF(it.value(), pos).length();
+            if (d < bestDist) {
+                bestDist = d;
+                bestKey = it.key();
             }
         }
+        if (bestKey >= 0) {
+            claimed.insert(bestKey);
+            matched.insert(bestKey, pos);
+        } else {
+            int key = rawId;                 // 新触点：用其 raw id 作 key（冲突则自增）
+            while (matched.contains(key))
+                ++key;
+            matched.insert(key, pos);
+            touchStartPositions.insert(key, pos);
+        }
     }
-
-    // 不再在 TouchEnd 一次性清空：本设备每指抬起各发一次 TouchEnd，
-    // 一抬就清会误删另一根仍在按的手指。逐点移除由上方 Released 分支完成。
+    activeTouches = matched;
+    QHash<int, QPointF>::iterator sit = touchStartPositions.begin();
+    while (sit != touchStartPositions.end()) {
+        if (!activeTouches.contains(sit.key()))
+            sit = touchStartPositions.erase(sit);
+        else
+            ++sit;
+    }
 
     qreal maximumMovement = 0.0;
     QHash<int, QPointF>::const_iterator iterator = activeTouches.constBegin();
