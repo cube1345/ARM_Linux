@@ -57,6 +57,7 @@
 ### 11. 触摸多指只能识别一个触点
 - **根因**：linuxfb 触摸在未接受 `WA_AcceptTouchEvents` 的控件上被合成为单点鼠标。
 - **解决**：只对桌面页 `homePage` 设 `WA_AcceptTouchEvents`（多指识别）；相册 photo_view 自带双指，勿改全局 viewport（否则双指链路被干扰）。
+- **⚠️ 2026-10 更正**：此条结论**不完整且误导**。相册详情页双指失效的真正根因是 UI 被 QGraphicsView 包裹后 Qt 合成鼠标（见第五章第 21 条），**与 `WA_AcceptTouchEvents` 无关**；驱动与 Qt evdevtouch 一直能上报 2 个触点。
 
 ### 12. 3D/自绘控件事件被全局过滤器误吞
 - **注意**：给全局手势装 filter 时，需对“点击型”控件返回 false 放行；滑动（阈值 42px）才拦截。
@@ -105,6 +106,73 @@
 ### 20. 用 bash 批量下载歌曲：中文文件名乱码 / 误匹配非原曲
 - **根因**：bash 处理 heredoc 中文在部分 locale 下破坏字节；bilibili 搜索命中错误视频（如“水.mp3”）。
 - **解决**：下载脚本改 Python（UTF-8 稳定），并对候选做**标题含歌名 + 过滤鼓谱/伴奏/解说 + 时长 150-340s**三重校验；歌词经网易云 search+lyric 接口获取 `.lrc`。
+
+---
+
+## 五、触摸子系统专项（2026-10 双指问题根治）
+
+> 背景：相册详情页双指捏合长期失效，曾被误判为「驱动/Qt 只报单点」。2026-10 用对照实验
+> （把历史版 `a229c1c` 与 main 版在同一块板、同一 evdevtouch 环境下分别跑，读 `PHOTO_ALBUM_TOUCH_DEBUG` 日志）
+> 彻底定位：**驱动 `edt_ft5x06`（MT protocol-B）与 Qt evdevtouch 一直能上报 2 个触点**，
+> 真凶是应用层。
+
+### 21. 相册详情页双指捏合完全失效（接触点恒为 1）
+- **现象**：详情页双指捏合无反应；界面「接触点」标签恒显示 1。
+- **根因**：main 版自 `484a038` 起为做方向锁定，把**整个 UI 嵌进 `QGraphicsScene` + `QGraphicsProxyWidget`**。
+  Qt 在 QGraphicsView 层把 `QTouchEvent` **合成为单点鼠标**再喂给内嵌 widget，photo_view 因而
+  收不到 `QTouchEvent`，其双指逻辑根本没机会运行。（历史版无此 scene 包裹，故当时双指可用。）
+- **佐证**：main 版 view 层 eventFilter 实测收到 `pts=2`，但 photo_view 的 `PhotoAlbum touch event`
+  日志为 0 条；界面「接触点:1」来自 `mousePressEvent` 里的 `touchDebugChanged(1,...)`。
+- **解决**（commit `4f2eba5`）：`MainWindow::eventFilter` 在 `cur==detailPage && obj==m_view->viewport()`
+  时拦截 `TouchBegin/Update/End`，把坐标经 `viewport → mapToScene → proxy mapFromScene → photoView mapFrom`
+  映射后，构造 `QTouchEvent` 直接注入 photo_view，并 `return true` 阻断 Qt 鼠标合成。
+- **注意**：缩略图网格页必须完全放行，否则点缩略图的触摸被吞、进不去详情页。
+
+### 22. 触摸点松手后残留（幽灵触点，size 不归零）
+- **现象**：双指松开后仍残留 1~2 个「基础触点」，下一轮手势凭空多出触点。
+- **根因**（两层）：
+  1. 门控只看「当前点坐标」——手指滑出 photo_view 边界后，收尾的 `TouchEnd` 被放行，
+     photo_view 的 `activeTouches` 收不到 `Released` 而累积；
+  2. 本屏 evdevtouch 对**同一物理触点跨事件上报的 id 不稳定**，`Released` 点的 id 与
+     `activeTouches` 里的 key 对不上，`remove(point.id())` 删不到。
+- **解决**（commit `8814a58`）：
+  - **手势归属**：`TouchBegin` 锚点命中 photo_view 后，整条手势（`Update/End/Cancel`）
+    持续注入，即使手指滑出边界也不丢收尾事件；
+  - 触点追踪不再依赖 id，改为**一对一配对**（见第 23 条），Released 必然对应某个 key。
+- **验证**：松手后 `activeTouches.size()` 归 0。
+
+### 23. 单指滑动被误判为双指 → 意外放大/缩小
+- **现象**：单指滑动平移图片时偶发缩放。
+- **根因**：evdevtouch 对**同一根手指交替上报两个 id**（如 `33554434` / `50331649`），
+  且快速滑动时单帧位移可 > 30px。旧逻辑「每个点各自找 30px 内最近的 key」在两者叠加下，
+  把同一手指拆成**两个 activeTouches key** → `size()>=2` → 误入 pinch 分支 → 缩放。
+- **解决**（commit `8814a58`）：触点追踪改为**一对一配对**——每个旧 key 只允许被一个当前触点
+  认领（取最近者），单指无论移动多快都恒定 1 个 key；抬起的手指因无人认领而自动移除。
+  双指捏合仍是 2 个 key，互不影响。
+- **验证**：单指滑动全程 `activeTouches.size()` 恒为 1。
+
+### 24. 加触摸注入后进不去详情页 / 返回按钮失效
+- **现象**：注入改造后，点缩略图无法进入详情页，或详情页顶部返回按钮无响应。
+- **根因**：注入门控范围过宽——覆盖整页时吞掉了缩略图点击；覆盖含 header 的整页时吞掉返回按钮触摸。
+- **解决**：门控严格限定 `cur==detailPage`，且 `TouchBegin` 锚点须落在 photo_view 矩形内才归属；
+  缩略图页、header/footer 区域一律放行给 Qt 正常处理。
+
+---
+
+## 六、板端部署与调试坑
+
+### 25. `scp` 上传报 `Text file busy`
+- **根因**：目标二进制正在运行，文件被内核占用。
+- **解决**：先 `kill` 板端进程再 `scp`。
+
+### 26. ssh 远程 `pkill -f "photo-album"` 导致会话立刻断开
+- **根因**：远程执行的命令行本身含 `photo-album` 字符串，`pkill -f` 把自己的 shell 也匹配杀了。
+- **解决**：用 `pkill -f "[p]hoto-album"`（字符类规避自匹配）或按 PID `kill`。
+
+### 27. 相册显示内置 demo 演示图而非真实照片
+- **根因**：启动参数传了空目录 `/root/photos`（板卡 root 家目录实为 `/home/root`，
+  `/root/photos` 是空的），程序对空目录会**自动生成 15 张演示图**，故「看不到自己的照片」未必是 bug。
+- **解决**：启动传 `/home/root/photos`（用户照片/视频所在）。参见第一章第 2 条。
 
 ---
 
