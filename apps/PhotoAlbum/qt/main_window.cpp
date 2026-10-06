@@ -40,6 +40,8 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPainter>
+#include <QRadialGradient>
+#include <QRegion>
 #include <QPixmap>
 #include <QPushButton>
 #include <QCheckBox>
@@ -460,6 +462,17 @@ bool MainWindow::eventFilter(QObject *obj, QEvent *event)
         }
         // 未归属（点在 header/返回按钮等区域）：放行 Qt 正常处理
     }
+    // 迷宫页：触摸用于"结束态点击重开"。QGraphicsView 会把触摸合成鼠标，
+    // LabyrinthGame 收不到，故在 viewport 层拦截触发（吞掉以免干扰）。
+    if (cur == labyrinthPage && labyrinthGame && obj == m_view->viewport()) {
+        if (et == QEvent::TouchEnd || et == QEvent::TouchCancel) {
+            if (labyrinthGame->isOver())
+                labyrinthGame->startGame();
+            return true;   // 吞掉迷宫触摸
+        }
+        if (et == QEvent::TouchBegin || et == QEvent::TouchUpdate)
+            return true;
+    }
     if (cur != homePage && cur != game2048Page && cur != snakePage
         && cur != tetrisPage && cur != brickPage)
         return QMainWindow::eventFilter(obj, event);
@@ -617,6 +630,105 @@ void MainWindow::handleGameSwipe(int dx, int dy)
     // 桌面/相册/监控/视频等页面各有自己的手势，此处不吞
 }
 
+// 悬浮返回球：仿 iOS AssistiveTouch。白底淡出圆 + 可自由拖动，点按回主页。
+// 同时处理鼠标与触摸（主窗口已 WA_AcceptTouchEvents，触摸走 touch 事件）。
+class FloatingHomeDot : public QWidget
+{
+public:
+    using TapFn = std::function<void()>;
+    explicit FloatingHomeDot(TapFn fn, QWidget *parent = nullptr)
+        : QWidget(parent), m_fn(fn), m_pressed(false), m_moved(false)
+    {
+        setFixedSize(64, 64);
+        setAttribute(Qt::WA_TranslucentBackground);
+        setAttribute(Qt::WA_AcceptTouchEvents);
+        // 圆形命中区域：圆外透明区不拦事件，触摸可穿透到下层
+        setMask(QRegion(2, 2, 60, 60, QRegion::Ellipse));
+        setCursor(Qt::PointingHandCursor);
+    }
+protected:
+    void paintEvent(QPaintEvent *) override
+    {
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing);
+        const QRectF r = rect().adjusted(3, 3, -3, -3);
+        // 淡出圆：中心实白，外缘逐渐透明
+        QRadialGradient g(r.center(), r.width() / 2);
+        g.setColorAt(0.0, QColor(255, 255, 255, 235));
+        g.setColorAt(0.72, QColor(240, 240, 245, 190));
+        g.setColorAt(1.0, QColor(255, 255, 255, 40));
+        p.setPen(QPen(QColor(255, 255, 255, 120), 1));
+        p.setBrush(g);
+        p.drawEllipse(r);
+        // 内置小圆点（home 语义）
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(255, 255, 255, 210));
+        p.drawEllipse(QPointF(r.center().x(), r.center().y()), 8, 8);
+        p.setBrush(QColor(255, 255, 255, 90));
+        p.drawEllipse(QPointF(r.center().x(), r.center().y()), 4, 4);
+    }
+    bool event(QEvent *e) override
+    {
+        switch (e->type()) {
+        case QEvent::TouchBegin: {
+            const auto pts = static_cast<QTouchEvent *>(e)->touchPoints();
+            if (!pts.isEmpty()) handlePress(pts.constFirst().screenPos());
+            return true;
+        }
+        case QEvent::TouchUpdate: {
+            const auto pts = static_cast<QTouchEvent *>(e)->touchPoints();
+            if (!pts.isEmpty()) handleMove(pts.constFirst().screenPos());
+            return true;
+        }
+        case QEvent::TouchEnd:
+        case QEvent::TouchCancel:
+            handleRelease();
+            return true;
+        default:
+            break;
+        }
+        return QWidget::event(e);
+    }
+    void mousePressEvent(QMouseEvent *e) override { handlePress(e->globalPos()); }
+    void mouseMoveEvent(QMouseEvent *e) override   { handleMove(e->globalPos()); }
+    void mouseReleaseEvent(QMouseEvent *) override { handleRelease(); }
+
+private:
+    void handlePress(const QPointF &g)
+    {
+        m_pressed = true;
+        m_moved = false;
+        m_pressPos = g;
+        m_orig = pos();
+    }
+    void handleMove(const QPointF &g)
+    {
+        if (!m_pressed)
+            return;
+        if ((g - m_pressPos).manhattanLength() > 6)
+            m_moved = true;
+        QWidget *pw = parentWidget();
+        if (!pw)
+            return;
+        const QPoint p = pw->mapFromGlobal(g.toPoint())
+                       - QPoint(width() / 2, height() / 2);
+        move(qBound(0, p.x(), pw->width() - width()),
+             qBound(0, p.y(), pw->height() - height()));
+    }
+    void handleRelease()
+    {
+        const bool tap = m_pressed && !m_moved;
+        m_pressed = false;
+        if (tap && m_fn)
+            m_fn();
+    }
+
+    TapFn m_fn;
+    bool m_pressed;
+    bool m_moved;
+    QPointF m_pressPos;
+    QPoint m_orig;
+};
 void MainWindow::buildUi()
 {
     setWindowTitle(tr("Photo Album"));
@@ -782,6 +894,21 @@ void MainWindow::buildUi()
     // 否则整个 UI 嵌进 scene 后 photo_view 收不到 TouchBegin/Update/End。
     m_proxy->setAcceptTouchEvents(true);
     setCentralWidget(m_view);
+
+    // 悬浮返回球：可拖动，点击回主页，浮于所有页面之上
+    m_floatDot = new FloatingHomeDot([this]() { showHomePage(); }, this);
+    m_floatDot->move(width() - 76, height() - 88);
+    // 主页显示悬浮球无意义：首页隐藏，进入其它页显示并提到最上层
+    auto *st = static_cast<QStackedWidget *>(stackedWidget);
+    m_floatDot->setVisible(st->currentWidget() != homePage);
+    connect(st, &QStackedWidget::currentChanged, this, [this, st](int) {
+        if (!m_floatDot)
+            return;
+        const bool onHome = (st->currentWidget() == homePage);
+        m_floatDot->setVisible(!onHome);
+        if (!onHome)
+            m_floatDot->raise();
+    });
     central->setStyleSheet(QStringLiteral(
         "QWidget{background:#0b0b0f;} QLabel{background:transparent;color:#f5f5f7;}"
         "QLabel#title{font-size:18px;font-weight:700;} QLabel#status,QLabel#videoTime{color:#a1a1aa;}"
@@ -1214,6 +1341,7 @@ QPixmap makeDesktopIcon(const QString &svgAbs, const QColor &tint)
     return pm;
 }
 } // namespace
+
 
 void MainWindow::buildHomePage(QWidget *page)
 {

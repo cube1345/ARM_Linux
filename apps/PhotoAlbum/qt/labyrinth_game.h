@@ -19,6 +19,7 @@ public:
     void startGame();
     void setAccel(qreal ax, qreal ay);   // IMU 加速度 (m/s²)
     void setAcceleration(qreal g) { m_g = g; }   // 设定基准加速度 m/s²
+    bool isOver() const { return m_state != 0; }  // 是否处于结束态（成功/失败）
 
 protected:
     void paintEvent(QPaintEvent *event) override;

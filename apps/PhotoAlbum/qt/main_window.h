@@ -11,6 +11,7 @@
 #include "icm20608.h"
 #include "ap3216c.h"
 
+class FloatingHomeDot;
 class QColor;
 class HomePageView;
 class QGraphicsProxyWidget;
@@ -174,6 +175,8 @@ private:
     QImage imageForPath(const QString &path) const;
     static const QList<QImage> &createDemoPhotos();
     void applyOrientation(int orient);
+
+    FloatingHomeDot *m_floatDot = nullptr;  // 悬浮返回球（仿 AssistiveTouch）
 
     QWidget *stackedWidget;
     QWidget *homePage;
